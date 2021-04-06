@@ -9,6 +9,7 @@ class SAE(nn.Module):
         # Initialise class parameters
         # Initialise encoder and decoder 
         self.encoder_layers = nn.ModuleList([])
+        # https://github.com/felixludos/learn_rep/blob/master/src/baseline.py 
         self.SCM_layers = nn.ModuleList([])
         self.generator_layers = nn.ModuleList([])
         # Define which likelihood to use
