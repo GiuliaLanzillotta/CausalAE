@@ -21,7 +21,8 @@ class Trainer:
         # summary writers 
         pass 
 
-    def test(self): 
+    def test(self):
+        pass
 
 
     

@@ -72,6 +72,8 @@ class DatasetLoader:
         #TODO: add validation set
         #train, val = torch.utils.data.random_split(train_set, lengths=[55000, 5000], generator=torch.Generator().manual_seed(42))
 
+        #TODO: add new dataset: https://arxiv.org/pdf/2010.14407.pdf
+
         self.train = DataLoader(train_set,
                                 batch_size=args["batch_size"],
                                 shuffle=True,
