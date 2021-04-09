@@ -9,19 +9,21 @@ from torch.nn import functional as F
 
 class VAE(nn.Module):
 
-    def __init__(self, beta, dim_in, latent_dim, channels_list:list=None) -> None:
+    def __init__(self, params:dict, dim_in) -> None:
         super(VAE, self).__init__()
-        self.beta = beta
-        self.latent_dim = latent_dim
+        self.beta = params["beta"]
+        self.latent_dim = params["latent_dim"]
+        self.dim_in = dim_in # C, H, W
         # Building encoder
         #TODO: add a selection for non-linearity here
-        if channels_list is None: channels_list = [32, 64, 128, 256]
-        conv_net = ConvNet(dim_in, latent_dim,channels_list=channels_list)
+        channels_list = params["channels_list"]
+        conv_net = ConvNet(dim_in, self.latent_dim, channels_list=channels_list)
         self.conv_net = nn.Sequential(conv_net, nn.ELU())
-        self.fc_mu = nn.Linear(latent_dim, latent_dim)
-        self.fc_var = nn.Linear(latent_dim, latent_dim)
+        self.fc_mu = nn.Linear(self.latent_dim, self.latent_dim)
+        self.fc_var = nn.Linear(self.latent_dim, self.latent_dim)
         channels_list.reverse()
-        self.trans_conv_net = TransConvNet(latent_dim, conv_net.final_shape, channels_list[1:] + [dim_in[0]])
+        self.trans_conv_net = TransConvNet(self.latent_dim, conv_net.final_shape,
+                                           channels_list[1:] + [dim_in[0]])
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
@@ -61,18 +63,19 @@ class VAE(nn.Module):
         z = self.sample_parametric(mu, log_var)
         return  [self.decode(z), mu, log_var]
 
-    def loss_function(self, inputs, **kwargs) -> dict:
+    def loss_function(self, *args, **kwargs) -> dict:
         #TODO: see where we use this parameter
         self.num_iter += 1
-        X_hat = kwargs["recons"]
-        mu = kwargs["mu"]
-        log_var = kwargs["log_var"]
+        X_hat = args[0]
+        mu = args[1]
+        log_var = args[2]
+        X = kwargs["X"]
         #  In this context it makes sense to normalise β by latent z size
         # m and input x size n in order to compare its different values
         # across different latent layer sizes and different datasets
         KL_weight = kwargs["KL_weight"] # usually weight = M/N
         # ELBO = reconstruction term + prior-matching term
-        recons_loss= F.mse_loss(X_hat, inputs)
+        recons_loss= F.mse_loss(X_hat, X)
         KL_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
         loss = recons_loss + self.beta * KL_weight * KL_loss
         return {'loss': loss, 'Reconstruction_loss':recons_loss, 'KL':KL_loss}

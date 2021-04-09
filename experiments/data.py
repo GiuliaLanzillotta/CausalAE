@@ -69,18 +69,26 @@ class DatasetLoader:
             raise RuntimeError("Unrecognized data set '{}'".format(
                 args.dataset_name))
 
-        #TODO: add validation set
-        #train, val = torch.utils.data.random_split(train_set, lengths=[55000, 5000], generator=torch.Generator().manual_seed(42))
+        tot_train = train_set.data.shape[0]
+        train_split = args["train_split"]
+        train_num = int(train_split*tot_train)
+        val_num = tot_train-train_num
+        train, val = torch.utils.data.random_split(train_set,
+                                                   lengths=[train_num, val_num],
+                                                   generator=torch.Generator().manual_seed(42))
 
         #TODO: add new dataset: https://arxiv.org/pdf/2010.14407.pdf
-
-        self.train = DataLoader(train_set,
+        self.train = DataLoader(train,
                                 batch_size=args["batch_size"],
                                 shuffle=True,
                                 drop_last=True)
+        self.val = DataLoader(val,
+                              batch_size=args["batch_size"],
+                              shuffle=True,
+                              drop_last=True)
         self.test = DataLoader(test_set,
-                                batch_size=args["test_batch_size"],
-                                shuffle=False)
+                               batch_size=args["test_batch_size"],
+                               shuffle=False)
 
         self.data_shape = self.train.dataset[0][0].size()
         self.img_size = self.data_shape[1:]
@@ -97,16 +105,16 @@ class DatasetLoader:
         fig.subplots_adjust(hspace=0.3, wspace=0.3)
         for i,ax in enumerate(axes.flat):
             ax.imshow(images[i].reshape(self.data_shape))
-        # Show true and predicted classes.
-        xlabel = "True: {0}, Pred: {1}".format(cls_true[i], cls_pred[i]) if cls_pred else "True: {0}".format(cls_true[i])
-        ax.set_xlabel(xlabel)
-        # Remove ticks 
-        ax.set_xticks([])
-        ax.set_yticks([])
+            # Show true and predicted classes.
+            xlabel = "True: {0}, Pred: {1}".format(cls_true[i], cls_pred[i]) if cls_pred else "True: {0}".format(cls_true[i])
+            ax.set_xlabel(xlabel)
+            # Remove ticks
+            ax.set_xticks([])
+            ax.set_yticks([])
 
     def plot_from_test(self):
         """ Take first 9 images from test set and plot them
             #TODO: random extraction 
         """
         images, cls_true = zip(*[self.test.dataset[i] for i in range(9)])
-        plot_images(images=images, cls_true=cls_true)
+        self.plot_images(images=images, cls_true=cls_true)
