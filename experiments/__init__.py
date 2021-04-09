@@ -1,5 +1,7 @@
 # Module managing experiments
-from VAEManager import VAEXperiment
+from . import VAEManager
+from . import data
+from .VAEManager import VAEXperiment
 
 
 experiments_switch = {'VAE':VAEXperiment}

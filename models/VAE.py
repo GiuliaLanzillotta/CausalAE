@@ -64,8 +64,6 @@ class VAE(nn.Module):
         return  [self.decode(z), mu, log_var]
 
     def loss_function(self, *args, **kwargs) -> dict:
-        #TODO: see where we use this parameter
-        self.num_iter += 1
         X_hat = args[0]
         mu = args[1]
         log_var = args[2]

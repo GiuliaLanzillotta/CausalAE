@@ -84,7 +84,7 @@ class DatasetLoader:
                                 drop_last=True)
         self.val = DataLoader(val,
                               batch_size=args["batch_size"],
-                              shuffle=True,
+                              shuffle=False,
                               drop_last=True)
         self.test = DataLoader(test_set,
                                batch_size=args["test_batch_size"],

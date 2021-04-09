@@ -6,7 +6,6 @@ import datetime
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-from models import models_switch
 from experiments import experiments_switch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -38,7 +37,6 @@ torch.manual_seed(config['logging_params']['manual_seed'])
 np.random.seed(config['logging_params']['manual_seed'])
 #TODO: check these 2
 cudnn.deterministic = True
-cudnn.benchmark = False
 
 experiment = experiments_switch[config['model_params']['name']](config)
 # saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
@@ -50,15 +48,15 @@ checkpoint_callback = ModelCheckpoint(
     save_top_k=3,
     mode='min',
 )
-#TODO: check trainer arguments
-runner = Trainer(default_save_path=f"{tb_logger.save_dir}",
-                 min_nb_epochs=1,
+runner = Trainer(default_root_dir=f"{tb_logger.save_dir}",
+                 min_epochs=1,
                  logger=tb_logger,
-                 log_save_interval=100,
-                 train_percent_check=1.,
-                 val_percent_check=1.,
-                 num_sanity_val_steps=5,
-                 early_stop_callback = False,
+                 log_every_n_steps =100,
+                 callbacks=[checkpoint_callback],
+                 progress_bar_refresh_rate=20,
+                 checkpoint_callback=True,
+                 benchmark=False,
                  **config['trainer_params'])
+
 print(f"======= Training {config['model_params']['name']} =======")
 runner.fit(experiment)
