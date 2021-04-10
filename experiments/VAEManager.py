@@ -22,6 +22,8 @@ class VAEXperiment(pl.LightningModule):
         N = int(np.product(self.loader.data_shape))
         M = self.model.latent_dim
         self.KL_weight = N/M
+        # For tensorboard logging (saving the graph)
+        self.example_input_array = torch.rand((1,) + self.loader.data_shape)
 
 
     def forward(self, inputs: Tensor, **kwargs) -> Tensor:
@@ -34,32 +36,10 @@ class VAEXperiment(pl.LightningModule):
                                               X = input_imgs,
                                               KL_weight =  self.KL_weight)
         # Logging
-        tensorboard_logs = {"train_loss":train_loss["loss"]}
-        self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True)
+        self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log_dict({key: val.item() for key, val in train_loss.items()})
 
-        return {"loss":train_loss["loss"], "log":tensorboard_logs}
-    """
-    def training_step_end(self, *args, **kwargs):
-        #TODO
-        pass
-
-    def to_log_once(self):
-        # logging
-        sampleImg=torch.rand((1,) + self.loader.data_shape)
-        self.logger.experiment.log_graph(self.model, sampleImg)
-        #TODO: merge all hyperparameters
-        #TODO: add metrics
-        self.logger.experiment.log_hyperparams(self.params["opt_params"])
-
-    def training_epoch_end(self, outputs):
-        if self.current_epoch==1: self.to_log_once()
-        avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        for name,params in self.model.named_parameters():
-            self.logger.experiment.add_histogram(name,params,self.current_epoch)
-        self.logger.experiment.add_scalar('train_epoch_loss', avg_loss, self.current_epoch)
-        return {'loss': avg_loss}
-    """
+        return train_loss["loss"]
 
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
@@ -68,22 +48,14 @@ class VAEXperiment(pl.LightningModule):
                                             X = input_imgs,
                                             KL_weight =  self.KL_weight)
         # Calling self.log will surface up scalars for you in TensorBoard
-        self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_epoch=True)
-
-    """
-    def validation_step_end(self, *args, **kwargs):
-        #TODO
-        pass
+        self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True)
+        return val_loss
 
     def validation_epoch_end(self, outputs):
-        #Outputs is of the form [loss_batch1, loss_batch2, ...]
-        #Each loss element is a dict with keys "loss", "Reconstruction_loss" and "KL"
-        
-        avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        self.logger.experiment.add_scalar('val_epoch_loss', avg_loss, self.current_epoch)
-        self.sample_images()
-        return {'val_loss': avg_loss}
-    """
+        avg_val_loss = torch.tensor([x['loss'] for x in outputs]).mean()
+        if self.current_epoch%20==0:self.sample_images() # save images every 20 epochs
+        return {"val_loss":avg_val_loss}
+
     def test_step(self, *args, **kwargs):
         #TODO
         pass
@@ -93,12 +65,10 @@ class VAEXperiment(pl.LightningModule):
         optimizer = optim.Adam(self.model.parameters(),
                                lr=opt_params['LR'],
                                weight_decay=opt_params['weight_decay'])
-
-        #TODO: fix here
         """
         if opt_params['scheduler_gamma'] is not None:
             scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma = opt_params['scheduler_gamma'])
-            return optimizer, scheduler
+            return optimizer
         """
         return optimizer
 
@@ -107,19 +77,25 @@ class VAEXperiment(pl.LightningModule):
         Note: this function is called for each epoch"""
 
         # Get sample reconstruction image
-        test_input, test_label = next(iter(self.val_dataloader()))
-        recons = self.model.generate(test_input)
+        device = self.device
+        test_input, test_label = next(iter(self.test_dataloader()))
+        recons = self.model.generate(test_input.to(device))
+        folder=f"./{self.logger.save_dir}{self.logger.name}/{self.logger.version}/"
+        # save originals at the beginning
+        if self.current_epoch==0:
+            tvu.save_image(test_input,
+                           fp= f"{folder}original_{self.logger.name}.png",
+                           normalize=True,
+                           nrow=int(np.sqrt(self.params["data_params"]["batch_size"]))) # plot a square grid
         tvu.save_image(recons.data,
-                       f"{self.logger.save_dir}{self.logger.name}/version_{self.logger.version}/"
-                       f"recons_{self.logger.name}_{self.current_epoch}.png",
+                       fp= f"{folder}recons_{self.logger.name}_{self.current_epoch}.png",
                        normalize=True,
                        nrow=int(np.sqrt(self.params["data_params"]["batch_size"]))) # plot a square grid
 
         # Get randomly sampled images
-        samples = self.model.sample_standard(self.params["data_params"]["batch_size"])
+        samples = self.model.sample_standard(self.params["data_params"]["batch_size"], device=self.device)
         tvu.save_image(samples.cpu().data,
-                       f"{self.logger.save_dir}{self.logger.name}/version_{self.logger.version}/"
-                       f"{self.logger.name}_{self.current_epoch}.png",
+                       fp=f"{folder}samples_{self.logger.name}_{self.current_epoch}.png",
                        normalize=True,
                        nrow=int(np.sqrt(self.params["data_params"]["batch_size"])))
         # clean

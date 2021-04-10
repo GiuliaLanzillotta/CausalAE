@@ -46,17 +46,17 @@ class VAE(nn.Module):
         eps = torch.randn_like(std)
         return eps * std + mu
 
-    def sample_standard(self, num_samples:int) -> Tensor:
+    def sample_standard(self, num_samples:int, device) -> Tensor:
         """ Sampling noise from the latent space and generating images
         through the decoder"""
-        z = torch.randn(num_samples, self.latent_dim)
+        z = torch.randn(num_samples, self.latent_dim).to(device)
         samples = self.decode(z)
         return samples
 
     def generate(self, x: Tensor, **kwargs) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
-        raise self.forward(x)[0]
+        return self.forward(x)[0]
 
     def forward(self, inputs: Tensor) -> list:
         mu, log_var = self.encode(inputs)

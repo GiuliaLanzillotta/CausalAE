@@ -1,6 +1,6 @@
 model_params:
   name: 'VAE'
-  beta: 10.0
+  beta: 1.0
   latent_dim: 10
   channels_list: [32, 64, 128, 256]
 
@@ -22,5 +22,7 @@ trainer_params:
 
 logging_params:
   save_dir: "logs/"
-  name: "BetaVAE_B"
+  name: "BetaVAE"
   manual_seed: 1265
+  version: v2
+

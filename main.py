@@ -29,33 +29,28 @@ with open(args.filename, 'r') as file:
     except yaml.YAMLError as exc:
         print(exc)
 
+
+
 tb_logger = TensorBoardLogger(save_dir=config['logging_params']['save_dir'],
-                              name=config['logging_params']['name'])
+                              name=config['logging_params']['name'],
+                              version=config['logging_params']['version'],
+                              log_graph=True)
 
 # For reproducibility
 torch.manual_seed(config['logging_params']['manual_seed'])
 np.random.seed(config['logging_params']['manual_seed'])
-#TODO: check these 2
-cudnn.deterministic = True
 
 experiment = experiments_switch[config['model_params']['name']](config)
-# saves a file like: my/path/sample-mnist-epoch=02-val_loss=0.32.ckpt
-
-checkpoint_callback = ModelCheckpoint(
-    monitor='val_loss',
-    dirpath=f"{tb_logger.save_dir}",
-    filename=f"{config['logging_params']['name']+'_'+config['data_params']['dataset_name']+'_'+datetime.datetime.now().strftime('%Y%m%d%H%M%S')}",
-    save_top_k=3,
-    mode='min',
-)
-runner = Trainer(default_root_dir=f"{tb_logger.save_dir}",
-                 min_epochs=1,
+checkpoint_callback = ModelCheckpoint(monitor='val_loss')
+# optional: resume from checkpoint... TODO
+runner = Trainer(min_epochs=1,
                  logger=tb_logger,
-                 log_every_n_steps =100,
+                 log_every_n_steps=50,
                  callbacks=[checkpoint_callback],
                  progress_bar_refresh_rate=20,
                  checkpoint_callback=True,
                  benchmark=False,
+                 deterministic=True,
                  **config['trainer_params'])
 
 print(f"======= Training {config['model_params']['name']} =======")
