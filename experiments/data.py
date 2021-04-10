@@ -1,7 +1,7 @@
 # Script responsible for data loading and cleaning
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision.datasets import CIFAR10, SVHN, CelebA
+from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA
 import matplotlib.pyplot as plt
 import torch
 
@@ -24,8 +24,19 @@ class DatasetLoader:
            - test_batch_size 
         $note: to obtain a dict from a Namespace simply >> vars(nsObject)
         """
+        if args["dataset_name"] == 'MNIST':
+            transform = transforms.ToTensor()
+            data_folder = './datasets/MNIST/'
+            train_set = MNIST(data_folder,
+                                train=True,
+                                download=True,
+                                transform=transform)
+            test_set = MNIST(data_folder,
+                               train=False,
+                               download=True,
+                               transform=transform)
 
-        if args["dataset_name"] == 'cifar10':
+        elif args["dataset_name"] == 'cifar10':
             transform = transforms.ToTensor()
             data_folder = './datasets/cifar10/'
             train_set = CIFAR10(data_folder,

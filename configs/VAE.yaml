@@ -1,8 +1,8 @@
 model_params:
   name: 'VAE'
   beta: 1.0
-  latent_dim: 10
-  channels_list: [32, 64, 128, 256]
+  latent_dim: 30
+  channels_list: [32, 64]
 
 opt_params:
   LR: 0.0005
@@ -11,9 +11,9 @@ opt_params:
 
 
 data_params:
-  dataset_name: cifar10
+  dataset_name: MNIST
   batch_size: 144 # Better to have a square number
-  test_batch_size: 400
+  test_batch_size: 144
   train_split: 0.7
 
 trainer_params:
@@ -24,5 +24,6 @@ logging_params:
   save_dir: "logs/"
   name: "BetaVAE"
   manual_seed: 1265
-  version: v2
+  version: v4
+  plot_every: 5
 

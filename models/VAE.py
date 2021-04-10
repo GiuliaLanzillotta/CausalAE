@@ -1,6 +1,5 @@
 # Code for beta-VAE
 # Paper: https://openreview.net/forum?id=Sy2fzU9gl
-import numpy as np
 from torch import nn
 from torch import Tensor
 import torch

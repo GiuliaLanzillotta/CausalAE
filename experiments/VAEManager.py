@@ -53,7 +53,8 @@ class VAEXperiment(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.tensor([x['loss'] for x in outputs]).mean()
-        if self.current_epoch%20==0:self.sample_images() # save images every 20 epochs
+        if self.current_epoch%self.params['logging_params']['plot_every']==0:
+            self.sample_images() # save images every plot_every_epochs epochs
         return {"val_loss":avg_val_loss}
 
     def test_step(self, *args, **kwargs):

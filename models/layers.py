@@ -84,7 +84,7 @@ class TransConvNet(nn.Module):
         for c in channels_list:
             # transpose conv block with kernel size 2, size 2 and padding 1 
             # doubling the input dimension at every step 
-            modules.append(TransConvBlock(C, c, 2, 2, 0)) 
+            modules.append(TransConvBlock(C, c, 2, 2, 0))
             C = c
         self.trans_net = nn.Sequential(*modules)
 
