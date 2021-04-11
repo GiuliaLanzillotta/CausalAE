@@ -1,5 +1,5 @@
 model_params:
-  name: 'VAE'
+  name: 'SAE'
   beta: 4.0
   latent_dim: 32
   channels_list: [32, 32, 64]

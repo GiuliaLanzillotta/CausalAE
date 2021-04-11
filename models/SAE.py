@@ -3,12 +3,12 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, TransConvNet
+from . import ConvNet, TransConvNet, SCM
 from torch.nn import functional as F
 
 class SAE(nn.Module):
     def __init__(self, params:dict, dim_in) -> None:
-        super(VAE, self).__init__()
+        super(SAE, self).__init__()
         self.beta = params["beta"]
         self.latent_dim = params["latent_dim"]
         self.dim_in = dim_in # C, H, W
@@ -19,7 +19,7 @@ class SAE(nn.Module):
         self.conv_net = nn.Sequential(conv_net, nn.ELU()) # returns vector of latent_dim size
 
         #TODO: add SCM layer
-
+        self.scm = SCM()
         self.trans_conv_net = TransConvNet(self.latent_dim, conv_net.final_shape,
                                            channels_list[1:] + [dim_in[0]])
 
@@ -28,7 +28,8 @@ class SAE(nn.Module):
         #TODO: generate samples (hybrid sampling or prior)
 
     def decode(self, z: Tensor) -> Tensor:
-        trans_conv_res = self.trans_conv_net(z)
+        causal_vars = self.scm(z)
+        trans_conv_res = self.trans_conv_net(causal_vars)
         return trans_conv_res
 
     @staticmethod

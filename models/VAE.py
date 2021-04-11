@@ -12,17 +12,19 @@ class VAE(nn.Module):
         super(VAE, self).__init__()
         self.beta = params["beta"]
         self.latent_dim = params["latent_dim"]
+        self.filter_size = params["filter_size"]
         self.dim_in = dim_in # C, H, W
         # Building encoder
         #TODO: add a selection for non-linearity here
         channels_list = params["channels_list"]
-        conv_net = ConvNet(dim_in, self.latent_dim, channels_list=channels_list)
+        conv_net = ConvNet(dim_in, self.latent_dim, channels_list=channels_list,
+                           filter_size=self.filter_size)
         self.conv_net = nn.Sequential(conv_net, nn.ELU())
         self.fc_mu = nn.Linear(self.latent_dim, self.latent_dim)
         self.fc_var = nn.Linear(self.latent_dim, self.latent_dim)
         channels_list.reverse()
-        self.trans_conv_net = TransConvNet(self.latent_dim, conv_net.final_shape,
-                                           channels_list[1:] + [dim_in[0]])
+        self.trans_conv_net = TransConvNet(self.latent_dim, conv_net.final_shape, dim_in,
+                                           channels_list[1:] + [dim_in[0]], filter_size=self.filter_size)
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
@@ -51,6 +53,8 @@ class VAE(nn.Module):
         z = torch.randn(num_samples, self.latent_dim).to(device)
         samples = self.decode(z)
         return samples
+
+    #TODO: implement interpolation
 
     def generate(self, x: Tensor, **kwargs) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
