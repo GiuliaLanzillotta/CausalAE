@@ -1,9 +1,12 @@
 model_params:
   name: 'SAE'
-  beta: 4.0
   latent_dim: 32
   channels_list: [32, 32, 64]
   filter_size: 4
+  stride: 2
+  unit_dim: 1
+  upsampling_factor: 2
+  latent_vecs: 128 # for hybrid sampling
 
 opt_params:
   LR: 0.0001

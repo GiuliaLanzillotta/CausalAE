@@ -152,6 +152,42 @@ class GaussianLayer(nn.Module):
         #TODO: implement interpolation
         pass
 
+class HybridLayer(nn.Module):
+    """Stochastic layer based on Hybrid sampling"""
+    def __init__(self, dim, unit_dim, N):
+        super(HybridLayer, self).__init__()
+        self.dim = dim
+        self.unit_dim = unit_dim
+        self.N = N
+        self.weights = torch.ones(self.N) # unnormalised probability weights for each sample (equivalent to uniform)
+        self.prior = None
+
+    def initialise_prior(self, latent_vectors):
+        # randomly selecting latent vectors for the prior
+        # TODO: make initialisation incremental (store an incremental pool of vectors and sample from that)
+        selected_idx = torch.randperm(latent_vectors.size(0))[:self.N]
+        self.prior = latent_vectors[selected_idx]
+
+    def sample_from_prior(self, num_samples:int):
+        # splitting the prior latent vectors into chunks (one for each noise dimension)
+        prior_chunks = torch.split(self.prior, self.unit_dim, dim=1)
+        # randomising the order of each chunk
+        new_vectors = [chunk[torch.multinomial(self.weights, num_samples, replacement=True)] for chunk in prior_chunks]
+        new_vectors = torch.cat(new_vectors,dim=1)
+        return new_vectors
+
+    def forward(self, inputs):
+        """Performs hybrid sampling on the latent space"""
+        self.initialise_prior(inputs)
+        output = self.sample_from_prior(inputs.size(0))
+        return output
+
+
+
+
+
+
+
 
 class AdaIN(nn.Module):
     #TODO: implement AdaIN layer (to be used instead of StrTrf in baselines)
@@ -192,8 +228,8 @@ class UpsampledConv(nn.Module):
 class SCMDecoder(nn.Module):
     """ Implements SCM layer (to be used in SAE): given a latent noise vector the
     SCM produces the causal variables by ancestral sampling."""
-    def __init__(self, initial_shape, final_shape, latent_size, unit_dim, channels_list:list, filter_size:int=2, stride:int=2,
-                 upsampling_factor:int=2):
+    def __init__(self, initial_shape, final_shape, latent_size, unit_dim, channels_list:list,
+                 filter_size:int=2, stride:int=2, upsampling_factor:int=2):
         super().__init__()
         assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
         # latent size: size of the noise vector in input (obtained by hybrid/parametric sampling)

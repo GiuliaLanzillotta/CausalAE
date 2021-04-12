@@ -3,25 +3,28 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, TransConvNet, SCM
+from . import ConvNet, TransConvNet, SCMDecoder
 from torch.nn import functional as F
 
 class SAE(nn.Module):
     def __init__(self, params:dict, dim_in) -> None:
         super(SAE, self).__init__()
-        self.beta = params["beta"]
         self.latent_dim = params["latent_dim"]
+        self.unit_dim = params["unit_dim"]
+        self.N = params["latent_vecs"] # number of latent vectors to store for hybrid sampling
         self.dim_in = dim_in # C, H, W
         # Building encoder
         #TODO: add a selection for non-linearity here
         channels_list = params["channels_list"]
         conv_net = ConvNet(dim_in, self.latent_dim, channels_list=channels_list)
-        self.conv_net = nn.Sequential(conv_net, nn.ELU()) # returns vector of latent_dim size
+        self.conv_net = conv_net # returns vector of latent_dim size
+        # hybrid sampling to get the noise vector
 
-        #TODO: add SCM layer
-        self.scm = SCM()
-        self.trans_conv_net = TransConvNet(self.latent_dim, conv_net.final_shape,
-                                           channels_list[1:] + [dim_in[0]])
+        # initialise constant image to be used in decoding (it's going to be an image full of zeros)
+        initial_shape = (1,self.unit_dim,self.unit_dim)
+        self.scm = SCMDecoder(initial_shape, final_shape=dim_in, latent_size=self.latent_dim,
+                              unit_dim=params["unit_dim"], channels_list=channels_list, filter_size=params["filter_size"],
+                              stride= params["stride"], upsampling_factor=params["upsampling_factor"])
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
