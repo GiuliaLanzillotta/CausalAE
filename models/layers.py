@@ -25,6 +25,10 @@ class ConvBlock(nn.Module):
         #TODO also consider dilation
         return int(np.floor((H_in-H_w+2*p)/s + 1))
 
+    @staticmethod
+    def same_padding(H_in, H_w, s):
+        return int(((s-1)*H_w + H_in -1)/2)
+
 
 class ConvNet(nn.Module):
     """ Implements convolutional net with multiple convolutional 
@@ -80,7 +84,6 @@ class TransConvBlock(nn.Module):
         #TODO also consider dilation
         return int((H_in-1)*s - 2*p + H_w)
 
-
 class TransConvNet(nn.Module):
     """Implements a Transpose convolutional network (initial reshaping + transpose convolution)"""
 
@@ -90,10 +93,10 @@ class TransConvNet(nn.Module):
                 convolution block
         """
         super(TransConvNet, self).__init__()
-        flat_dim = int(np.product(initial_shape)) 
-        self.fc_reshape = nn.Linear(dim_in, flat_dim)
         self.initial_shape = initial_shape
         self.final_shape = final_shape
+        flat_dim = int(np.product(initial_shape))
+        self.fc_reshape = nn.Linear(dim_in, flat_dim)
         C,H,W = initial_shape
         # Stacking the trans-conv layers 
         modules = []
@@ -150,23 +153,86 @@ class GaussianLayer(nn.Module):
         pass
 
 
+class AdaIN(nn.Module):
+    #TODO: implement AdaIN layer (to be used instead of StrTrf in baselines)
+    pass
 
 class StrTrf(nn.Module):
     """Implements the structural transform layer. To be used in SAE."""
-    def __init__(self, noise_size, latent_size):
+    def __init__(self, noise_size):
         super().__init__()
-        self.fc_mu = nn.Linear(noise_size, latent_size)
-        self.sigma = nn.Linear(noise_size, latent_size)
+        self.fc_mu = nn.Linear(noise_size,1)
+        self.sigma = nn.Linear(noise_size,1)
 
     def forward(self, x, z):
+        """ z is the noise obtained via hybrid or parametric sampling.
+        x is the set of all causal variables computed so far. Thus this is
+        the layer where the causal variables interact with the noise terms to generate
+        the children variables."""
         y = self.fc_mu(z) + self.sigma(z)*x
         return y
 
-class SCM(nn.Module):
+
+class UpsampledConv(nn.Module):
+    """Implements layer to be used in structural decoder:
+    bilinear upsampling + convolution (with activtion) (with no dimensionality reduction)"""
+    def __init__(self, upsampling_factor, dim_in, channels:int, filter_size:int=2, stride:int=2):
+        super().__init__()
+        C, H, W = dim_in
+        self.upsampling = nn.Upsample(scale_factor=upsampling_factor, mode="bilinear", align_corners=True)
+        padding = ConvBlock.same_padding(H*upsampling_factor, filter_size, stride)
+        self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding)
+        self.act = nn.ReLU()#TODO: add selection here
+
+    def forward(self, inputs):
+        upsmpld = self.upsampling(inputs)
+        output = self.act(self.conv_layer(upsmpld))
+        return output
+
+class SCMDecoder(nn.Module):
     """ Implements SCM layer (to be used in SAE): given a latent noise vector the
     SCM produces the causal variables by ancestral sampling."""
-    def __init__(self):
+    def __init__(self, initial_shape, final_shape, latent_size, unit_dim, channels_list:list, filter_size:int=2, stride:int=2,
+                 upsampling_factor:int=2):
         super().__init__()
+        assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
+        # latent size: size of the noise vector in input (obtained by hybrid/parametric sampling)
+        self.latent_size = latent_size
+        # unit_dim: dimension of one "noise unit"- not necessarily 1
+        # the noise will be processed one unit at a time -> the noise vector is
+        # split in units during the forward pass
+        self.unit_dim = unit_dim
+        self.hierarchy_depth = latent_size//unit_dim
+        C, H, W = initial_shape # the initial shape refers to the constant input block
+        assert len(channels_list)==self.hierarchy_depth, "Specified number of channels not matching heirarchy depth"
+        self.conv_modules = []
+        self.str_trf_modules = []
+        h = H
+        for c in channels_list:
+            self.str_trf_modules.append(StrTrf(self.unit_dim))
+            self.conv_modules.append(UpsampledConv(upsampling_factor, initial_shape, c, filter_size, stride))
+            h *= 2
+            # reshaping into initial size
+        self.flatten = nn.Flatten()
+        flat_dim_out = int(channels_list[-1] * h**2)
+        flat_dim_final = int(np.product(final_shape))
+        self.fc_out = nn.Linear(flat_dim_out, flat_dim_final) #notice no activation here
 
-    def forward(self):
-        pass
+    def forward(self, x, z):
+        start_dim=0
+        for sf, conv in zip(self.str_trf_modules, self.conv_modules):
+            z_i = z[start_dim:start_dim+self.unit_dim]
+            y = sf(x, z_i)
+            x = conv(y)
+            start_dim+=self.unit_dim
+        flattened = self.flatten(x)
+        outputs = self.fc_out(flattened)
+        reshaped = outputs.view((-1,) + self.final_shape)
+        return reshaped
+
+
+
+
+
+
+
