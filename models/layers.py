@@ -164,29 +164,35 @@ class HybridLayer(nn.Module):
 
     def initialise_prior(self, latent_vectors):
         # randomly selecting latent vectors for the prior
-        # TODO: make initialisation incremental (store an incremental pool of vectors and sample from that)
-        selected_idx = torch.randperm(latent_vectors.size(0))[:self.N]
+        idx = torch.randperm(latent_vectors.size(0))
+        if latent_vectors.size(0)<self.N:
+            selected_idx = idx[:latent_vectors.size(0)]
+        else: selected_idx = idx[:self.N]
         self.prior = latent_vectors[selected_idx]
 
-    def sample_from_prior(self, num_samples:int):
+    def update_prior(self, latent_vectors):
+        # TODO: make initialisation incremental (store an incremental pool
+        #  over different batches and sample from that)
+        pass
+
+    def sample_from_prior(self, input_shape):
         # splitting the prior latent vectors into chunks (one for each noise dimension)
+        num_samples = input_shape[0]
         prior_chunks = torch.split(self.prior, self.unit_dim, dim=1)
         # randomising the order of each chunk
-        new_vectors = [chunk[torch.multinomial(self.weights, num_samples, replacement=True)] for chunk in prior_chunks]
-        new_vectors = torch.cat(new_vectors,dim=1)
+        new_vectors = torch.zeros(input_shape, dtype=torch.float).to(self.prior.device)
+        for i,chunk in enumerate(prior_chunks):
+            # num_samples x N one-hot matrix
+            idx = torch.multinomial(self.weights[:self.prior.size(0)], num_samples, replacement=True)
+            W = nn.functional.one_hot(idx).float().to(self.prior.device)
+            new_vectors[i*self.unit_dim:(i+1)*self.unit_dim] += torch.matmul(W, self.prior)
         return new_vectors
 
     def forward(self, inputs):
         """Performs hybrid sampling on the latent space"""
         self.initialise_prior(inputs)
-        output = self.sample_from_prior(inputs.size(0))
+        output = self.sample_from_prior(inputs.shape)
         return output
-
-
-
-
-
-
 
 
 class AdaIN(nn.Module):

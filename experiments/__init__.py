@@ -2,6 +2,8 @@
 from . import VAEManager
 from . import data
 from .VAEManager import VAEXperiment
+from .SAEManager import SAEXperiment
 
 
-experiments_switch = {'VAE':VAEXperiment}
+experiments_switch = {'VAE':VAEXperiment,
+                      'SAE':SAEXperiment}

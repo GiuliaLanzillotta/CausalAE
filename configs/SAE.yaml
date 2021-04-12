@@ -1,10 +1,11 @@
 model_params:
   name: 'SAE'
-  latent_dim: 32
-  channels_list: [32, 32, 64]
+  latent_dim: 12
+  channels_list_enc: [32, 32, 64, 64]
+  channels_list_dec: [3, 3, 3, 3]
   filter_size: 4
   stride: 2
-  unit_dim: 1
+  unit_dim: 3
   upsampling_factor: 2
   latent_vecs: 128 # for hybrid sampling
 
@@ -26,8 +27,8 @@ trainer_params:
 
 logging_params:
   save_dir: "logs/"
-  name: "BetaVAE"
+  name: "SAE"
   manual_seed: 1265
-  version: v9
+  version: v1
   plot_every: 5
 
