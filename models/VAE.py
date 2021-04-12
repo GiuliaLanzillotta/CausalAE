@@ -3,7 +3,7 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, TransConvNet
+from . import ConvNet, TransConvNet, GaussianLayer
 from torch.nn import functional as F
 
 class VAE(nn.Module):
@@ -12,59 +12,45 @@ class VAE(nn.Module):
         super(VAE, self).__init__()
         self.beta = params["beta"]
         self.latent_dim = params["latent_dim"]
-        self.filter_size = params["filter_size"]
         self.dim_in = dim_in # C, H, W
         # Building encoder
         #TODO: add a selection for non-linearity here
         channels_list = params["channels_list"]
         conv_net = ConvNet(dim_in, self.latent_dim, channels_list=channels_list,
-                           filter_size=self.filter_size)
-        self.conv_net = nn.Sequential(conv_net, nn.ELU())
-        self.fc_mu = nn.Linear(self.latent_dim, self.latent_dim)
-        self.fc_var = nn.Linear(self.latent_dim, self.latent_dim)
+                           filter_size=params["filter_size"], stride=params["stride"])
+        self.conv_net = conv_net
+        self.gaussian_latent = GaussianLayer(self.latent_dim, self.latent_dim)
         channels_list.reverse()
-        self.trans_conv_net = TransConvNet(self.latent_dim, conv_net.final_shape, dim_in,
-                                           channels_list[1:] + [dim_in[0]], filter_size=self.filter_size)
+        self.trans_conv_net = nn.Sequential(TransConvNet(self.latent_dim, conv_net.final_shape, dim_in,
+                                                         channels_list[1:] + [dim_in[0]],
+                                                         filter_size=params["filter_size"],
+                                                         stride=params["stride"]),
+                                            nn.Sigmoid())
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
-        # Split the result into mu and var components
-        # of the latent Gaussian distribution
-        mu = self.fc_mu(conv_result)
-        log_var = self.fc_var(conv_result)
-        return [mu, log_var]
+        z, logvar, mu = self.gaussian_latent(conv_result)
+        return [z, mu, logvar]
 
     def decode(self, z: Tensor) -> Tensor:
         trans_conv_res = self.trans_conv_net(z)
         return trans_conv_res
 
-    @staticmethod
-    def sample_parametric(mu, logvar):
-        """Sampling from parametric Gaussian
-        Notice that mu and logvar are both multidimensional vectors, and their
-        dimension determines the number of samples."""
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return eps * std + mu
-
-    def sample_standard(self, num_samples:int, device) -> Tensor:
+    def generate_standard(self, num_samples:int, device) -> Tensor:
         """ Sampling noise from the latent space and generating images
         through the decoder"""
-        z = torch.randn(num_samples, self.latent_dim).to(device)
+        z = self.gaussian_latent.sample_standard(num_samples, device)
         samples = self.decode(z)
         return samples
 
-    #TODO: implement interpolation
-
-    def generate(self, x: Tensor, **kwargs) -> Tensor:
+    def generate(self, x: Tensor) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
         return self.forward(x)[0]
 
     def forward(self, inputs: Tensor) -> list:
-        mu, log_var = self.encode(inputs)
-        z = self.sample_parametric(mu, log_var)
-        return  [self.decode(z), mu, log_var]
+        z, mu, logvar = self.encode(inputs)
+        return  [self.decode(z), mu, logvar]
 
     def loss_function(self, *args, **kwargs) -> dict:
         X_hat = args[0]
@@ -76,7 +62,7 @@ class VAE(nn.Module):
         # across different latent layer sizes and different datasets
         KL_weight = kwargs["KL_weight"] # usually weight = M/N
         # ELBO = reconstruction term + prior-matching term
-        recons_loss= F.mse_loss(X_hat, X)
-        KL_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+        recons_loss= F.binary_cross_entropy(X_hat, X, reduction="sum")
+        KL_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
         loss = recons_loss + self.beta * KL_weight * KL_loss
         return {'loss': loss, 'Reconstruction_loss':recons_loss, 'KL':KL_loss}

@@ -101,6 +101,7 @@ class DatasetLoader:
                                batch_size=args["test_batch_size"],
                                shuffle=False)
 
+        self.num_samples = tot_train + test_set.data.shape[0]
         self.data_shape = self.train.dataset[0][0].size()
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]

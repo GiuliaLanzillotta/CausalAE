@@ -1,4 +1,5 @@
-# Implementation of useful layers 
+# Implementation of useful layers
+import torch
 from torch import nn
 from torch import Tensor
 import numpy as np
@@ -29,7 +30,7 @@ class ConvNet(nn.Module):
     """ Implements convolutional net with multiple convolutional 
     blocks  + final flattening """
 
-    def __init__(self, dim_in, final_dim, channels_list:list, filter_size:int = 2):
+    def __init__(self, dim_in, final_dim, channels_list:list, filter_size:int = 2, stride:int=2):
         #TODO add selection for non-linearity
         super(ConvNet, self).__init__()
         C, H, W = dim_in 
@@ -41,8 +42,8 @@ class ConvNet(nn.Module):
         for c in channels_list:
             # conv block with kernel size 2, size 2 and padding 1 
             # halving the input dimension at every step 
-            modules.append(ConvBlock(C, c, filter_size, 2, 0))
-            h = ConvBlock.compute_output_size(h, filter_size, 2, 0)
+            modules.append(ConvBlock(C, c, filter_size, stride, 0))
+            h = ConvBlock.compute_output_size(h, filter_size, stride, 0)
             C = c
 
         # calculating shape of the image after convolution
@@ -83,7 +84,7 @@ class TransConvBlock(nn.Module):
 class TransConvNet(nn.Module):
     """Implements a Transpose convolutional network (initial reshaping + transpose convolution)"""
 
-    def __init__(self, dim_in, initial_shape, final_shape, channels_list:list, filter_size:int=2):
+    def __init__(self, dim_in, initial_shape, final_shape, channels_list:list, filter_size:int=2, stride:int=2):
         """
             - initial_shape:(C,H,W) -> shape of the input image to the transpose 
                 convolution block
@@ -100,8 +101,8 @@ class TransConvNet(nn.Module):
         for c in channels_list:
             # transpose conv block with kernel size 2, size 2 and padding 1 
             # doubling the input dimension at every step 
-            modules.append(TransConvBlock(C, c, filter_size, 2, 0))
-            h = TransConvBlock.compute_output_size(h, filter_size, 2, 0)
+            modules.append(TransConvBlock(C, c, filter_size, stride, 0))
+            h = TransConvBlock.compute_output_size(h, filter_size, stride, 0)
             C = c
         # reshaping into initial size
         modules.append(nn.Flatten())
@@ -117,17 +118,51 @@ class TransConvNet(nn.Module):
         reshaped = outputs.view((-1,) + self.final_shape)
         return reshaped
 
-class StrTrf(nn.Module):
-    #TODO
-    """Implements the structural transform layer. To be used in SAE."""
-    def __init__(self):
+class GaussianLayer(nn.Module):
+    """Stochastic layer with Gaussian distribution.
+    This layer parametrizes a Gaussian distribution on the latent space of size
+    "latent_size" """
+    def __init__(self, hidden_size, latent_size):
         super().__init__()
+        self.latent_size = latent_size
+        self.mu = nn.Linear(hidden_size, latent_size)
+        self.logvar = nn.Linear(hidden_size, latent_size)
 
-    def forward(self):
+    def forward(self, inputs):
+        # Split the result into mu and var components
+        # of the latent Gaussian distribution
+        mu = self.mu(inputs)
+        logvar = self.logvar(inputs)
+
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+
+        return std * eps + mu, logvar, mu
+
+    def sample_standard(self, num_samples:int, device) -> Tensor:
+        """ Sampling noise from the latent space and generating images
+            through the decoder"""
+        z = torch.randn(num_samples, self.latent_size).to(device)
+        return z
+
+    def interpolate_standard(self):
+        #TODO: implement interpolation
         pass
 
+
+
+class StrTrf(nn.Module):
+    """Implements the structural transform layer. To be used in SAE."""
+    def __init__(self, noise_size, latent_size):
+        super().__init__()
+        self.fc_mu = nn.Linear(noise_size, latent_size)
+        self.sigma = nn.Linear(noise_size, latent_size)
+
+    def forward(self, x, z):
+        y = self.fc_mu(z) + self.sigma(z)*x
+        return y
+
 class SCM(nn.Module):
-    #TODO
     """ Implements SCM layer (to be used in SAE): given a latent noise vector the
     SCM produces the causal variables by ancestral sampling."""
     def __init__(self):

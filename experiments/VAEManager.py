@@ -19,9 +19,7 @@ class VAEXperiment(pl.LightningModule):
         dim_in =  self.loader.data_shape # C, H, W
         self.model = VAE(params["model_params"], dim_in)
         # Additional initialisations (used in training and validation steps)
-        N = int(np.product(self.loader.data_shape))
-        M = self.model.latent_dim
-        self.KL_weight = N/M
+        self.KL_weight = self.loader.num_samples/self.params['data_params']['batch_size']
         # For tensorboard logging (saving the graph)
         self.example_input_array = torch.rand((1,) + self.loader.data_shape)
 
@@ -32,6 +30,8 @@ class VAEXperiment(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
+        if self.current_epoch%10==0 and self.current_epoch!=0:
+            self.KL_weight *= self.params['opt_params']["KL_decay"] # decaying the KL term
         train_loss = self.model.loss_function(*results,
                                               X = input_imgs,
                                               KL_weight =  self.KL_weight)
@@ -94,7 +94,7 @@ class VAEXperiment(pl.LightningModule):
                        nrow=int(np.sqrt(self.params["data_params"]["batch_size"]))) # plot a square grid
 
         # Get randomly sampled images
-        samples = self.model.sample_standard(self.params["data_params"]["batch_size"], device=self.device)
+        samples = self.model.generate_standard(self.params["data_params"]["batch_size"], device=self.device)
         tvu.save_image(samples.cpu().data,
                        fp=f"{folder}samples_{self.logger.name}_{self.current_epoch}.png",
                        normalize=True,
