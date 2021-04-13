@@ -34,7 +34,7 @@ with open(args.filename, 'r') as file:
 tb_logger = TensorBoardLogger(save_dir=config['logging_params']['save_dir'],
                               name=config['logging_params']['name'],
                               version=config['logging_params']['version'],
-                              log_graph=True)
+                              log_graph=False)
 
 # For reproducibility
 torch.manual_seed(config['logging_params']['manual_seed'])

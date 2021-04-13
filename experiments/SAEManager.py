@@ -17,10 +17,9 @@ class SAEXperiment(pl.LightningModule):
         # split in train/test, apply transformations, divide in batches, extract data dimension
         self.loader = DatasetLoader(params["data_params"])
         dim_in =  self.loader.data_shape # C, H, W
-        self.model = SAE(params["model_params"], dim_in)
+        self.model = SAE(params["model_params"], dim_in, self.device)
         # For tensorboard logging (saving the graph)
-        self.example_input_array = torch.rand((1,) + self.loader.data_shape)
-        print(self.model)
+        self.example_input_array = torch.rand((1,) + self.loader.data_shape, requires_grad=False)
 
     def forward(self, inputs: Tensor, **kwargs) -> Tensor:
         return self.model(inputs, **kwargs)
@@ -47,7 +46,7 @@ class SAEXperiment(pl.LightningModule):
         avg_val_loss = torch.tensor(outputs).mean()
         if self.current_epoch%self.params['logging_params']['plot_every']==0:
             self.sample_images() # save images every plot_every_epochs epochs
-        return {"val_loss":avg_val_loss}
+        self.log("val_loss",avg_val_loss, prog_bar=True)
 
     def test_step(self, *args, **kwargs):
         #TODO

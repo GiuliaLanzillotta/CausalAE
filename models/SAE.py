@@ -7,7 +7,7 @@ from . import ConvNet, SCMDecoder, HybridLayer
 from torch.nn import functional as F
 
 class SAE(nn.Module):
-    def __init__(self, params:dict, dim_in) -> None:
+    def __init__(self, params:dict, dim_in, device) -> None:
         super(SAE, self).__init__()
         self.latent_dim = params["latent_dim"]
         self.unit_dim = params["unit_dim"]
@@ -31,11 +31,12 @@ class SAE(nn.Module):
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
         #TODO: gradient through hybrid layer
-        noise = self.hybrid_layer(conv_result)
+        noise = self.hybrid_layer(conv_result).to(inputs.device)
         return noise
 
     def decode(self, z: Tensor) -> Tensor:
-        x = torch.zeros(size = (z.shape[0],)+self.decoder_initial_shape)
+        with torch.no_grad():
+            x = torch.zeros(size = (z.shape[0],)+self.decoder_initial_shape).to(z.device)
         output = self.scm(x, z)
         return self.act(output)
 

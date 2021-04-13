@@ -26,6 +26,17 @@ class ConvBlock(nn.Module):
         return int(np.floor((H_in-H_w+2*p)/s + 1))
 
     @staticmethod
+    def get_filter_size(H_in, s, H_out):
+        """Computes filter size to be used to obtain desired output size
+         starting with padding 0 and gradually incrementing it."""
+        p = 0
+        opt =  (H_in +2*p - (H_out - 1)*s)
+        while opt+p>H_in or opt<=0:
+            p+=1
+            opt = (H_in +2*p - (H_out - 1)*s)
+        return opt, p
+
+    @staticmethod
     def same_padding(H_in, H_w, s):
         return int(((s-1)*H_w + H_in -1)/2)
 
@@ -160,15 +171,17 @@ class HybridLayer(nn.Module):
         self.unit_dim = unit_dim
         self.N = N
         self.weights = torch.ones(self.N) # unnormalised probability weights for each sample (equivalent to uniform)
+        self.weights.requires_grad = False
         self.prior = None
 
     def initialise_prior(self, latent_vectors):
         # randomly selecting latent vectors for the prior
-        idx = torch.randperm(latent_vectors.size(0))
-        if latent_vectors.size(0)<self.N:
-            selected_idx = idx[:latent_vectors.size(0)]
+        input_size = latent_vectors.detach().shape[0]
+        idx = torch.randperm(input_size).to(latent_vectors.device)
+        if input_size<self.N:
+            selected_idx = idx[:input_size]
         else: selected_idx = idx[:self.N]
-        self.prior = latent_vectors[selected_idx]
+        self.prior = torch.index_select(latent_vectors, 0, selected_idx)
 
     def update_prior(self, latent_vectors):
         # TODO: make initialisation incremental (store an incremental pool
@@ -180,13 +193,13 @@ class HybridLayer(nn.Module):
         num_samples = input_shape[0]
         prior_chunks = torch.split(self.prior, self.unit_dim, dim=1)
         # randomising the order of each chunk
-        new_vectors = torch.zeros(input_shape, dtype=torch.float).to(self.prior.device)
-        for i,chunk in enumerate(prior_chunks):
+        new_vectors = []
+        for chunk in prior_chunks:
             # num_samples x N one-hot matrix
-            idx = torch.multinomial(self.weights[:self.prior.size(0)], num_samples, replacement=True)
-            W = nn.functional.one_hot(idx).float().to(self.prior.device)
-            new_vectors[i*self.unit_dim:(i+1)*self.unit_dim] += torch.matmul(W, self.prior)
-        return new_vectors
+            idx = torch.multinomial(self.weights[:self.prior.shape[0]], num_samples, replacement=True).to(chunk.device)
+            new_vectors.append(torch.index_select(chunk, 0, idx))
+        noise = torch.cat(new_vectors, dim=1)
+        return noise
 
     def forward(self, inputs):
         """Performs hybrid sampling on the latent space"""
@@ -211,7 +224,9 @@ class StrTrf(nn.Module):
         x is the set of all causal variables computed so far. Thus this is
         the layer where the causal variables interact with the noise terms to generate
         the children variables."""
-        y = self.fc_mu(z) + self.sigma(z)*x
+        sigma_z = self.sigma(z)
+        mu_z = self.fc_mu(z)
+        y = mu_z.unsqueeze(2).unsqueeze(3) + sigma_z.unsqueeze(2).unsqueeze(3)*x
         return y
 
 
@@ -237,6 +252,7 @@ class SCMDecoder(nn.Module):
     def __init__(self, initial_shape, final_shape, latent_size, unit_dim, channels_list:list,
                  filter_size:int=2, stride:int=2, upsampling_factor:int=2):
         super().__init__()
+        self.final_shape = final_shape
         assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
         # latent size: size of the noise vector in input (obtained by hybrid/parametric sampling)
         self.latent_size = latent_size
@@ -247,30 +263,28 @@ class SCMDecoder(nn.Module):
         self.hierarchy_depth = latent_size//unit_dim
         C, H, W = initial_shape # the initial shape refers to the constant input block
         assert len(channels_list)==self.hierarchy_depth, "Specified number of channels not matching heirarchy depth"
-        self.conv_modules = []
-        self.str_trf_modules = []
+        self.conv_modules = nn.ModuleList([])
+        self.str_trf_modules = nn.ModuleList([])
         h = H
         for c in channels_list:
+            dim_in = (C, h, h)
             self.str_trf_modules.append(StrTrf(self.unit_dim))
-            self.conv_modules.append(UpsampledConv(upsampling_factor, initial_shape, c, filter_size, stride))
+            self.conv_modules.append(UpsampledConv(upsampling_factor, dim_in, c, filter_size, stride))
             h *= 2
-            # reshaping into initial size
-        self.flatten = nn.Flatten()
-        flat_dim_out = int(channels_list[-1] * h**2)
-        flat_dim_final = int(np.product(final_shape))
-        self.fc_out = nn.Linear(flat_dim_out, flat_dim_final) #notice no activation here
+            C = c
+        # reshaping into initial size
+        k, p = ConvBlock.get_filter_size(h, stride, final_shape[1])
+        self.final_conv = ConvBlock(C, final_shape[0], k, stride, p)
 
     def forward(self, x, z):
         start_dim=0
         for sf, conv in zip(self.str_trf_modules, self.conv_modules):
-            z_i = z[start_dim:start_dim+self.unit_dim]
+            z_i = z[:,start_dim:start_dim+self.unit_dim]
             y = sf(x, z_i)
             x = conv(y)
             start_dim+=self.unit_dim
-        flattened = self.flatten(x)
-        outputs = self.fc_out(flattened)
-        reshaped = outputs.view((-1,) + self.final_shape)
-        return reshaped
+        outputs = self.final_conv(x)
+        return outputs
 
 
 
