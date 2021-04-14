@@ -1,4 +1,7 @@
 .idea
 logs
-datasets
+datasets/cifar10
+datasets/MNIST
+datasets/robot_finger_datasets
+datasets/robot_finger_datasets.tar
 */__pycache__
