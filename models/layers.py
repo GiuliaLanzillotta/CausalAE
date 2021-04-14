@@ -216,8 +216,19 @@ class StrTrf(nn.Module):
     """Implements the structural transform layer. To be used in SAE."""
     def __init__(self, noise_size):
         super().__init__()
-        self.fc_mu = nn.Linear(noise_size,1)
-        self.sigma = nn.Linear(noise_size,1)
+        self.fc_mu = nn.Sequential(nn.Linear(noise_size,noise_size*10),
+                                   nn.ReLU(),
+                                   nn.Linear(noise_size*10,noise_size*20),
+                                   nn.ReLU(),
+                                   nn.Linear(noise_size*20,1),
+                                   nn.ReLU())
+        self.sigma = nn.Sequential(nn.Linear(noise_size,noise_size*10),
+                                   nn.ReLU(),
+                                   nn.Linear(noise_size*10,noise_size*20),
+                                   nn.ReLU(),
+                                   nn.Linear(noise_size*20,1),
+                                   nn.ReLU())
+
 
     def forward(self, x, z):
         """ z is the noise obtained via hybrid or parametric sampling.
@@ -236,7 +247,7 @@ class UpsampledConv(nn.Module):
     def __init__(self, upsampling_factor, dim_in, channels:int, filter_size:int=2, stride:int=2):
         super().__init__()
         C, H, W = dim_in
-        self.upsampling = nn.Upsample(scale_factor=upsampling_factor, mode="bilinear", align_corners=True)
+        self.upsampling = nn.Upsample(scale_factor=upsampling_factor, mode="bilinear", align_corners=False)
         padding = ConvBlock.same_padding(H*upsampling_factor, filter_size, stride)
         self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding)
         self.act = nn.ReLU()#TODO: add selection here
@@ -273,17 +284,31 @@ class SCMDecoder(nn.Module):
             h *= 2
             C = c
         # reshaping into initial size
+        flag = h<final_shape[1]
+        if flag:
+            dim_in = (C, h, h)
+            upsample_final = UpsampledConv(upsampling_factor, dim_in, C, filter_size, stride)
+            h *= 2
         k, p = ConvBlock.get_filter_size(h, stride, final_shape[1])
-        self.final_conv = ConvBlock(C, final_shape[0], k, stride, p)
+        conv_final = ConvBlock(C, final_shape[0], k, stride, p)
+        self.shape_adjusting_block = nn.Sequential(upsample_final, conv_final) if flag else conv_final
 
-    def forward(self, x, z):
+    def forward(self, x, z, mode="auto"):
+        """ Implements forward pass with 2 possible modes:
+        - auto: no hybrid sampling (only the convolution)
+        - hybrid: hybrid sampling included """
         start_dim=0
-        for sf, conv in zip(self.str_trf_modules, self.conv_modules):
-            z_i = z[:,start_dim:start_dim+self.unit_dim]
-            y = sf(x, z_i)
-            x = conv(y)
-            start_dim+=self.unit_dim
-        outputs = self.final_conv(x)
+        if mode=="auto":
+            for conv in self.conv_modules:
+                x = conv(x)
+        elif mode=="hybrid":
+            for sf, conv in zip(self.str_trf_modules, self.conv_modules):
+                z_i = z[:,start_dim:start_dim+self.unit_dim]
+                y = sf(x, z_i)
+                x = conv(y)
+                start_dim+=self.unit_dim
+        else: raise NotImplementedError("Unknown specified forward mode for SCM")
+        outputs = self.shape_adjusting_block(x)
         return outputs
 
 

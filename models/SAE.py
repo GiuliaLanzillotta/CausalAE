@@ -22,37 +22,45 @@ class SAE(nn.Module):
         # hybrid sampling to get the noise vector
         self.hybrid_layer = HybridLayer(self.latent_dim, self.unit_dim, self.N)
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
-        self.decoder_initial_shape = (1,self.unit_dim,self.unit_dim)
+        self.decoder_initial_shape = (self.latent_dim, 1, 1)
         self.scm = SCMDecoder(self.decoder_initial_shape, final_shape=dim_in, latent_size=self.latent_dim,
                               unit_dim=params["unit_dim"], channels_list=channels_list_dec, filter_size=params["filter_size"],
                               stride= params["stride"], upsampling_factor=params["upsampling_factor"])
         self.act = nn.Sigmoid()
 
     def encode(self, inputs: Tensor):
-        conv_result = self.conv_net(inputs)
-        #TODO: gradient through hybrid layer
-        noise = self.hybrid_layer(conv_result).to(inputs.device)
+        codes = self.conv_net(inputs)
+        return codes
+
+    def sample_noise(self, codes:Tensor):
+        noise = self.hybrid_layer(codes).to(codes.device)
         return noise
 
-    def decode(self, z: Tensor) -> Tensor:
-        with torch.no_grad():
-            x = torch.zeros(size = (z.shape[0],)+self.decoder_initial_shape).to(z.device)
-        output = self.scm(x, z)
+    def decode(self, z: Tensor, x:Tensor, mode:str) -> Tensor:
+        output = self.scm(x, z, mode=mode)
         return self.act(output)
 
     def generate_from_prior(self, num_samples:int):
         """Samples (with hybrid sampling) from the latent space."""
         noise = self.hybrid_layer.sample_from_prior(num_samples)
-        return self.decode(noise)
+        return self.decode(noise) #TODO: fix here
 
     def generate(self, x: Tensor) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
         return self.forward(x)
 
-    def forward(self, inputs: Tensor) -> Tensor:
-        noise = self.encode(inputs)
-        output = self.decode(noise)
+    def forward(self, inputs: Tensor, mode="auto") -> Tensor:
+        codes = self.encode(inputs)
+        if mode=="auto":
+            # normal autoencoder mode (no noise)
+            x = codes.view((-1,)+self.decoder_initial_shape)
+            z = x
+        elif mode=="hybrid":
+            with torch.no_grad():
+                x = torch.zeros(size = (codes.shape[0],)+self.decoder_initial_shape).to(codes.device)
+            z = self.sample_noise(codes)
+        output = self.decode(z, x, mode=mode)
         return  output
 
     def loss_function(self, *args):
