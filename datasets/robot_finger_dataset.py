@@ -1,6 +1,7 @@
 """ Implementation of loading functions for robot_finger_dataset"""
 from typing import Any, Callable, Dict, IO, List, Optional, Tuple, Union
 from torchvision.datasets import VisionDataset
+from torchvision.transforms import ToPILImage,ToTensor
 from PIL import Image
 import numpy as np
 import tarfile
@@ -37,24 +38,30 @@ class RFD(VisionDataset):
                  real: bool=False,
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None,
-                 load: bool = False) -> None:
+                 load: bool = False,
+                 only_subset:bool = True) -> None:
         """ Can load one of 4 datasets available:
         - the training dataset
         - the standard test dataset
         - the heldout_colors test set
         - the real images test set
+        Note: only one of the test sets can be loaded at a time.
+        (Ideally this could be changed)
         """
-        super().__init__(root, transform, target_transform)
+        super(RFD, self).__init__(root, transform=transform,
+                                  target_transform=target_transform)
 
         self.train = train  # training set or test set
         self.heldout_test = heldout_colors
         self.real_test = real
+        self.origin_folder = self.raw_subfolders[0]
+        self.only_subset = only_subset
+
         if load: self.load_from_disk()
         if not self._check_exists():
             raise RuntimeError('Dataset not found.' +
                                ' You can use load=True to load it from file')
 
-        self.origin_folder = self.raw_subfolders[0]
         if self.train:
             data_file = self.training_file
         elif self.heldout_test:
@@ -69,24 +76,27 @@ class RFD(VisionDataset):
         self.data, self.targets = torch.load(os.path.join(self.processed_folder, data_file))
 
 
-    def read_tar(self, path):
+    @staticmethod
+    def read_tar(path, limit:int):
         """Reads tar file, navigating all subdirectories and storing all images
-        in a torch tensor"""
+        in a list of PIlImages"""
         print("Opening "+str(path))
         tar = tarfile.open(path)
+        to_tensor = ToTensor()
         #navigating subdirectories
         imgs = []
         files_read = 0
-        for member in tar.getmembers():
+        for member in tar:
             if member.isreg(): #regular file
                 files_read +=1
-                image = tar.extractfile(member.name)
+                image = tar.extractfile(member)
                 image = image.read()
-                image = Image.open(io.BytesIO(image))
-                imgs.append(torch.Tensor(image.getdata(), requires_grad=False).view(self.shape))
+                image = to_tensor(Image.open(io.BytesIO(image)))
+                image.requires_grad=False
+                imgs.append(image)
                 if files_read%100000==0: print(str(files_read)+ " files read.")
-        tensor = torch.stack(imgs)
-        return tensor
+                if limit and files_read==limit: break
+        return imgs
 
     def read_dataset_info(self):
         # loading info
@@ -100,7 +110,7 @@ class RFD(VisionDataset):
     def __repr__(self):
         standard_descrpt = super.__repr__(self)
         self.read_dataset_info()
-        head = "Dataset "+ self.__class__.__name__ + " info"
+        head = "Dataset "+ self.__class__.__name__ + self.origin_folder +" info"
         body = ["Factors of variation : "]
         for n,v_num in zip(self.factor_names, self.factor_values_num):
             line = n+" with "+str(self.factor_values_num)+" values"
@@ -108,54 +118,58 @@ class RFD(VisionDataset):
         lines = [head] + [" " * self._repr_indent + line for line in body]
         return '\n'.join([standard_descrpt, lines])
 
-    def get_train_test_split(self, tensor, labels):
+    def get_train_test_split(self, images, labels):
         """ Performs train-test splitting of standard dataset """
-        size = tensor.shape[0]
+        size = len(images)
         train_samples = int(self.train_percentage*size)
         # randomly sample 'train_samples' indices
-        idx = torch.randperm(size)
+        #TODO: check whether shuffling makes sense
+        idx = np.random.permutation(size)
         train_indices = idx[:train_samples]
         test_indices = idx[train_samples:]
-        train_tensor = tensor[train_indices]
-        train_labels = labels[train_indices]
-        test_tensor = tensor[test_indices]
-        test_labels = labels[test_indices]
-        return train_tensor,train_labels,test_tensor,test_labels
+        train_images = [images[i] for i in train_indices]
+        train_labels = [labels[i] for i in train_indices]
+        test_images = [images[i] for i in test_indices]
+        test_labels = [labels[i] for i in test_indices]
+        return train_images,train_labels,test_images,test_labels
 
     def load_from_disk(self):
         """ One-time use function: loads the files from disk opening the various .tar, .npz
         files and stores the content as torch tensors. """
+        if self._check_exists():
+            return
+        LIMIT = 100000
         os.makedirs(self.processed_folder, exist_ok=True)
         print("Preprocessing...")
-        # open .tar files
         for i,folder in enumerate(self.raw_subfolders):
             # loading images
             if i==2: # true images stored in .npz
                 path = os.path.join(self.raw_folder, folder, folder+"_images.npz")
-                tensor = torch.tensor(np.load(path, allow_pickle=True)["images"], requires_grad=False)
+                images = np.load(path, allow_pickle=True)["images"]
             else:
+                # open .tar files
                 path = os.path.join(self.raw_folder, folder, folder+"_images.tar")
-                tensor = self.read_tar(path)
+                images = self.read_tar(path, limit=LIMIT)
             # loading labels
-            path = os.path.join(self.raw_folder, self.origin_folder, self.origin_folder+"_labels.npz")
-            labels = torch.tensor(np.load(path, allow_pickle=True)["labels"], requires_grad=False) #num_data_points x 9
+            path = os.path.join(self.raw_folder, folder, folder+"_labels.npz")
+            labels = np.load(path, allow_pickle=True)["labels"]
+            if self.only_subset: labels=labels[:LIMIT]#num_data_points x 9
             if i==0: # for the standard dataset we split in train and test sets
                 # train-test split
-                train_tensor,train_labels,test_tensor,test_labels = self.get_train_test_split(tensor, labels)
-                training_set = (train_tensor, train_labels)
-                test_set = (test_tensor, test_labels)
+                train_images,train_labels,test_images,test_labels = self.get_train_test_split(images, labels)
+                training_set = (train_images, train_labels)
+                test_set = (test_images, test_labels)
                 # saving to file
-                with open(os.path.join(self.processed_folder, self.training_file), 'wb') as f:
-                    torch.save(training_set, f)
-                with open(os.path.join(self.processed_folder, self.standard_test_file), 'wb') as f:
-                    torch.save(test_set, f)
+                torch.save(training_set, os.path.join(self.processed_folder, self.training_file))
+                del training_set
+                torch.save(test_set, os.path.join(self.processed_folder, self.standard_test_file))
             else:
-                set = (tensor, labels)
-                with open(os.path.join(self.processed_folder, self.heldout_test_file if i==1 else self.real_test_file), 'wb') as f:
-                    torch.save(set, f)
+                dataset = (images, labels)
+                torch.save(dataset, os.path.join(self.processed_folder,
+                                                 self.heldout_test_file if i==1
+                                                 else self.real_test_file))
 
         print("Done!")
-
 
     def __getitem__(self, index: int) -> Any:
         """
@@ -166,10 +180,6 @@ class RFD(VisionDataset):
             tuple: (image, target) where target is index of the target class.
         """
         img, target = self.data[index], int(self.targets[index])
-
-        # doing this so that it is consistent with all other datasets
-        # to return a PIL Image
-        img = Image.fromarray(img.numpy(), mode='L')
 
         if self.transform is not None:
             img = self.transform(img)

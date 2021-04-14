@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA
 import matplotlib.pyplot as plt
+from datasets import RFD
 import torch
 
 class DatasetLoader:
@@ -66,7 +67,7 @@ class DatasetLoader:
                 transforms.Resize((64, 64)),
                 transforms.ToTensor(),
             ])
-            data_folder = '/datasets/celeba/'
+            data_folder = './datasets/celeba/'
             train_set = CelebA(data_folder,
                                split='train',
                                download=True,
@@ -75,6 +76,26 @@ class DatasetLoader:
                               split='valid',
                               download=True,
                               transform=transform)
+
+        elif args["dataset_name"] == 'RFD': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
+            transform = transforms.ToTensor()
+            #IMPORTANT: train images already converted to tensor objects
+            # -> no need to apply transformation
+            data_folder = './datasets/robot_finger_datasets/'
+            train_set = RFD(data_folder,
+                            train=True,
+                            load=True,
+                            target_transform=transform,
+                            only_subset=args["subset"])
+            test_set = RFD(data_folder,
+                           train=False,
+                           heldout_colors = args["heldout"],
+                           real= args["real"],
+                           load=True,
+                           transform=transform,
+                           target_transform=transform)
+            print(train_set)
+            print(test_set)
         
         else:
             raise RuntimeError("Unrecognized data set '{}'".format(
@@ -88,7 +109,6 @@ class DatasetLoader:
                                                    lengths=[train_num, val_num],
                                                    generator=torch.Generator().manual_seed(42))
 
-        #TODO: add new dataset: https://arxiv.org/pdf/2010.14407.pdf
         self.train = DataLoader(train,
                                 batch_size=args["batch_size"],
                                 shuffle=True,

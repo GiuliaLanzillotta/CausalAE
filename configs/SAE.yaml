@@ -17,10 +17,13 @@ opt_params:
 
 
 data_params:
-  dataset_name: MNIST
+  dataset_name: RFD
   batch_size: 144 # Better to have a square number
   test_batch_size: 144
   train_split: 0.7
+  heldout: False
+  real: False
+  subset: True #limit number of samples to 200.000 (to avoid memory errors)
 
 trainer_params:
   gpus: 1
