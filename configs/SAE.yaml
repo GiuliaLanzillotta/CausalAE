@@ -15,7 +15,7 @@ opt_params:
   LR: 0.0005
   weight_decay: 0.0
   scheduler_gamma: 0.95
-  auto_epochs: 10
+  auto_epochs: -1
 
 
 data_params:
@@ -35,6 +35,6 @@ logging_params:
   save_dir: "logs/"
   name: "SAE"
   manual_seed: 1265
-  version: v2
+  version: v3
   plot_every: 5
 
