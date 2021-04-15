@@ -14,7 +14,8 @@ class ConvBlock(nn.Module):
         super(ConvBlock, self).__init__()
         self.block = nn.Sequential(
             nn.Conv2d(C_IN, out_channels=C_OUT, kernel_size=k, stride=s, padding=p),
-            nn.BatchNorm2d(C_OUT),nn.LeakyReLU())
+            nn.BatchNorm2d(C_OUT),
+            nn.LeakyReLU())
 
     def forward(self, inputs: Tensor) -> Tensor:
         outputs = self.block(inputs)
@@ -38,14 +39,16 @@ class ConvBlock(nn.Module):
 
     @staticmethod
     def same_padding(H_in, H_w, s):
-        return int(((s-1)*H_w + H_in -1)/2)
+        if H_in<H_w: return (H_w-H_in)*s
+        return int(((s-1)*H_in + H_w -s)/2)
 
 
 class ConvNet(nn.Module):
     """ Implements convolutional net with multiple convolutional 
     blocks  + final flattening """
 
-    def __init__(self, dim_in, final_dim, channels_list:list, filter_size:int = 2, stride:int=2):
+    def __init__(self, dim_in, final_dim, channels_list:list,
+                 filter_size:int = 2, stride:int=2, padding:int=0):
         #TODO add selection for non-linearity
         super(ConvNet, self).__init__()
         C, H, W = dim_in 
@@ -57,8 +60,8 @@ class ConvNet(nn.Module):
         for c in channels_list:
             # conv block with kernel size 2, size 2 and padding 1 
             # halving the input dimension at every step 
-            modules.append(ConvBlock(C, c, filter_size, stride, 0))
-            h = ConvBlock.compute_output_size(h, filter_size, stride, 0)
+            modules.append(ConvBlock(C, c, filter_size, stride, padding))
+            h = ConvBlock.compute_output_size(h, filter_size, stride, padding)
             C = c
 
         # calculating shape of the image after convolution
@@ -66,7 +69,8 @@ class ConvNet(nn.Module):
         assert all(v>0 for v in self.final_shape), "Input not big enough for the convolutions requested"
         flat_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
-        modules.append(nn.Linear(flat_dim, final_dim)) #notice no activation here
+        modules.append(nn.Linear(flat_dim, final_dim))
+        modules.append(nn.ReLU())
         self.net = nn.Sequential(*modules)
 
 
@@ -214,19 +218,19 @@ class AdaIN(nn.Module):
 
 class StrTrf(nn.Module):
     """Implements the structural transform layer. To be used in SAE."""
-    def __init__(self, noise_size):
+    def __init__(self, noise_size, n_features):
         super().__init__()
         self.fc_mu = nn.Sequential(nn.Linear(noise_size,noise_size*10),
                                    nn.ReLU(),
                                    nn.Linear(noise_size*10,noise_size*20),
                                    nn.ReLU(),
-                                   nn.Linear(noise_size*20,1),
+                                   nn.Linear(noise_size*20,n_features),
                                    nn.ReLU())
         self.sigma = nn.Sequential(nn.Linear(noise_size,noise_size*10),
                                    nn.ReLU(),
                                    nn.Linear(noise_size*10,noise_size*20),
                                    nn.ReLU(),
-                                   nn.Linear(noise_size*20,1),
+                                   nn.Linear(noise_size*20,n_features),
                                    nn.ReLU())
 
 
@@ -237,7 +241,10 @@ class StrTrf(nn.Module):
         the children variables."""
         sigma_z = self.sigma(z)
         mu_z = self.fc_mu(z)
-        y = mu_z.unsqueeze(2).unsqueeze(3) + sigma_z.unsqueeze(2).unsqueeze(3)*x
+        # mu_z and sigma_z are one-dimensional vectors: we need to expand their dimensions
+        mu_z = mu_z.view(*mu_z.shape, *(1,)*(len(x.shape) - len(mu_z.shape)))
+        sigma_z = sigma_z.view(*sigma_z.shape, *(1,) * (len(x.shape) - len(sigma_z.shape)))
+        y = mu_z + sigma_z*x
         return y
 
 
@@ -279,7 +286,7 @@ class SCMDecoder(nn.Module):
         h = H
         for c in channels_list:
             dim_in = (C, h, h)
-            self.str_trf_modules.append(StrTrf(self.unit_dim))
+            self.str_trf_modules.append(StrTrf(self.unit_dim, C))
             self.conv_modules.append(UpsampledConv(upsampling_factor, dim_in, c, filter_size, stride))
             h *= 2
             C = c

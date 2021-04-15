@@ -81,13 +81,14 @@ class DatasetLoader:
             transform = transforms.ToTensor()
             #IMPORTANT: train images already converted to tensor objects
             # -> no need to apply transformation
+            cluster_data_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
             data_folder = './datasets/robot_finger_datasets/'
-            train_set = RFD(data_folder,
+            train_set = RFD(cluster_data_folder,
                             train=True,
                             load=True,
                             target_transform=transform,
                             only_subset=args["subset"])
-            test_set = RFD(data_folder,
+            test_set = RFD(cluster_data_folder,
                            train=False,
                            heldout_colors = args["heldout"],
                            real= args["real"],

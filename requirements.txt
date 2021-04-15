@@ -1,0 +1,7 @@
+pytorch_lightning
+matplotlib
+torch
+torchvision
+numpy
+Pillow
+PyYAML

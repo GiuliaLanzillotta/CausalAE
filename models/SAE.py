@@ -15,17 +15,25 @@ class SAE(nn.Module):
         self.dim_in = dim_in # C, H, W
         # Building encoder
         #TODO: add a selection for non-linearity here
-        channels_list_enc = params["channels_list_enc"]
-        channels_list_dec = params["channels_list_dec"]
-        conv_net = ConvNet(dim_in, self.latent_dim, channels_list=channels_list_enc)
+
+        conv_net = ConvNet(dim_in, self.latent_dim,
+                           channels_list=params["channels_list_enc"],
+                           filter_size=params["filter_size"],
+                           stride=params["stride_enc"],
+                           padding=params["padding_enc"])
         self.conv_net = conv_net # returns vector of latent_dim size
         # hybrid sampling to get the noise vector
         self.hybrid_layer = HybridLayer(self.latent_dim, self.unit_dim, self.N)
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
         self.decoder_initial_shape = (self.latent_dim, 1, 1)
-        self.scm = SCMDecoder(self.decoder_initial_shape, final_shape=dim_in, latent_size=self.latent_dim,
-                              unit_dim=params["unit_dim"], channels_list=channels_list_dec, filter_size=params["filter_size"],
-                              stride= params["stride"], upsampling_factor=params["upsampling_factor"])
+        self.scm = SCMDecoder(self.decoder_initial_shape,
+                              final_shape=dim_in,
+                              latent_size=self.latent_dim,
+                              unit_dim=params["unit_dim"],
+                              channels_list=params["channels_list_dec"],
+                              filter_size=params["filter_size"],
+                              stride= params["stride_dec"],
+                              upsampling_factor=params["upsampling_factor"])
         self.act = nn.Sigmoid()
 
     def encode(self, inputs: Tensor):
@@ -68,5 +76,6 @@ class SAE(nn.Module):
         X_hat = args[0]
         X = args[1]
         FID = 0
+        MSE = F.mse_loss(X_hat, X, reduction="sum")
         BCE = F.binary_cross_entropy(X_hat, X, reduction="sum")
-        return BCE, FID
+        return BCE, FID, MSE

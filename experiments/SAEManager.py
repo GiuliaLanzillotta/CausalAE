@@ -31,11 +31,12 @@ class SAEXperiment(pl.LightningModule):
         mode="auto" if self.current_epoch<=self.burn_in else "hybrid"
         input_imgs, labels = batch
         X_hat = self.forward(input_imgs, mode=mode)
-        BCE, FID = self.model.loss_function(X_hat, input_imgs)# Logging
+        BCE, FID, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
         self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         # TODO: include FID
         # self.log('FID', FID, prog_bar=True, on_epoch=True, on_step=True)
-        return BCE
+        return MSE
 
     def training_epoch_end(self, outputs) -> None:
         if self.current_epoch%self.params['logging_params']['plot_every']==0:
@@ -45,11 +46,12 @@ class SAEXperiment(pl.LightningModule):
         mode="auto" if self.current_epoch<=self.burn_in else "hybrid"
         input_imgs, labels = batch
         X_hat = self.forward(input_imgs, mode=mode)
-        BCE, FID = self.model.loss_function(X_hat, input_imgs)# Logging
+        BCE, FID, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
         self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
         # TODO: include FID
         # self.log('FID', FID, prog_bar=True, on_epoch=True, on_step=True)
-        return BCE
+        return MSE
 
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.tensor(outputs).mean()

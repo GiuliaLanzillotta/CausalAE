@@ -58,7 +58,8 @@ class RFD(VisionDataset):
         self.only_subset = only_subset
 
         if load: self.load_from_disk()
-        if not self._check_exists():
+        #TODO: print statements
+        if not all(self._check_exists()):
             raise RuntimeError('Dataset not found.' +
                                ' You can use load=True to load it from file')
 
@@ -92,7 +93,6 @@ class RFD(VisionDataset):
                 image = tar.extractfile(member)
                 image = image.read()
                 image = to_tensor(Image.open(io.BytesIO(image)))
-                image.requires_grad=False
                 imgs.append(image)
                 if files_read%100000==0: print(str(files_read)+ " files read.")
                 if limit and files_read==limit: break
@@ -108,7 +108,7 @@ class RFD(VisionDataset):
         self.factor_values_num = list(self.info["num_factor_values"])
 
     def __repr__(self):
-        standard_descrpt = super.__repr__(self)
+        standard_descrpt = super(RFD).__repr__()
         self.read_dataset_info()
         head = "Dataset "+ self.__class__.__name__ + self.origin_folder +" info"
         body = ["Factors of variation : "]
@@ -116,7 +116,7 @@ class RFD(VisionDataset):
             line = n+" with "+str(self.factor_values_num)+" values"
             body.append(line)
         lines = [head] + [" " * self._repr_indent + line for line in body]
-        return '\n'.join([standard_descrpt, lines])
+        return '\n'.join([standard_descrpt, '\n'.join(lines)])
 
     def get_train_test_split(self, images, labels):
         """ Performs train-test splitting of standard dataset """
@@ -136,12 +136,14 @@ class RFD(VisionDataset):
     def load_from_disk(self):
         """ One-time use function: loads the files from disk opening the various .tar, .npz
         files and stores the content as torch tensors. """
-        if self._check_exists():
-            return
+
         LIMIT = 100000
         os.makedirs(self.processed_folder, exist_ok=True)
+        exist_flags = self._check_exists()
+        if all(exist_flags): return
         print("Preprocessing...")
         for i,folder in enumerate(self.raw_subfolders):
+            if exist_flags[i]: continue
             # loading images
             if i==2: # true images stored in .npz
                 path = os.path.join(self.raw_folder, folder, folder+"_images.npz")
@@ -161,13 +163,14 @@ class RFD(VisionDataset):
                 test_set = (test_images, test_labels)
                 # saving to file
                 torch.save(training_set, os.path.join(self.processed_folder, self.training_file))
-                del training_set
                 torch.save(test_set, os.path.join(self.processed_folder, self.standard_test_file))
+                del training_set, test_set
             else:
                 dataset = (images, labels)
                 torch.save(dataset, os.path.join(self.processed_folder,
                                                  self.heldout_test_file if i==1
                                                  else self.real_test_file))
+                del dataset
 
         print("Done!")
 
@@ -202,12 +205,10 @@ class RFD(VisionDataset):
         # this will be something like './datasets/robot_finger_datasets/RFD/processed'
         return os.path.join(self.root, self.__class__.__name__, 'processed')
 
-    def _check_exists(self) -> bool:
-        return (os.path.exists(os.path.join(self.processed_folder,
-                                            self.training_file)) and
-                os.path.exists(os.path.join(self.processed_folder,
-                                            self.standard_test_file)) and
-                os.path.exists(os.path.join(self.processed_folder,
-                                            self.heldout_test_file)) and
-                os.path.exists(os.path.join(self.processed_folder,
-                                            self.real_test_file)))
+    def _check_exists(self) -> List:
+        flags = [os.path.exists(os.path.join(self.processed_folder, self.training_file)) and \
+                   os.path.exists(os.path.join(self.processed_folder, self.standard_test_file)),
+                 os.path.exists(os.path.join(self.processed_folder, self.heldout_test_file)),
+                 os.path.exists(os.path.join(self.processed_folder, self.real_test_file))]
+
+        return flags

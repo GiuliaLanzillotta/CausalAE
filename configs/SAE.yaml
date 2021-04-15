@@ -1,11 +1,13 @@
 model_params:
   name: 'SAE'
-  latent_dim: 32
-  channels_list_enc: [32, 32, 64, 64]
-  channels_list_dec: [64, 32, 64, 32]
-  filter_size: 4
-  stride: 2
-  unit_dim: 8
+  latent_dim: 16
+  channels_list_enc: [64, 64, 64, 64]
+  channels_list_dec: [64, 64, 64, 64]
+  filter_size: 3
+  padding_enc: 1
+  stride_enc: 2
+  stride_dec: 1
+  unit_dim: 4
   upsampling_factor: 2
   latent_vecs: 128 # for hybrid sampling
 
@@ -13,17 +15,17 @@ opt_params:
   LR: 0.0005
   weight_decay: 0.0
   scheduler_gamma: 0.95
-  auto_epochs: 0
+  auto_epochs: 10
 
 
 data_params:
-  dataset_name: RFD
+  dataset_name: MNIST
   batch_size: 144 # Better to have a square number
   test_batch_size: 144
   train_split: 0.7
   heldout: False
   real: False
-  subset: True #limit number of samples to 200.000 (to avoid memory errors)
+  subset: False #limit number of samples to 200.000 (to avoid memory errors)
 
 trainer_params:
   gpus: 1
