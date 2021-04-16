@@ -1,4 +1,4 @@
-from tuning import *
+from .tuning import *
 
 
 

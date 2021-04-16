@@ -30,11 +30,12 @@ data_params:
 trainer_params:
   gpus: 1
   max_epochs: 100
+  tune_params: 8
 
 logging_params:
   save_dir: "logs/"
   name: "SAE"
   manual_seed: 1265
-  version: v3
+  version: v4
   plot_every: 5
 

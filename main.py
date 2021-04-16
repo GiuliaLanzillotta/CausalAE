@@ -7,6 +7,9 @@ import numpy as np
 import os
 import glob
 import torch
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+
 from experiments import experiments_switch
 from configs import config_switch
 from pytorch_lightning import Trainer
@@ -17,7 +20,7 @@ from ray import tune
 
 
 
-def train_model(config:dict, tune:bool=False, num_epochs=10, num_gpus=0):
+def train_model(config:dict, tuning:bool=False):
     """ Wrapper for the model training loop to be used by the hyper-parameter tuner"""
     tb_logger = TensorBoardLogger(save_dir=config['logging_params']['save_dir'],
                                   name=config['logging_params']['name'],
@@ -33,14 +36,19 @@ def train_model(config:dict, tune:bool=False, num_epochs=10, num_gpus=0):
     callbacks = [ModelCheckpoint(monitor='val_loss', mode="min")]
     metrics = {"loss":"ptl/val_loss"}
     #after each validation epoch we report the above metric to Ray Tune
-    if tune: callbacks.append(TuneReportCallback(metrics, on="validation_end"))
+    if tuning: callbacks.append(TuneReportCallback(metrics, on="validation_end"))
 
     # resuming from checkpoint
     checkpoint_path = os.path.join(config['logging_params']['save_dir'],
                                    config['logging_params']['name'],
                                    config['logging_params']['version'],
                                    "checkpoints/")
-    latest_checkpoint = max(glob.glob(checkpoint_path + "\*ckpt"), key=os.path.getctime)
+    try:
+        latest_checkpoint = max(glob.glob(checkpoint_path + "\*ckpt"), key=os.path.getctime)
+    except ValueError:
+        #no checpoints
+        latest_checkpoint = "null"
+
     runner = Trainer(min_epochs=1,
                      logger=tb_logger,
                      log_every_n_steps=50,
@@ -58,11 +66,36 @@ def train_model(config:dict, tune:bool=False, num_epochs=10, num_gpus=0):
     runner.fit(experiment)
     #todo save best model checkpoint path and metrics value
 
+def do_tuning(config:dict):
+    # using Ray tuning functionality to do hyperparameter search
+    # see here for details: https://docs.ray.io/en/master/tune/tutorials/tune-pytorch-lightning.html#using-population-based-training-to-find-the-best-parameters
+    #todo: select a search algorithm
+    scheduler = ASHAScheduler(
+        max_t=config['trainer_params']['max_epochs'],
+        grace_period=10, # wait at least 10 epochs
+        reduction_factor=2)
+    reporter = CLIReporter(metric_columns=["loss", "training_iteration"]) #todo: check what we want to save in final table
+    analysis = tune.run(
+        tune.with_parameters(train_model, tuning=True),
+        resources_per_trial={
+            "cpu": os.cpu_count(),
+            "gpu": config['trainer_params']['gpus']},
+        metric="loss",
+        mode="min",
+        config=config,
+        num_samples=config['trainer_params']['tune_params'],
+        scheduler=scheduler,
+        progress_reporter=reporter,
+        trial_name_creator=config["logging_params"]["name_creator"])
+    analysis.results_df.to_csv(os.path.join(config['logging_params']['save_dir'],"tune_results.csv"))
+
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='SAE experiments runner')
-    parser.add_argument('--tune',  '-t',
-                        dest="tune",
+    parser.add_argument('--tuning',  '-t',
+                        dest="tuning",
                         metavar='TUNE',
                         type=bool,
                         help =  'whether to perform hyperparameter tuning',
@@ -74,6 +107,6 @@ if __name__ == '__main__':
                         default='SAE')
 
     args = parser.parse_args()
-    config = config_switch(args.name)(args.tune)
-    tune.run()
-    train_model(config, tune=args.tune)
+    config = config_switch[args.name](args.tuning)
+    if args.tuning: do_tuning(config)
+    else: train_model(config)

@@ -36,7 +36,7 @@ class SAEXperiment(pl.LightningModule):
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         # TODO: include FID
         # self.log('FID', FID, prog_bar=True, on_epoch=True, on_step=True)
-        return MSE
+        return BCE
 
     def training_epoch_end(self, outputs) -> None:
         if self.current_epoch%self.params['logging_params']['plot_every']==0:
@@ -51,7 +51,7 @@ class SAEXperiment(pl.LightningModule):
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
         # TODO: include FID
         # self.log('FID', FID, prog_bar=True, on_epoch=True, on_step=True)
-        return MSE
+        return BCE
 
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.tensor(outputs).mean()
