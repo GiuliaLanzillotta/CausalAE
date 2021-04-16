@@ -78,7 +78,7 @@ class RFD(VisionDataset):
 
 
     @staticmethod
-    def read_tar(path, limit:int):
+    def read_tar(path, limit:int=0):
         """Reads tar file, navigating all subdirectories and storing all images
         in a list of PIlImages"""
         print("Opening "+str(path))
@@ -95,7 +95,7 @@ class RFD(VisionDataset):
                 image = to_tensor(Image.open(io.BytesIO(image)))
                 imgs.append(image)
                 if files_read%100000==0: print(str(files_read)+ " files read.")
-                if limit and files_read==limit: break
+                if 0 < limit == files_read: break
         return imgs
 
     def read_dataset_info(self):
@@ -113,7 +113,7 @@ class RFD(VisionDataset):
         head = "Dataset "+ self.__class__.__name__ + self.origin_folder +" info"
         body = ["Factors of variation : "]
         for n,v_num in zip(self.factor_names, self.factor_values_num):
-            line = n+" with "+str(self.factor_values_num)+" values"
+            line = n+" with "+str(v_num)+" values"
             body.append(line)
         lines = [head] + [" " * self._repr_indent + line for line in body]
         return '\n'.join([standard_descrpt, '\n'.join(lines)])
@@ -137,7 +137,7 @@ class RFD(VisionDataset):
         """ One-time use function: loads the files from disk opening the various .tar, .npz
         files and stores the content as torch tensors. """
 
-        LIMIT = 100000
+        LIMIT = 100000 if self.only_subset else 0
         os.makedirs(self.processed_folder, exist_ok=True)
         exist_flags = self._check_exists()
         if all(exist_flags): return

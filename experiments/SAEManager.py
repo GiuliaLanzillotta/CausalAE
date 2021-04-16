@@ -19,7 +19,8 @@ class SAEXperiment(pl.LightningModule):
         # split in train/test, apply transformations, divide in batches, extract data dimension
         self.loader = DatasetLoader(params["data_params"])
         dim_in =  self.loader.data_shape # C, H, W
-        self.model = SAE(params["model_params"], dim_in, self.device)
+        self.model = SAE(params["model_params"], dim_in)
+        print(self.model)
         self.burn_in = params["opt_params"]["auto_epochs"]
         # For tensorboard logging (saving the graph)
         self.example_input_array = torch.rand((1,) + self.loader.data_shape, requires_grad=False)

@@ -11,21 +11,16 @@ class VAE(nn.Module):
     def __init__(self, params:dict, dim_in) -> None:
         super(VAE, self).__init__()
         self.beta = params["beta"]
-        self.latent_dim = params["latent_dim"]
+        self.latent_size = params["latent_size"]
         self.dim_in = dim_in # C, H, W
         # Building encoder
         #TODO: add a selection for non-linearity here
-        channels_list = params["channels_list"]
-        conv_net = ConvNet(dim_in, self.latent_dim, channels_list=channels_list,
-                           filter_size=params["filter_size"], stride=params["stride"])
+        conv_net = ConvNet(dim_in, self.latent_size, depth=params["enc_depth"], **params)
         self.conv_net = conv_net
-        self.gaussian_latent = GaussianLayer(self.latent_dim, self.latent_dim)
-        channels_list.reverse()
-        self.trans_conv_net = nn.Sequential(TransConvNet(self.latent_dim, conv_net.final_shape, dim_in,
-                                                         channels_list[1:] + [dim_in[0]],
-                                                         filter_size=params["filter_size"],
-                                                         stride=params["stride"]),
-                                            nn.Sigmoid())
+        self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size)
+        self.trans_conv_net = TransConvNet(self.latent_size, conv_net.final_shape,
+                                           dim_in, depth=params["dec_depth"])
+        self.act = nn.Sigmoid()
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
@@ -34,7 +29,7 @@ class VAE(nn.Module):
 
     def decode(self, z: Tensor) -> Tensor:
         trans_conv_res = self.trans_conv_net(z)
-        return trans_conv_res
+        return self.act(trans_conv_res)
 
     def generate_standard(self, num_samples:int, device) -> Tensor:
         """ Sampling noise from the latent space and generating images

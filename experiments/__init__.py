@@ -6,4 +6,4 @@ from .SAEManager import SAEXperiment
 
 
 experiments_switch = {'VAE':VAEXperiment,
-                      'SAE':SAEXperiment}
+                      'BaseSAE':SAEXperiment}

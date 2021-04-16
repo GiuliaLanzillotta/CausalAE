@@ -75,19 +75,21 @@ def do_tuning(config:dict):
         grace_period=10, # wait at least 10 epochs
         reduction_factor=2)
     reporter = CLIReporter(metric_columns=["loss", "training_iteration"]) #todo: check what we want to save in final table
+    path = os.path.join(config['logging_params']['save_dir'],
+                        config['logging_params']['name'],"tuner")
     analysis = tune.run(
         tune.with_parameters(train_model, tuning=True),
         resources_per_trial={
-            "cpu": os.cpu_count(),
+            "cpu": config['tuner_params']['cpus'],
             "gpu": config['trainer_params']['gpus']},
         metric="loss",
         mode="min",
         config=config,
-        num_samples=config['trainer_params']['tune_params'],
+        local_dir=path,
+        num_samples=config['tuner_params']['num_samples'],
         scheduler=scheduler,
-        progress_reporter=reporter,
-        trial_name_creator=config["logging_params"]["name_creator"])
-    analysis.results_df.to_csv(os.path.join(config['logging_params']['save_dir'],"tune_results.csv"))
+        progress_reporter=reporter)
+    analysis.results_df.to_csv(os.path.join(path,"tune_results.csv"))
 
 
 
@@ -104,7 +106,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='SAE')
+                        default='BaseSAE')
 
     args = parser.parse_args()
     config = config_switch[args.name](args.tuning)

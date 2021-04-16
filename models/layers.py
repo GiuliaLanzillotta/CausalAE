@@ -47,25 +47,27 @@ class ConvNet(nn.Module):
     """ Implements convolutional net with multiple convolutional 
     blocks  + final flattening """
 
-    def __init__(self, dim_in, final_dim, channels_list:list,
-                 filter_size:int = 2, stride:int=2, padding:int=0):
-        #TODO add selection for non-linearity
+    def __init__(self, dim_in, final_dim, depth:int, pool_every:int, **kwargs):
+        #TODO: include MISH non-linearity and add switch for non-linearities
         super(ConvNet, self).__init__()
-        C, H, W = dim_in 
-        self.channels_list = channels_list
+        C, H, W = dim_in
+        self.depth = depth
         
         # Stacking the conv layers  
         modules = []
         h = H
-        for c in channels_list:
+        for l in range(depth):
             # conv block with kernel size 2, size 2 and padding 1 
-            # halving the input dimension at every step 
-            modules.append(ConvBlock(C, c, filter_size, stride, padding))
-            h = ConvBlock.compute_output_size(h, filter_size, stride, padding)
-            C = c
+            # halving the input dimension at every step
+            same_padding = ConvBlock.same_padding(h, 5 if l==0 else 3, 1)
+            modules.append(ConvBlock(C, 64, 5 if l==0 else 3, 1, same_padding))
+            if l==0: C = 64
+            if l%pool_every == 0 and l>0:
+                modules.append(nn.MaxPool2d(2,2,0))
+                h = ConvBlock.compute_output_size(h, 2, 2, 0)
 
         # calculating shape of the image after convolution
-        self.final_shape = channels_list[-1], h, h # assuming square input image
+        self.final_shape = C, h, h # assuming square input image
         assert all(v>0 for v in self.final_shape), "Input not big enough for the convolutions requested"
         flat_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
@@ -79,7 +81,8 @@ class ConvNet(nn.Module):
         return outputs
 
 class TransConvBlock(nn.Module):
-    """ Implements logic for a transpose convolutional block [transposeConv2d, normalization, activation]"""
+    """ Implements logic for a transpose convolutional block
+    [transposeConv2d, normalization, activation]"""
 
     def __init__(self, C_IN, C_OUT, k, s, p):
         #TODO: add check for the norm
@@ -87,7 +90,8 @@ class TransConvBlock(nn.Module):
         super(TransConvBlock, self).__init__()
         self.block = nn.Sequential(
             nn.ConvTranspose2d(C_IN, out_channels=C_OUT, kernel_size=k, stride=s, padding=p),
-            nn.BatchNorm2d(C_OUT),nn.LeakyReLU())
+            nn.BatchNorm2d(C_OUT),
+            nn.LeakyReLU())
 
     def forward(self, inputs: Tensor) -> Tensor:
         outputs = self.block(inputs)
@@ -102,7 +106,7 @@ class TransConvBlock(nn.Module):
 class TransConvNet(nn.Module):
     """Implements a Transpose convolutional network (initial reshaping + transpose convolution)"""
 
-    def __init__(self, dim_in, initial_shape, final_shape, channels_list:list, filter_size:int=2, stride:int=2):
+    def __init__(self, dim_in, initial_shape, final_shape, depth):
         """
             - initial_shape:(C,H,W) -> shape of the input image to the transpose 
                 convolution block
@@ -112,29 +116,32 @@ class TransConvNet(nn.Module):
         self.final_shape = final_shape
         flat_dim = int(np.product(initial_shape))
         self.fc_reshape = nn.Linear(dim_in, flat_dim)
+        self.depth = depth
         C,H,W = initial_shape
         # Stacking the trans-conv layers 
         modules = []
         h = H
-        for c in channels_list:
+        for l in range(depth):
             # transpose conv block with kernel size 2, size 2 and padding 1 
             # doubling the input dimension at every step 
-            modules.append(TransConvBlock(C, c, filter_size, stride, 0))
-            h = TransConvBlock.compute_output_size(h, filter_size, stride, 0)
-            C = c
+            modules.append(TransConvBlock(C, 64, 5 if l==l-1 else 3, 1, 0))
+            h = TransConvBlock.compute_output_size(h, 5 if l==l-1 else 3, 1, 0)
+            C = 64
         # reshaping into initial size
-        modules.append(nn.Flatten())
-        flat_dim_out = int(channels_list[-1] * h**2)
-        flat_dim_final = int(np.product(final_shape))
-        modules.append(nn.Linear(flat_dim_out, flat_dim_final)) #notice no activation here
+        # if the current image size is too small we need to add new transpose convolution blocks
+        while h < final_shape[1]:
+            self.depth +=1
+            modules.append(TransConvBlock(C, 64, 3, 1, 0))
+            h = TransConvBlock.compute_output_size(h, 3, 1, 0)
+        k, p = ConvBlock.get_filter_size(h, 1, final_shape[1])
+        modules.append(ConvBlock(C, final_shape[0], k, 1, p))
         self.trans_net = nn.Sequential(*modules)
 
 
     def forward(self, inputs: Tensor) -> Tensor: 
         reshaped = self.fc_reshape(inputs).view((-1,) + self.initial_shape)
         outputs = self.trans_net(reshaped)
-        reshaped = outputs.view((-1,) + self.final_shape)
-        return reshaped
+        return outputs
 
 class GaussianLayer(nn.Module):
     """Stochastic layer with Gaussian distribution.
@@ -211,7 +218,6 @@ class HybridLayer(nn.Module):
         output = self.sample_from_prior(inputs.shape)
         return output
 
-
 class AdaIN(nn.Module):
     #TODO: implement AdaIN layer (to be used instead of StrTrf in baselines)
     pass
@@ -267,53 +273,57 @@ class UpsampledConv(nn.Module):
 class SCMDecoder(nn.Module):
     """ Implements SCM layer (to be used in SAE): given a latent noise vector the
     SCM produces the causal variables by ancestral sampling."""
-    def __init__(self, initial_shape, final_shape, latent_size, unit_dim, channels_list:list,
-                 filter_size:int=2, stride:int=2, upsampling_factor:int=2):
+    def __init__(self, initial_shape, final_shape, latent_size, unit_dim, depth:int, **kwargs):
+        """
+        @latent_size:int = size of the noise vector in input (obtained by hybrid/parametric sampling)
+        @unit_dim:int = dimension of one "noise unit"- not necessarily 1
+        # the noise will be processed one unit at a time -> the noise vector is
+        # split in units during the forward pass
+
+        """
         super().__init__()
         self.final_shape = final_shape
         assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
-        # latent size: size of the noise vector in input (obtained by hybrid/parametric sampling)
         self.latent_size = latent_size
-        # unit_dim: dimension of one "noise unit"- not necessarily 1
-        # the noise will be processed one unit at a time -> the noise vector is
-        # split in units during the forward pass
         self.unit_dim = unit_dim
+        self.depth = depth
         self.hierarchy_depth = latent_size//unit_dim
+        assert self.depth>=self.hierarchy_depth, "Given depth for decoder network is not enough for given noise size"
         C, H, W = initial_shape # the initial shape refers to the constant input block
-        assert len(channels_list)==self.hierarchy_depth, "Specified number of channels not matching heirarchy depth"
         self.conv_modules = nn.ModuleList([])
         self.str_trf_modules = nn.ModuleList([])
         h = H
-        for c in channels_list:
+        for l in range(depth):
             dim_in = (C, h, h)
-            self.str_trf_modules.append(StrTrf(self.unit_dim, C))
-            self.conv_modules.append(UpsampledConv(upsampling_factor, dim_in, c, filter_size, stride))
-            h *= 2
-            C = c
+            if l<self.hierarchy_depth:
+                self.str_trf_modules.append(StrTrf(self.unit_dim, C))
+            self.conv_modules.append(UpsampledConv(2 if l%3==0 and l>0 else 1, dim_in, 64, 3, 1))
+            h *= 2 if l%3==0 and l>0 else 1
+            C = 64
+
         # reshaping into initial size
-        flag = h<final_shape[1]
-        if flag:
+        shape_adjusting_block = []
+        while h<final_shape[1]:
             dim_in = (C, h, h)
-            upsample_final = UpsampledConv(upsampling_factor, dim_in, C, filter_size, stride)
+            shape_adjusting_block.append(UpsampledConv(2, dim_in, 64, 3, 1))
             h *= 2
-        k, p = ConvBlock.get_filter_size(h, stride, final_shape[1])
-        conv_final = ConvBlock(C, final_shape[0], k, stride, p)
-        self.shape_adjusting_block = nn.Sequential(upsample_final, conv_final) if flag else conv_final
+        k, p = ConvBlock.get_filter_size(h, 1, final_shape[1])
+        shape_adjusting_block.append(ConvBlock(C, final_shape[0], k, 1, p))
+        self.shape_adjusting_block = nn.Sequential(*shape_adjusting_block)
 
     def forward(self, x, z, mode="auto"):
         """ Implements forward pass with 2 possible modes:
         - auto: no hybrid sampling (only the convolution)
         - hybrid: hybrid sampling included """
-        start_dim=0
         if mode=="auto":
             for conv in self.conv_modules:
                 x = conv(x)
         elif mode=="hybrid":
-            for sf, conv in zip(self.str_trf_modules, self.conv_modules):
-                z_i = z[:,start_dim:start_dim+self.unit_dim]
-                y = sf(x, z_i)
-                x = conv(y)
-                start_dim+=self.unit_dim
+            for l in range(self.depth):
+                if l<self.hierarchy_depth:
+                    z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
+                    x = self.str_trf_modules[l](x, z_i)
+                x = self.conv_modules[l](x)
         else: raise NotImplementedError("Unknown specified forward mode for SCM")
         outputs = self.shape_adjusting_block(x)
         return outputs

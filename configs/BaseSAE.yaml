@@ -1,12 +1,9 @@
 model_params:
-  name: 'SAE'
-  latent_dim: 16
-  channels_list_enc: [64, 64, 64, 64]
-  channels_list_dec: [64, 64, 64, 64]
-  filter_size: 3
-  padding_enc: 1
-  stride_enc: 2
-  stride_dec: 1
+  name: 'BaseSAE'
+  latent_size: 12
+  enc_depth: 12 #number of convolutional layers in the encoder
+  dec_depth: 12
+  pool_every: 3
   unit_dim: 4
   upsampling_factor: 2
   latent_vecs: 128 # for hybrid sampling
@@ -16,7 +13,6 @@ opt_params:
   weight_decay: 0.0
   scheduler_gamma: 0.95
   auto_epochs: -1
-
 
 data_params:
   dataset_name: RFD
@@ -28,14 +24,17 @@ data_params:
   subset: False #limit number of samples to 200.000 (to avoid memory errors)
 
 trainer_params:
-  gpus: 1
+  gpus: 0
   max_epochs: 100
-  tune_params: 8
+
+tuner_params:
+  num_samples: 1
+  cpus: 1
 
 logging_params:
   save_dir: "logs/"
-  name: "SAE"
+  name: "BaseSAE"
   manual_seed: 1265
-  version: v4
+  version: v5
   plot_every: 5
 

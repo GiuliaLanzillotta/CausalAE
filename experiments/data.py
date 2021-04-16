@@ -5,6 +5,7 @@ from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA
 import matplotlib.pyplot as plt
 from datasets import RFD
 import torch
+import os
 
 class DatasetLoader:
     """
@@ -27,7 +28,9 @@ class DatasetLoader:
         """
         if args["dataset_name"] == 'MNIST':
             transform = transforms.ToTensor()
-            data_folder = './datasets/MNIST/'
+            root = os.path.dirname(os.path.realpath(__file__))
+            data_folder = os.path.join(root,'../datasets/MNIST/')
+            print(data_folder)
             train_set = MNIST(data_folder,
                                 train=True,
                                 download=True,
