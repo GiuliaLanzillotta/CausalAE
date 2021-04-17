@@ -293,12 +293,14 @@ class SCMDecoder(nn.Module):
         self.conv_modules = nn.ModuleList([])
         self.str_trf_modules = nn.ModuleList([])
         h = H
+        pool_every = kwargs.get("pool_every")
         for l in range(depth):
             dim_in = (C, h, h)
             if l<self.hierarchy_depth:
                 self.str_trf_modules.append(StrTrf(self.unit_dim, C))
-            self.conv_modules.append(UpsampledConv(2 if l%3==0 and l>0 else 1, dim_in, 64, 3, 1))
-            h *= 2 if l%3==0 and l>0 else 1
+            self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 and l>0 else 1, dim_in, 64, 3, 1))
+            h *= 2 if l%pool_every==0 and l>0 else 1
+            if h<3: h=3
             C = 64
 
         # reshaping into initial size
@@ -307,6 +309,12 @@ class SCMDecoder(nn.Module):
             dim_in = (C, h, h)
             shape_adjusting_block.append(UpsampledConv(2, dim_in, 64, 3, 1))
             h *= 2
+
+        while (ConvBlock.get_filter_size(h, 1, final_shape[1]))[0]>10:
+            #gradually decrease size (not to have super big filters)
+            k, p = ConvBlock.get_filter_size(h, 1, h-5)
+            shape_adjusting_block.append(ConvBlock(C, C, k, 1, p))
+            h -=5
         k, p = ConvBlock.get_filter_size(h, 1, final_shape[1])
         shape_adjusting_block.append(ConvBlock(C, final_shape[0], k, 1, p))
         self.shape_adjusting_block = nn.Sequential(*shape_adjusting_block)

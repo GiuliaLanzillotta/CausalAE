@@ -1,14 +1,43 @@
 """ Implementation of loading functions for robot_finger_dataset"""
-from typing import Any, Callable, Dict, IO, List, Optional, Tuple, Union
-from torchvision.datasets import VisionDataset
+from typing import Any, Callable, Dict, IO, List, Optional, Tuple, Union, Iterator
+from torch.utils.data import IterableDataset
+from torch.utils.data.dataset import T_co
 from torchvision.transforms import ToPILImage,ToTensor
 from PIL import Image
+import itertools
+import webdataset as wds
 import numpy as np
 import tarfile
 import torch
 import os, io
 
-class RFD(VisionDataset):
+"""
+import webdataset as wds
+root = "./datasets/robot_finger_datasets/RFD/raw/"
+path = root+"finger/finger_images.tar"
+preproc = transforms.Compose([
+    transforms.ToTensor(),
+])
+dataset = (
+    wds.Dataset(path, length=10000)
+        .decode("pil")
+        .map_dict(png=preproc)
+)
+loader = torch.utils.data.DataLoader(dataset, batch_size=64)
+tot=0
+for i in loader: 
+    tot+=1
+
+
+# UserWarning: Length of IterableDataset <webdataset.fluid.Dataset object at 0x0000018BC14E7BC8> was reported to be 1 (when accessing len(dataloader)), but 111 samples have been fetched. 
+  warnings.warn(warn_msg)
+
+"""
+
+
+
+
+class RFD(IterableDataset):
     """ The Robot Finger Dataset
     ----------------------------
     3 different datasets:
@@ -26,77 +55,54 @@ class RFD(VisionDataset):
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
     train_percentage = 0.9
 
-    training_file = 'training.pt'
-    standard_test_file = 'test.pt'
-    heldout_test_file = 'heldout_test.pt'
-    real_test_file = 'real_test.pt'
 
 
-
-    def __init__(self, root: str, train: bool = True,
+    def __init__(self,
+                 root: str,
                  heldout_colors: bool =False,
                  real: bool=False,
                  transform: Optional[Callable] = None,
-                 target_transform: Optional[Callable] = None,
-                 load: bool = False,
-                 only_subset:bool = True) -> None:
-        """ Can load one of 4 datasets available:
-        - the training dataset
-        - the standard test dataset
+                 target_transform: Optional[Callable] = None) -> None:
+        """ Can load one of 3 datasets available:
+        - the standard dataset
         - the heldout_colors test set
         - the real images test set
         Note: only one of the test sets can be loaded at a time.
         (Ideally this could be changed)
         """
-        super(RFD, self).__init__(root, transform=transform,
-                                  target_transform=target_transform)
-
-        self.train = train  # training set or test set
+        super(RFD, self).__init__()
+        self.root = root
+        print("====== Opening RFD ======")
         self.heldout_test = heldout_colors
         self.real_test = real
         self.origin_folder = self.raw_subfolders[0]
-        self.only_subset = only_subset
+        print("===== Reading files =====")
+        self.images, self.labels = self.load_files()
 
-        if load: self.load_from_disk()
-        #TODO: print statements
-        if not all(self._check_exists()):
-            raise RuntimeError('Dataset not found.' +
-                               ' You can use load=True to load it from file')
 
-        if self.train:
-            data_file = self.training_file
-        elif self.heldout_test:
-            data_file = self.heldout_test_file
-            self.origin_folder = self.raw_subfolders[1]
-        elif self.real_test_file:
-            data_file = self.real_test_file
-            self.origin_folder = self.raw_subfolders[2]
+    def load_files(self):
+        """ Initialises dataset by loading files from disk"""
+        # switching folder
+        if self.heldout_test: folder_index=1
+        elif self.real_test: folder_index=2
+        else: folder_index=0
+        raw_folder = self.raw_subfolders[folder_index]
+        self.origin_folder=raw_folder
+        if folder_index == 2:
+            # no need to read .tar file
+            path = os.path.join(self.raw_folder, raw_folder, raw_folder+"_images.npz")
+            images = iter(np.load(path, allow_pickle=True)["images"])
         else:
-            data_file = self.standard_test_file
+            # need to split in test and training
+            path = os.path.join(self.raw_folder, raw_folder, raw_folder+"_images.tar")
+            images = iter(wds.Dataset(path).decode("pil").map(lambda tup: tup["png"]))
+        # loading labels
+        path = os.path.join(self.raw_folder, raw_folder, raw_folder+"_labels.npz")
+        labels = iter(np.load(path, allow_pickle=True)["labels"])
+        return images, labels
 
-        self.data, self.targets = torch.load(os.path.join(self.processed_folder, data_file))
-
-
-    @staticmethod
-    def read_tar(path, limit:int=0):
-        """Reads tar file, navigating all subdirectories and storing all images
-        in a list of PIlImages"""
-        print("Opening "+str(path))
-        tar = tarfile.open(path)
-        to_tensor = ToTensor()
-        #navigating subdirectories
-        imgs = []
-        files_read = 0
-        for member in tar:
-            if member.isreg(): #regular file
-                files_read +=1
-                image = tar.extractfile(member)
-                image = image.read()
-                image = to_tensor(Image.open(io.BytesIO(image)))
-                imgs.append(image)
-                if files_read%100000==0: print(str(files_read)+ " files read.")
-                if 0 < limit == files_read: break
-        return imgs
+    def __iter__(self) -> Iterator[T_co]:
+        return itertools.zip_longest(self.images, self.labels)
 
     def read_dataset_info(self):
         # loading info
@@ -115,100 +121,10 @@ class RFD(VisionDataset):
         for n,v_num in zip(self.factor_names, self.factor_values_num):
             line = n+" with "+str(v_num)+" values"
             body.append(line)
-        lines = [head] + [" " * self._repr_indent + line for line in body]
+        lines = [head] + [" " * 2 + line for line in body]
         return '\n'.join([standard_descrpt, '\n'.join(lines)])
-
-    def get_train_test_split(self, images, labels):
-        """ Performs train-test splitting of standard dataset """
-        size = len(images)
-        train_samples = int(self.train_percentage*size)
-        # randomly sample 'train_samples' indices
-        #TODO: check whether shuffling makes sense
-        idx = np.random.permutation(size)
-        train_indices = idx[:train_samples]
-        test_indices = idx[train_samples:]
-        train_images = [images[i] for i in train_indices]
-        train_labels = [labels[i] for i in train_indices]
-        test_images = [images[i] for i in test_indices]
-        test_labels = [labels[i] for i in test_indices]
-        return train_images,train_labels,test_images,test_labels
-
-    def load_from_disk(self):
-        """ One-time use function: loads the files from disk opening the various .tar, .npz
-        files and stores the content as torch tensors. """
-
-        LIMIT = 100000 if self.only_subset else 0
-        os.makedirs(self.processed_folder, exist_ok=True)
-        exist_flags = self._check_exists()
-        if all(exist_flags): return
-        print("Preprocessing...")
-        for i,folder in enumerate(self.raw_subfolders):
-            if exist_flags[i]: continue
-            # loading images
-            if i==2: # true images stored in .npz
-                path = os.path.join(self.raw_folder, folder, folder+"_images.npz")
-                images = np.load(path, allow_pickle=True)["images"]
-            else:
-                # open .tar files
-                path = os.path.join(self.raw_folder, folder, folder+"_images.tar")
-                images = self.read_tar(path, limit=LIMIT)
-            # loading labels
-            path = os.path.join(self.raw_folder, folder, folder+"_labels.npz")
-            labels = np.load(path, allow_pickle=True)["labels"]
-            if self.only_subset: labels=labels[:LIMIT]#num_data_points x 9
-            if i==0: # for the standard dataset we split in train and test sets
-                # train-test split
-                train_images,train_labels,test_images,test_labels = self.get_train_test_split(images, labels)
-                training_set = (train_images, train_labels)
-                test_set = (test_images, test_labels)
-                # saving to file
-                torch.save(training_set, os.path.join(self.processed_folder, self.training_file))
-                torch.save(test_set, os.path.join(self.processed_folder, self.standard_test_file))
-                del training_set, test_set
-            else:
-                dataset = (images, labels)
-                torch.save(dataset, os.path.join(self.processed_folder,
-                                                 self.heldout_test_file if i==1
-                                                 else self.real_test_file))
-                del dataset
-
-        print("Done!")
-
-    def __getitem__(self, index: int) -> Any:
-        """
-        Args:
-            index (int): Index
-
-        Returns:
-            tuple: (image, target) where target is index of the target class.
-        """
-        img, target = self.data[index], int(self.targets[index])
-
-        if self.transform is not None:
-            img = self.transform(img)
-
-        if self.target_transform is not None:
-            target = self.target_transform(target)
-
-        return img, target
-
-    def __len__(self) -> int:
-        return len(self.data)
 
     @property
     def raw_folder(self) -> str:
         # this will be something like './datasets/robot_finger_datasets/RFD/raw'
         return os.path.join(self.root, self.__class__.__name__, 'raw')
-
-    @property
-    def processed_folder(self) -> str:
-        # this will be something like './datasets/robot_finger_datasets/RFD/processed'
-        return os.path.join(self.root, self.__class__.__name__, 'processed')
-
-    def _check_exists(self) -> List:
-        flags = [os.path.exists(os.path.join(self.processed_folder, self.training_file)) and \
-                   os.path.exists(os.path.join(self.processed_folder, self.standard_test_file)),
-                 os.path.exists(os.path.join(self.processed_folder, self.heldout_test_file)),
-                 os.path.exists(os.path.join(self.processed_folder, self.real_test_file))]
-
-        return flags
