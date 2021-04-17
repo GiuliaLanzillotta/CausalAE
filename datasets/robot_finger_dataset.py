@@ -1,5 +1,7 @@
 """ Implementation of loading functions for robot_finger_dataset"""
 from typing import Any, Callable, Dict, IO, List, Optional, Tuple, Union, Iterator
+
+import numpy
 from torch.utils.data import IterableDataset
 from torch.utils.data.dataset import T_co
 from torchvision.transforms import ToPILImage,ToTensor
@@ -26,34 +28,58 @@ class RFD(IterableDataset):
     -
     """
 
-    shape = (128,128,3)
+    shape = (3, 128,128)
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
     train_percentage = 0.9
 
-    class RFD_items_iterator(Iterator):
+    class RFD_standard_iterator(Iterator):
         """ This iterator class accomplishes the following:
         - zipping together labels and images iterators
         - applying torch transformations and in general all preprocessing"""
         def __init__(self,
                      images_iterator:Iterator,
-                     labels_iterator:Iterator,
+                     labels:numpy.ndarray,
                      transform: Optional[Callable] = None,
                      target_transform: Optional[Callable] = None):
             super().__init__()
             self.images_iterator = images_iterator
-            self.labels_iterator = labels_iterator
+            self.labels = labels
             self.transform = transform
             self.target_transform = target_transform
 
         def __next__(self) -> Tuple:
-            next_image = next(self.images_iterator)
-            next_label = next(self.labels_iterator)
+            next_item = next(self.images_iterator)
+            next_idx, next_image = next_item
+            next_label = torch.tensor(self.labels[int(next_idx)], requires_grad=False)
             if self.transform is not None:
                 next_image = self.transform(next_image)
             if self.target_transform is not None:
                 next_label = self.target_transform(next_label)
             return (next_image, next_label)
 
+    class RFD_real_set_iterator(Iterator):
+        """ This iterator class accomplishes the following:
+        - zipping together labels and images iterators
+        - applying torch transformations and in general all preprocessing"""
+        def __init__(self,
+                     images:numpy.ndarray,
+                     labels:numpy.ndarray,
+                     transform: Optional[Callable] = None,
+                     target_transform: Optional[Callable] = None):
+            super().__init__()
+            self.images_iterator = iter(images)
+            self.labels_iterator = iter(labels)
+            self.transform = transform
+            self.target_transform = target_transform
+
+        def __next__(self) -> Tuple:
+            next_image = next(self.images_iterator)
+            next_label = torch.tensor(next(self.labels_iterator), requires_grad=False)
+            if self.transform is not None:
+                next_image = self.transform(next_image)
+            if self.target_transform is not None:
+                next_label = self.target_transform(next_label)
+            return (next_image, next_label)
 
 
     def __init__(self,
@@ -77,7 +103,10 @@ class RFD(IterableDataset):
         self.origin_folder = self.raw_subfolders[0]
         print("===== Reading files =====")
         images, labels = self.load_files()
-        self.iterator = self.RFD_items_iterator(images, labels, transform, target_transform)
+        print(self)
+        if real: self.iterator = self.RFD_real_set_iterator(images, labels, transform, target_transform)
+        else: self.iterator = self.RFD_standard_iterator(images, labels, transform, target_transform)
+
 
     def load_files(self):
         """ Initialises dataset by loading files from disk"""
@@ -89,23 +118,28 @@ class RFD(IterableDataset):
         self.origin_folder=raw_folder
         if folder_index == 2:
             # no need to read .tar file
-            path = os.path.join(self.raw_folder, raw_folder, raw_folder+"_images.npz")
-            images = iter(np.load(path, allow_pickle=True)["images"])
+            path =self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.npz"
+            images = np.load(path, allow_pickle=True)["images"]
         else:
             # need to split in test and training
-            path = os.path.join(self.raw_folder, raw_folder, raw_folder+"_images.tar")
-            images = iter(wds.Dataset(path).decode("pil").map(lambda tup: tup["png"]))
+            path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.tar"
+            images = iter(wds.Dataset(path).decode("pil")\
+                          .map(lambda tup: (tup["__key__"].split("/")[-1], tup["png"]))
+                          .shuffle(1000))
         # loading labels
-        path = os.path.join(self.raw_folder, raw_folder, raw_folder+"_labels.npz")
-        labels = iter(np.load(path, allow_pickle=True)["labels"])
+        path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_labels.npz"
+        labels = np.load(path, allow_pickle=True)["labels"]
         return images, labels
 
     def __iter__(self) -> Iterator:
         return self.iterator
 
+    def __len__(self):
+        return self.size
+
     def read_dataset_info(self):
         # loading info
-        path = os.path.join(self.raw_folder, self.origin_folder, self.origin_folder+"_info.npz")
+        path = self.raw_folder +"/"+self.origin_folder+"/"+self.origin_folder+"_info.npz"
         info = dict(np.load(path, allow_pickle=True))
         self.size = info["dataset_size"].item()
         self.info = info
@@ -115,7 +149,7 @@ class RFD(IterableDataset):
 
     def __repr__(self):
         self.read_dataset_info()
-        head = "Dataset "+ self.__class__.__name__ + self.origin_folder +" info"
+        head = "Dataset "+ self.__class__.__name__ + "_"+self.origin_folder +" info"
         body = ["Size = " + str(self.size), "Factors of variation : "]
         for n,v_num in zip(self.factor_names, self.factor_values_num):
             line = n+" with "+str(v_num)+" values"
@@ -126,4 +160,4 @@ class RFD(IterableDataset):
     @property
     def raw_folder(self) -> str:
         # this will be something like './datasets/robot_finger_datasets/RFD/raw'
-        return os.path.join(self.root, self.__class__.__name__, 'raw')
+        return self.root +self.__class__.__name__+"/"+'raw'

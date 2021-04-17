@@ -82,25 +82,50 @@ class DatasetLoader:
 
         elif args["dataset_name"] == 'RFD': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
             transform = transforms.ToTensor()
-            #IMPORTANT: train images already converted to tensor objects
-            # -> no need to apply transformation
             cluster_data_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
             data_folder = './datasets/robot_finger_datasets/'
-            train_set = RFD(cluster_data_folder,
-                            train=True,
-                            load=True,
-                            target_transform=transform,
-                            only_subset=args["subset"])
-            test_set = RFD(cluster_data_folder,
-                           train=False,
-                           heldout_colors = args["heldout"],
-                           real= args["real"],
-                           load=True,
-                           transform=transform,
-                           target_transform=transform)
-            print(train_set)
-            print(test_set)
-        
+            # instance of iterable dataset
+            dataset = RFD(data_folder,
+                          heldout_colors=args["heldout"],
+                          real= args["real"],
+                          transform=transform,
+                          target_transform=transform)
+            tot = len(dataset)
+            self.num_samples = tot
+            self.data_shape = dataset.shape
+            self.img_size = self.data_shape[:2]
+            self.color_ch = self.data_shape[2]
+
+            if not args["heldout"] and not args["real"]: #train-test split only at training time
+                train_num = int(0.7*tot)
+                val_num = int(0.2*tot)
+                test_num = tot-train_num-val_num
+                train, val, test = torch.utils.data.random_split(dataset,
+                                                             lengths=[train_num, val_num, test_num],
+                                                             generator=torch.Generator().manual_seed(42))
+                self.train = DataLoader(train,
+                                        batch_size=args["batch_size"],
+                                        drop_last=True)
+                self.val = DataLoader(val,
+                                      batch_size=args["batch_size"],
+                                      drop_last=True)
+                self.test = DataLoader(test,
+                                       batch_size=args["test_batch_size"],
+                                       shuffle=False)
+                return
+
+            else:
+                self.train = None
+                self.val = None
+                self.test = DataLoader(dataset,
+                                       batch_size=args["test_batch_size"],
+                                       shuffle=False)
+                return
+
+
+
+
+
         else:
             raise RuntimeError("Unrecognized data set '{}'".format(
                 args.dataset_name))
@@ -112,6 +137,7 @@ class DatasetLoader:
         train, val = torch.utils.data.random_split(train_set,
                                                    lengths=[train_num, val_num],
                                                    generator=torch.Generator().manual_seed(42))
+        self.num_samples = tot_train + test_set.data.shape[0]
 
         self.train = DataLoader(train,
                                 batch_size=args["batch_size"],
@@ -125,7 +151,7 @@ class DatasetLoader:
                                batch_size=args["test_batch_size"],
                                shuffle=False)
 
-        self.num_samples = tot_train + test_set.data.shape[0]
+
         self.data_shape = self.train.dataset[0][0].size()
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]
