@@ -11,31 +11,6 @@ import tarfile
 import torch
 import os, io
 
-"""
-import webdataset as wds
-root = "./datasets/robot_finger_datasets/RFD/raw/"
-path = root+"finger/finger_images.tar"
-preproc = transforms.Compose([
-    transforms.ToTensor(),
-])
-dataset = (
-    wds.Dataset(path, length=10000)
-        .decode("pil")
-        .map_dict(png=preproc)
-)
-loader = torch.utils.data.DataLoader(dataset, batch_size=64)
-tot=0
-for i in loader: 
-    tot+=1
-
-
-# UserWarning: Length of IterableDataset <webdataset.fluid.Dataset object at 0x0000018BC14E7BC8> was reported to be 1 (when accessing len(dataloader)), but 111 samples have been fetched. 
-  warnings.warn(warn_msg)
-
-"""
-
-
-
 
 class RFD(IterableDataset):
     """ The Robot Finger Dataset
@@ -54,6 +29,30 @@ class RFD(IterableDataset):
     shape = (128,128,3)
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
     train_percentage = 0.9
+
+    class RFD_items_iterator(Iterator):
+        """ This iterator class accomplishes the following:
+        - zipping together labels and images iterators
+        - applying torch transformations and in general all preprocessing"""
+        def __init__(self,
+                     images_iterator:Iterator,
+                     labels_iterator:Iterator,
+                     transform: Optional[Callable] = None,
+                     target_transform: Optional[Callable] = None):
+            super().__init__()
+            self.images_iterator = images_iterator
+            self.labels_iterator = labels_iterator
+            self.transform = transform
+            self.target_transform = target_transform
+
+        def __next__(self) -> Tuple:
+            next_image = next(self.images_iterator)
+            next_label = next(self.labels_iterator)
+            if self.transform is not None:
+                next_image = self.transform(next_image)
+            if self.target_transform is not None:
+                next_label = self.target_transform(next_label)
+            return (next_image, next_label)
 
 
 
@@ -77,8 +76,8 @@ class RFD(IterableDataset):
         self.real_test = real
         self.origin_folder = self.raw_subfolders[0]
         print("===== Reading files =====")
-        self.images, self.labels = self.load_files()
-
+        images, labels = self.load_files()
+        self.iterator = self.RFD_items_iterator(images, labels, transform, target_transform)
 
     def load_files(self):
         """ Initialises dataset by loading files from disk"""
@@ -101,28 +100,28 @@ class RFD(IterableDataset):
         labels = iter(np.load(path, allow_pickle=True)["labels"])
         return images, labels
 
-    def __iter__(self) -> Iterator[T_co]:
-        return itertools.zip_longest(self.images, self.labels)
+    def __iter__(self) -> Iterator:
+        return self.iterator
 
     def read_dataset_info(self):
         # loading info
         path = os.path.join(self.raw_folder, self.origin_folder, self.origin_folder+"_info.npz")
         info = dict(np.load(path, allow_pickle=True))
+        self.size = info["dataset_size"].item()
         self.info = info
-        factor_values_dict = self.info["factor_values"].item()
+        factor_values_dict = info["factor_values"].item()
         self.factor_names = list(factor_values_dict.keys())
-        self.factor_values_num = list(self.info["num_factor_values"])
+        self.factor_values_num = list(info["num_factor_values"])
 
     def __repr__(self):
-        standard_descrpt = super(RFD).__repr__()
         self.read_dataset_info()
         head = "Dataset "+ self.__class__.__name__ + self.origin_folder +" info"
-        body = ["Factors of variation : "]
+        body = ["Size = " + str(self.size), "Factors of variation : "]
         for n,v_num in zip(self.factor_names, self.factor_values_num):
             line = n+" with "+str(v_num)+" values"
             body.append(line)
         lines = [head] + [" " * 2 + line for line in body]
-        return '\n'.join([standard_descrpt, '\n'.join(lines)])
+        return '\n'.join(lines)
 
     @property
     def raw_folder(self) -> str:

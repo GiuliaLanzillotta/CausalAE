@@ -1,1 +1,1 @@
-from .robot_finger_dataset import *
+from .robot_finger_dataset import RFD
