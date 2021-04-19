@@ -1,19 +1,13 @@
 """ Implementation of loading functions for robot_finger_dataset"""
-from typing import Any, Callable, Dict, IO, List, Optional, Tuple, Union, Iterator
+from typing import Any, Callable, Optional, Tuple, Iterator
 
 import numpy
-import torchvision.datasets
-from torch.utils.data import IterableDataset
-from torch.utils.data.dataset import T_co
-from torchvision.transforms import ToPILImage,ToTensor
-from PIL import Image
-import itertools
-import webdataset as wds
 import numpy as np
-import tarfile
 import torch
-import os, io
-
+import torchvision.datasets
+import webdataset as wds
+from PIL import Image
+from torch.utils.data import IterableDataset
 
 
 class RFD(torchvision.datasets.VisionDataset):
@@ -81,8 +75,11 @@ class RFD(torchvision.datasets.VisionDataset):
         """ Given the organised folder structure it is possible to read an image given
         its index. Returns the image as a PILImage."""
         # example path: .../images/7/3/9/0/9/739097.png
-        subpath = str.join("/",list(str(index))[:-1])
-        path = str.join("/", [self.origin_folder,subpath,str(index)+".png"])
+        max_len = len(str(self.size-1))
+        idx = str(index)
+        idx = '0'*(max_len-len(idx))+idx
+        subpath = str.join("/",list(idx)[:-1])
+        path = str.join("/", [self.raw_folder, self.origin_folder,"images",subpath,idx+".png"])
         img = Image.open(path)
         return img
 

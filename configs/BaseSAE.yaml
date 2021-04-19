@@ -23,7 +23,7 @@ data_params:
   subset: False #limit number of samples to 100'000 (to avoid memory errors)
 
 trainer_params:
-  gpus: 1
+  gpus: 0
   max_epochs: 100
 
 tuner_params:

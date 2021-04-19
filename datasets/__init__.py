@@ -1,1 +1,1 @@
-from .robot_finger_dataset import RFD
+from .robot_finger_dataset import RFD, RFDIterable
