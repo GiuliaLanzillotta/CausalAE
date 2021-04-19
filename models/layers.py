@@ -5,16 +5,33 @@ from torch import Tensor
 import numpy as np
 
 
+class FCBlock(nn.Module):
+    """ Factors the logic for a standard Fully Connected block"""
+    def __init__(self, dim_in, sizes_lists, act: nn.Module):
+        super().__init__()
+        modules = []
+        prev = dim_in
+        for size in sizes_lists:
+            modules.append(nn.Linear(prev, size))
+            modules.append(act)
+            prev = size
+        self.fc = nn.Sequential(*modules)
+
+    def forward(self, inputs:Tensor) -> Tensor:
+        return self.fc(inputs)
+
+
+
 class ConvBlock(nn.Module):
     """ Implements logic for a convolutional block [conv2d, normalization, activation]"""
 
-    def __init__(self, C_IN, C_OUT, k, s, p):
+    def __init__(self, C_IN, C_OUT, k, s, p, num_groups):
         #TODO: add check for the norm
         #TODO: add selector for activation 
         super(ConvBlock, self).__init__()
         self.block = nn.Sequential(
             nn.Conv2d(C_IN, out_channels=C_OUT, kernel_size=k, stride=s, padding=p),
-            nn.BatchNorm2d(C_OUT),
+            nn.GroupNorm(num_groups, C_OUT),
             nn.LeakyReLU())
 
     def forward(self, inputs: Tensor) -> Tensor:
@@ -60,9 +77,10 @@ class ConvNet(nn.Module):
             # conv block with kernel size 2, size 2 and padding 1 
             # halving the input dimension at every step
             same_padding = ConvBlock.same_padding(h, 5 if l==0 else 3, 1)
-            modules.append(ConvBlock(C, 64, 5 if l==0 else 3, 1, same_padding))
+            modules.append(ConvBlock(C, 64, 5 if l==0 else 3, 1, same_padding, 8))
+            if h==1: h = 3
             if l==0: C = 64
-            if l%pool_every == 0 and l>0:
+            if l%pool_every == 0:
                 modules.append(nn.MaxPool2d(2,2,0))
                 h = ConvBlock.compute_output_size(h, 2, 2, 0)
 
@@ -71,8 +89,7 @@ class ConvNet(nn.Module):
         assert all(v>0 for v in self.final_shape), "Input not big enough for the convolutions requested"
         flat_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
-        modules.append(nn.Linear(flat_dim, final_dim))
-        modules.append(nn.ReLU())
+        modules.append(FCBlock(flat_dim, [final_dim], nn.ReLU()))
         self.net = nn.Sequential(*modules)
 
 
@@ -84,13 +101,13 @@ class TransConvBlock(nn.Module):
     """ Implements logic for a transpose convolutional block
     [transposeConv2d, normalization, activation]"""
 
-    def __init__(self, C_IN, C_OUT, k, s, p):
+    def __init__(self, C_IN, C_OUT, k, s, p, num_groups):
         #TODO: add check for the norm
         #TODO: add selector for activation 
         super(TransConvBlock, self).__init__()
         self.block = nn.Sequential(
             nn.ConvTranspose2d(C_IN, out_channels=C_OUT, kernel_size=k, stride=s, padding=p),
-            nn.BatchNorm2d(C_OUT),
+            nn.GroupNorm(num_groups, C_OUT),
             nn.LeakyReLU())
 
     def forward(self, inputs: Tensor) -> Tensor:
@@ -124,17 +141,17 @@ class TransConvNet(nn.Module):
         for l in range(depth):
             # transpose conv block with kernel size 2, size 2 and padding 1 
             # doubling the input dimension at every step 
-            modules.append(TransConvBlock(C, 64, 5 if l==l-1 else 3, 1, 0))
+            modules.append(TransConvBlock(C, 64, 5 if l==l-1 else 3, 1, 0, 8))
             h = TransConvBlock.compute_output_size(h, 5 if l==l-1 else 3, 1, 0)
             C = 64
         # reshaping into initial size
         # if the current image size is too small we need to add new transpose convolution blocks
         while h < final_shape[1]:
             self.depth +=1
-            modules.append(TransConvBlock(C, 64, 3, 1, 0))
+            modules.append(TransConvBlock(C, 64, 3, 1, 0, 8))
             h = TransConvBlock.compute_output_size(h, 3, 1, 0)
         k, p = ConvBlock.get_filter_size(h, 1, final_shape[1])
-        modules.append(ConvBlock(C, final_shape[0], k, 1, p))
+        modules.append(ConvBlock(C, final_shape[0], k, 1, p, 1))
         self.trans_net = nn.Sequential(*modules)
 
 
@@ -226,27 +243,16 @@ class StrTrf(nn.Module):
     """Implements the structural transform layer. To be used in SAE."""
     def __init__(self, noise_size, n_features):
         super().__init__()
-        self.fc_mu = nn.Sequential(nn.Linear(noise_size,noise_size*10),
-                                   nn.ReLU(),
-                                   nn.Linear(noise_size*10,noise_size*20),
-                                   nn.ReLU(),
-                                   nn.Linear(noise_size*20,n_features),
-                                   nn.ReLU())
-        self.sigma = nn.Sequential(nn.Linear(noise_size,noise_size*10),
-                                   nn.ReLU(),
-                                   nn.Linear(noise_size*10,noise_size*20),
-                                   nn.ReLU(),
-                                   nn.Linear(noise_size*20,n_features),
-                                   nn.ReLU())
-
+        self.fc = FCBlock(noise_size, [noise_size*10, noise_size*20, n_features*2], nn.ReLU())
+        self.n_features = n_features
 
     def forward(self, x, z):
         """ z is the noise obtained via hybrid or parametric sampling.
         x is the set of all causal variables computed so far. Thus this is
         the layer where the causal variables interact with the noise terms to generate
         the children variables."""
-        sigma_z = self.sigma(z)
-        mu_z = self.fc_mu(z)
+        params = self.fc(z)
+        sigma_z, mu_z = torch.split(params, self.n_features, dim=1)
         # mu_z and sigma_z are one-dimensional vectors: we need to expand their dimensions
         mu_z = mu_z.view(*mu_z.shape, *(1,)*(len(x.shape) - len(mu_z.shape)))
         sigma_z = sigma_z.view(*sigma_z.shape, *(1,) * (len(x.shape) - len(sigma_z.shape)))
@@ -257,12 +263,12 @@ class StrTrf(nn.Module):
 class UpsampledConv(nn.Module):
     """Implements layer to be used in structural decoder:
     bilinear upsampling + convolution (with activtion) (with no dimensionality reduction)"""
-    def __init__(self, upsampling_factor, dim_in, channels:int, filter_size:int=2, stride:int=2):
+    def __init__(self, upsampling_factor, dim_in, channels:int, filter_size:int=2, stride:int=2, num_groups:int=8):
         super().__init__()
         C, H, W = dim_in
         self.upsampling = nn.Upsample(scale_factor=upsampling_factor, mode="bilinear", align_corners=False)
         padding = ConvBlock.same_padding(H*upsampling_factor, filter_size, stride)
-        self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding)
+        self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding, num_groups)
         self.act = nn.ReLU()#TODO: add selection here
 
     def forward(self, inputs):
@@ -298,25 +304,16 @@ class SCMDecoder(nn.Module):
             dim_in = (C, h, h)
             if l<self.hierarchy_depth:
                 self.str_trf_modules.append(StrTrf(self.unit_dim, C))
-            self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 and l>0 else 1, dim_in, 64, 3, 1))
-            h *= 2 if l%pool_every==0 and l>0 else 1
-            if h<3: h=3
+            self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, 64, 3, 1, 8))
+            h *= 2 if l%pool_every==0 else 1
             C = 64
-
-        # reshaping into initial size
+        # reducing number of channels
         shape_adjusting_block = []
-        while h<final_shape[1]:
-            dim_in = (C, h, h)
-            shape_adjusting_block.append(UpsampledConv(2, dim_in, 64, 3, 1))
-            h *= 2
-
-        while (ConvBlock.get_filter_size(h, 1, final_shape[1]))[0]>10:
-            #gradually decrease size (not to have super big filters)
-            k, p = ConvBlock.get_filter_size(h, 1, h-5)
-            shape_adjusting_block.append(ConvBlock(C, C, k, 1, p))
-            h -=5
+        shape_adjusting_block.append(TransConvBlock(C, final_shape[0], 5, 1, 0, 1))
+        h = TransConvBlock.compute_output_size(h, 5, 1, 0)
+        # reshaping into initial size
         k, p = ConvBlock.get_filter_size(h, 1, final_shape[1])
-        shape_adjusting_block.append(ConvBlock(C, final_shape[0], k, 1, p))
+        shape_adjusting_block.append(ConvBlock(final_shape[0], final_shape[0], k, 1, p, 1))
         self.shape_adjusting_block = nn.Sequential(*shape_adjusting_block)
 
     def forward(self, x, z, mode="auto"):

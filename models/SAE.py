@@ -3,7 +3,7 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, SCMDecoder, HybridLayer
+from . import ConvNet, SCMDecoder, HybridLayer, FCBlock
 from torch.nn import functional as F
 
 class SAE(nn.Module):
@@ -16,8 +16,9 @@ class SAE(nn.Module):
         # Building encoder
         #TODO: add a selection for non-linearity here
 
-        conv_net = ConvNet(dim_in, self.latent_size, depth=params["enc_depth"], **params)
+        conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params)
         self.conv_net = conv_net # returns vector of latent_dim size
+        self.fc = FCBlock(256, [256, 128, self.latent_size], nn.ReLU())
         # hybrid sampling to get the noise vector
         self.hybrid_layer = HybridLayer(self.latent_size, self.unit_dim, self.N)
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
@@ -26,7 +27,8 @@ class SAE(nn.Module):
         self.act = nn.Sigmoid()
 
     def encode(self, inputs: Tensor):
-        codes = self.conv_net(inputs)
+        conv_net_out = self.conv_net(inputs)
+        codes = self.fc(conv_net_out)
         return codes
 
     def sample_noise(self, codes:Tensor):
