@@ -1,10 +1,10 @@
 model_params:
   name: 'VAE'
   beta: 4.0
-  latent_dim: 32
-  enc_depth: 12 #number of convolutional layers in the encoder
-  dec_depth: 12
-  pool_every: 3
+  latent_size: 32
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
+  pool_every: 2
 
 opt_params:
   LR: 0.0001
@@ -14,7 +14,7 @@ opt_params:
 
 
 data_params:
-  dataset_name: cifar10
+  dataset_name: MNIST
   batch_size: 144 # Better to have a square number
   test_batch_size: 144
 
@@ -26,6 +26,6 @@ logging_params:
   save_dir: "logs/"
   name: "BetaVAE"
   manual_seed: 1265
-  version: v12
-  plot_every: 10
+  version: v13
+  plot_every: 1
 

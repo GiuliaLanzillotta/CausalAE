@@ -3,6 +3,8 @@ import torch
 from torch import Tensor
 from torch import optim
 from models import VAE
+from matplotlib.lines import Line2D
+import matplotlib.pyplot as plt
 from experiments.data import DatasetLoader
 from torchvision import utils as tvu
 import pytorch_lightning as pl
@@ -40,6 +42,10 @@ class VAEXperiment(pl.LightningModule):
         self.log_dict({key: val.item() for key, val in train_loss.items()})
 
         return train_loss["loss"]
+
+    def training_epoch_end(self, outputs) -> None:
+        if self.current_epoch%self.params['logging_params']['plot_every']==0:
+            self.plot_grad_flow(self.model.named_parameters())
 
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
@@ -101,6 +107,45 @@ class VAEXperiment(pl.LightningModule):
                        nrow=int(np.sqrt(self.params["data_params"]["batch_size"])))
         # clean
         del test_input, recons, samples
+
+    def plot_grad_flow(self, named_parameters):
+        '''Plots the gradients flowing through different layers in the net during training.
+        Can be used for checking for possible gradient vanishing / exploding problems.
+
+        Usage: Plug this function in Trainer class after loss.backwards() as
+        "plot_grad_flow(self.model.named_parameters())" to visualize the gradient flow'''
+        ave_grads = []
+        max_grads= []
+        layers = []
+        for n, p in named_parameters:
+            if(p.requires_grad) and ("bias" not in n):
+                layers.append(n)
+                try:
+                    ave_grads.append(p.grad.abs().mean())
+                    max_grads.append(p.grad.abs().max())
+                except AttributeError:
+                    print(n+" has no gradient. Skipping")
+                    continue
+        plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
+        plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+        plt.plot(ave_grads, alpha=0.3, color="b")
+        plt.plot(max_grads, alpha=0.3, color="c")
+        plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
+        plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+        plt.tick_params(axis='both', labelsize=4)
+        plt.xlim(left=0, right=len(ave_grads))
+        plt.ylim(bottom = -0.001, top=0.02) # zoom in on the lower gradient regions
+        plt.xlabel("Layers")
+        plt.ylabel("average gradient")
+        plt.title("Gradient flow")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.legend([Line2D([0], [0], color="c", lw=4),
+                    Line2D([0], [0], color="b", lw=4),
+                    Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
+        folder=f"./{self.logger.save_dir}{self.logger.name}/{self.logger.version}/"
+        plt.savefig(f"{folder}gradient_{self.logger.name}_{self.current_epoch}.png", dpi=200)
+
 
     def train_dataloader(self):
         return self.loader.train

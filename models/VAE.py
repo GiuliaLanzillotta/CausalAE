@@ -14,7 +14,6 @@ class VAE(nn.Module):
         self.latent_size = params["latent_size"]
         self.dim_in = dim_in # C, H, W
         # Building encoder
-        #TODO: add a selection for non-linearity here
         conv_net = ConvNet(dim_in, self.latent_size, depth=params["enc_depth"], **params)
         self.conv_net = conv_net
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size)

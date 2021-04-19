@@ -3,7 +3,7 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, SCMDecoder, HybridLayer, FCBlock
+from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock
 from torch.nn import functional as F
 
 class SAE(nn.Module):
@@ -18,7 +18,8 @@ class SAE(nn.Module):
 
         conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params)
         self.conv_net = conv_net # returns vector of latent_dim size
-        self.fc = FCBlock(256, [256, 128, self.latent_size], nn.ReLU())
+        fc_class = FCResidualBlock if params["residual_fc"] else FCBlock
+        self.fc = fc_class(256, [128, 64,  self.latent_size], nn.ReLU)
         # hybrid sampling to get the noise vector
         self.hybrid_layer = HybridLayer(self.latent_size, self.unit_dim, self.N)
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)

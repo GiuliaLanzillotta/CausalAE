@@ -17,6 +17,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 from ray import tune
+import ray
 
 
 
@@ -58,13 +59,15 @@ def train_model(config:dict, tuning:bool=False):
                      resume_from_checkpoint=latest_checkpoint,
                      benchmark=False,
                      deterministic=True,
+                     auto_select_gpus=True,
+                     #track_grad_norm = 2,
+                     #gradient_clip_val = 2.0,
                      **config['trainer_params'])
 
     print(f"======= Training {config['model_params']['name']} =======")
 
     experiment = experiments_switch[config['model_params']['name']](config)
     runner.fit(experiment)
-    #todo save best model checkpoint path and metrics value
 
 def do_tuning(config:dict):
     # using Ray tuning functionality to do hyperparameter search
@@ -79,9 +82,6 @@ def do_tuning(config:dict):
                         config['logging_params']['name'],"tuner")
     analysis = tune.run(
         tune.with_parameters(train_model, tuning=True),
-        resources_per_trial={
-            "cpu": config['tuner_params']['cpus'],
-            "gpu": config['trainer_params']['gpus']},
         metric="loss",
         mode="min",
         config=config,
@@ -100,7 +100,7 @@ if __name__ == '__main__':
                         dest="tuning",
                         metavar='TUNE',
                         type=bool,
-                        help =  'whether to perform hyperparameter tuning',
+                        help ='whether to perform hyperparameter tuning',
                         default=False)
     parser.add_argument('--name',  '-n',
                         dest="name",

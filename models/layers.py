@@ -5,15 +5,35 @@ from torch import Tensor
 import numpy as np
 
 
+class FCResidualBlock(nn.Module):
+    """ Implements residual fully connected block with adaptive average pooling """
+    def __init__(self, dim_in, sizes_lists, act):
+        super().__init__()
+        self.affine_modules = nn.ModuleList([])
+        self.avg_pool_modules = nn.ModuleList([])
+        self.act = act()
+        prev = dim_in
+        for size in sizes_lists:
+            self.affine_modules.append(nn.Linear(prev, size))
+            self.avg_pool_modules.append(nn.AdaptiveAvgPool1d(size))
+            prev = size
+
+    def forward(self, inputs:Tensor) -> Tensor:
+        x = inputs
+        for affine,pool in zip(self.affine_modules, self.avg_pool_modules):
+            delta = self.act(affine(x))
+            x = pool(x.unsqueeze(1)).squeeze(1) + delta
+        return x
+
 class FCBlock(nn.Module):
     """ Factors the logic for a standard Fully Connected block"""
-    def __init__(self, dim_in, sizes_lists, act: nn.Module):
+    def __init__(self, dim_in, sizes_lists, act):
         super().__init__()
         modules = []
         prev = dim_in
         for size in sizes_lists:
             modules.append(nn.Linear(prev, size))
-            modules.append(act)
+            modules.append(act())
             prev = size
         self.fc = nn.Sequential(*modules)
 
@@ -76,20 +96,19 @@ class ConvNet(nn.Module):
         for l in range(depth):
             # conv block with kernel size 2, size 2 and padding 1 
             # halving the input dimension at every step
-            same_padding = ConvBlock.same_padding(h, 5 if l==0 else 3, 1)
-            modules.append(ConvBlock(C, 64, 5 if l==0 else 3, 1, same_padding, 8))
-            if h==1: h = 3
+            reduce=l%pool_every==0
+            padding = ConvBlock.same_padding(h, 5 if l==0 else 3, 1) if not reduce else 0
+            modules.append(ConvBlock(C, 64, 5 if l==0 else 3, 2 if reduce else 1, padding , 8))
+            h = ConvBlock.compute_output_size(h, 5 if l==0 else 3, 2 if reduce else 1, padding)
+            if h<3: break
             if l==0: C = 64
-            if l%pool_every == 0:
-                modules.append(nn.MaxPool2d(2,2,0))
-                h = ConvBlock.compute_output_size(h, 2, 2, 0)
 
         # calculating shape of the image after convolution
         self.final_shape = C, h, h # assuming square input image
         assert all(v>0 for v in self.final_shape), "Input not big enough for the convolutions requested"
         flat_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
-        modules.append(FCBlock(flat_dim, [final_dim], nn.ReLU()))
+        modules.append(FCBlock(flat_dim, [final_dim], nn.ReLU))
         self.net = nn.Sequential(*modules)
 
 
@@ -243,7 +262,7 @@ class StrTrf(nn.Module):
     """Implements the structural transform layer. To be used in SAE."""
     def __init__(self, noise_size, n_features):
         super().__init__()
-        self.fc = FCBlock(noise_size, [noise_size*10, noise_size*20, n_features*2], nn.ReLU())
+        self.fc = FCBlock(noise_size, [noise_size*10, noise_size*20, n_features*2], nn.ReLU)
         self.n_features = n_features
 
     def forward(self, x, z):
