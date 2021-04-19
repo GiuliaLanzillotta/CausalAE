@@ -26,11 +26,11 @@ class DatasetLoader:
            - test_batch_size 
         $note: to obtain a dict from a Namespace simply >> vars(nsObject)
         """
+        already_split = False
         if args["dataset_name"] == 'MNIST':
             transform = transforms.ToTensor()
             root = os.path.dirname(os.path.realpath(__file__))
             data_folder = os.path.join(root,'../datasets/MNIST/')
-            print(data_folder)
             train_set = MNIST(data_folder,
                                 train=True,
                                 download=True,
@@ -75,75 +75,64 @@ class DatasetLoader:
                                split='train',
                                download=True,
                                transform=transform)
-            test_set = CelebA(data_folder,
+            valid_set = CelebA(data_folder,
                               split='valid',
                               download=True,
                               transform=transform)
+            test_set = CelebA(data_folder,
+                              split='test',
+                              download=True,
+                              transform=transform)
+            already_split = True
 
         elif args["dataset_name"] == 'RFD': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
             transform = transforms.ToTensor()
             cluster_data_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
-            data_folder = './datasets/robot_finger_datasets/'
-            # instance of iterable dataset
-            dataset = RFD(data_folder,
-                          heldout_colors=args["heldout"],
-                          real= args["real"],
-                          transform=transform,
-                          target_transform=transform)
-            tot = len(dataset)
-            self.num_samples = tot
-            self.data_shape = dataset.shape
-            self.img_size = self.data_shape[:2]
-            self.color_ch = self.data_shape[2]
-
-            if not args["heldout"] and not args["real"]: #train-test split only at training time
-                train_num = int(0.7*tot)
-                val_num = int(0.2*tot)
-                test_num = tot-train_num-val_num
-                train, val, test = torch.utils.data.random_split(dataset,
+            standard_set = RFD(cluster_data_folder,
+                            transform=transform)
+            heldout_set = RFD(cluster_data_folder,
+                              heldout_colors=True,
+                              transform=transform)
+            real_set = RFD(cluster_data_folder,
+                           real=True,
+                           transform=transform)
+            # Note that these two additional test sets are only available with the RFD dataset
+            self.heldout_set = DataLoader(heldout_set,
+                                          batch_size=args["test_batch_size"],
+                                          shuffle=False)
+            self.real_set = DataLoader(real_set,
+                                       batch_size=args["test_batch_size"],
+                                       shuffle=False)
+            # train, val, test set for standard set (to be used during training)
+            # note that the split sizes are fixed here (70,20,10 split)
+            tot = standard_set.size
+            train_num = int(0.7*tot)
+            val_num = int(0.2*tot)
+            test_num = tot-train_num-val_num
+            train_set, valid_set, test_set = torch.utils.data.random_split(standard_set,
                                                              lengths=[train_num, val_num, test_num],
                                                              generator=torch.Generator().manual_seed(42))
-                self.train = DataLoader(train,
-                                        batch_size=args["batch_size"],
-                                        drop_last=True)
-                self.val = DataLoader(val,
-                                      batch_size=args["batch_size"],
-                                      drop_last=True)
-                self.test = DataLoader(test,
-                                       batch_size=args["test_batch_size"],
-                                       shuffle=False)
-                return
-
-            else:
-                self.train = None
-                self.val = None
-                self.test = DataLoader(dataset,
-                                       batch_size=args["test_batch_size"],
-                                       shuffle=False)
-                return
-
-
-
+            already_split = True
 
 
         else:
             raise RuntimeError("Unrecognized data set '{}'".format(
                 args.dataset_name))
 
-        tot_train = train_set.data.shape[0]
-        train_split = args["train_split"]
-        train_num = int(train_split*tot_train)
-        val_num = tot_train-train_num
-        train, val = torch.utils.data.random_split(train_set,
-                                                   lengths=[train_num, val_num],
-                                                   generator=torch.Generator().manual_seed(42))
-        self.num_samples = tot_train + test_set.data.shape[0]
+        if not already_split:
+            tot_train = train_set.data.shape[0]
+            train_num = int(0.7*tot_train)
+            val_num = tot_train-train_num
+            train_set, valid_set = torch.utils.data.random_split(train_set,
+                                                                 lengths=[train_num, val_num],
+                                                                 generator=torch.Generator().manual_seed(42))
+            self.num_samples = tot_train + test_set.data.shape[0]
 
-        self.train = DataLoader(train,
+        self.train = DataLoader(train_set,
                                 batch_size=args["batch_size"],
                                 shuffle=True,
                                 drop_last=True)
-        self.val = DataLoader(val,
+        self.val = DataLoader(valid_set,
                               batch_size=args["batch_size"],
                               shuffle=False,
                               drop_last=True)

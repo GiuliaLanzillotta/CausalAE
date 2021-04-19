@@ -2,6 +2,7 @@
 from typing import Any, Callable, Dict, IO, List, Optional, Tuple, Union, Iterator
 
 import numpy
+import torchvision.datasets
 from torch.utils.data import IterableDataset
 from torch.utils.data.dataset import T_co
 from torchvision.transforms import ToPILImage,ToTensor
@@ -14,8 +15,104 @@ import torch
 import os, io
 
 
-class RFD(IterableDataset):
-    """ The Robot Finger Dataset
+
+class RFD(torchvision.datasets.VisionDataset):
+    """  The Robot Finger Dataset - Vision dataset version """
+    shape = (3, 128,128)
+    raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
+    train_percentage = 0.9
+
+    def __init__(self,
+                 root: str,
+                 heldout_colors: bool =False,
+                 real: bool=False,
+                 transform: Optional[Callable] = None,
+                 target_transform: Optional[Callable] = None) -> None:
+        """ Can load one of 3 datasets available:
+        - the standard dataset
+        - the heldout_colors test set
+        - the real images test set
+        Note: only one of the test sets can be loaded at a time.
+        (Ideally this could be changed) """
+        super(RFD, self).__init__(root, transform=transform,
+                         target_transform=target_transform)
+        self.root = root
+        print("====== Opening RFD Dataset ======")
+        self.heldout_test = heldout_colors
+        self.real_test = real
+        self.origin_folder = self.raw_subfolders[0]
+        if heldout_colors: self.origin_folder = self.raw_subfolders[1]
+        if real:
+            self.origin_folder = self.raw_subfolders[2]
+            self.images = self.read_real_images()
+        self.labels, self.info = self.read_labels_and_info()
+        self.size = self.info["dataset_size"].item()
+
+
+    def __repr__(self):
+        """ Str representation of the dataset """
+        factor_values_dict = self.info["factor_values"].item()
+        factor_names = list(factor_values_dict.keys())
+        factor_values_num = list(self.info["num_factor_values"])
+        head = "Dataset {0}_{1} info".format(self.__class__.__name__, self.origin_folder)
+        body = ["Size = {0}".format(self.size), "Factors of variation : "]
+        for n,v_num in zip(factor_names, factor_values_num):
+            line = n+" with "+str(v_num)+" values"
+            body.append(line)
+        last_line = "For more info see original paper: https://arxiv.org/abs/2010.14407"
+        lines = [head] + [" " * 2 + line for line in body] + [last_line]
+        return '\n'.join(lines)
+
+    def read_real_images(self):
+        """ Loading function only for real test dataset images"""
+        path = str.join("/", [self.raw_folder, self.origin_folder, self.origin_folder])
+        images = np.load(path+"_images.npz", allow_pickle=True)["images"]
+        return images
+
+    def read_labels_and_info(self):
+        """ Opens the labels and info .npz files and stores them in the class"""
+        # loading labels
+        path = str.join("/", [self.raw_folder, self.origin_folder, self.origin_folder])
+        labels = np.load(path+"_labels.npz", allow_pickle=True)["labels"]
+        info = dict(np.load(path+"_info.npz", allow_pickle=True))
+        return labels, info
+
+    def read_image_from_archive(self, index:int):
+        """ Given the organised folder structure it is possible to read an image given
+        its index. Returns the image as a PILImage."""
+        # example path: .../images/7/3/9/0/9/739097.png
+        subpath = str.join("/",list(str(index))[:-1])
+        path = str.join("/", [self.origin_folder,subpath,str(index)+".png"])
+        img = Image.open(path)
+        return img
+
+
+    def __getitem__(self, index: int) -> Any:
+        target = self.labels[index]
+        if self.real_test: img = self.images[index]
+        else: img = self.read_image_from_archive(index)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target
+
+    def __len__(self) -> int:
+        return self.size
+
+    @property
+    def raw_folder(self) -> str:
+        # this will be something like './datasets/robot_finger_datasets/RFD/raw'
+        return self.root +self.__class__.__name__+"/"+'raw'
+
+
+class RFDIterable(IterableDataset):
+    """ The Robot Finger Dataset - Iterable version
+    This version directly works with the .tar files obtained by the first
+    un-tarring of the dataset (finger_images.tar, finger_heldout_colors.tar, finger_real.tar)
     ----------------------------
     3 different datasets:
     - finger: simulated images
@@ -94,8 +191,9 @@ class RFD(IterableDataset):
         - the real images test set
         Note: only one of the test sets can be loaded at a time.
         (Ideally this could be changed)
+        #TODO: change here
         """
-        super(RFD, self).__init__()
+        super(RFDIterable, self).__init__()
         self.root = root
         print("====== Opening RFD ======")
         self.heldout_test = heldout_colors
