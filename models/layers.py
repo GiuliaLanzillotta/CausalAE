@@ -206,9 +206,6 @@ class GaussianLayer(nn.Module):
         z = torch.randn(num_samples, self.latent_size)
         return z
 
-    def interpolate_standard(self, num_steps:int, dim:int):
-        #TODO: implement interpolation
-        pass
 
 class HybridLayer(nn.Module):
     """Stochastic layer based on Hybrid sampling"""
@@ -237,6 +234,7 @@ class HybridLayer(nn.Module):
 
     def sample_from_prior(self, input_shape):
         # splitting the prior latent vectors into chunks (one for each noise dimension)
+        if self.prior is None: raise ValueError("No samples from the prior have been obtained yet")
         num_samples = input_shape[0]
         prior_chunks = torch.split(self.prior, self.unit_dim, dim=1)
         # randomising the order of each chunk

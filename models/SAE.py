@@ -40,7 +40,7 @@ class SAE(nn.Module, GenerativeAE):
         return noise
 
     def sample_noise_from_prior(self, num_samples:int):
-        return self.hybrid_layer.sample_from_prior(num_samples)
+        return self.hybrid_layer.sample_from_prior((num_samples,))
 
     def sample_noise_from_posterior(self, inputs: Tensor):
         codes = self.encode(inputs)
