@@ -45,7 +45,7 @@ class VAEXperiment(pl.LightningModule):
         return train_loss["loss"]
 
     def training_epoch_end(self, outputs) -> None:
-        if self.current_epoch%self.params['logging_params']['plot_every']==0:
+        if self.current_epoch%self.params['vis_params']['plot_every']==0:
             self.visualiser.plot_training_gradients(self.current_epoch)
 
     def validation_step(self, batch, batch_idx):
@@ -60,7 +60,7 @@ class VAEXperiment(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.tensor([x['loss'] for x in outputs]).mean()
-        if self.current_epoch%self.params['logging_params']['plot_every']==0 and self.current_epoch>0:
+        if self.current_epoch%self.params['vis_params']['plot_every']==0 and self.current_epoch>0:
             self.visualiser.plot_reconstructions(self.current_epoch, device=self.device)
             self.visualiser.plot_samples_from_prior(self.current_epoch)
             self.visualiser.plot_latent_traversals(self.current_epoch, device=self.device)

@@ -55,7 +55,8 @@ class ModelVisualiser(object):
         # clean
         del random_codes, recons
 
-    def plot_latent_traversals(self, current_epoch:int=None, num_samples:int=5, steps:int=12, device=None):
+    def plot_latent_traversals(self, current_epoch:int=None, num_samples:int=5,
+                               steps:int=26, device=None):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
@@ -71,14 +72,15 @@ class ModelVisualiser(object):
             # for each latent dimension, change the code in that dimension while keeping the others fixed
             vec_traversals = [list(vec_base + traversals[:,i].reshape(steps,1)) for i in range(latents.shape[1])]
             #TODO: check this works for VAE as well
-            recons = self.model.decode(torch.tensor(np.stack(list(itertools.chain(*vec_traversals)))).unsqueeze(2).unsqueeze(3).to(device))#steps x M lists of 1xM vectors
+            random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
+            recons = self.model.decode(torch.tensor(random_codes).to(device)) # (stepsxM) images
             latent_traversals.append(recons)
             file_name = "traversals_{}".format(idx)
             if current_epoch is not None: file_name+="_"+str(current_epoch)
             tvu.save_image(recons.data,
                            fp= f"{self.save_path}/{file_name}.png",
                            normalize=True,
-                           nrow=steps) # plot a square grid
+                           nrow=steps) # steps x M grid
 
     @staticmethod
     def do_latent_traversal(latent_vectors, steps, width:float=0.5):
@@ -103,9 +105,9 @@ class ModelVisualiser(object):
         for n, p in self.model.named_parameters():
             if(p.requires_grad) and ("bias" not in n):
                 try:
-                    layers.append(n)
                     ave_grads.append(p.grad.abs().mean())
                     max_grads.append(p.grad.abs().max())
+                    layers.append(n)
                 except AttributeError:
                     print(n+" has no gradient. Skipping")
                     continue

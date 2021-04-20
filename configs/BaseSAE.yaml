@@ -13,7 +13,7 @@ opt_params:
   LR: 0.0002
   weight_decay: 0.0
   scheduler_gamma: 0.95
-  auto_epochs: 50
+  auto_epochs: -1
 
 data_params:
   dataset_name: MNIST
@@ -39,7 +39,7 @@ logging_params:
 
 vis_params:
   save_dir: "vis/"
-  plot_every: 5
+  plot_every: 10
   num_animations: 5
   num_frames: 5
   fpd: 10

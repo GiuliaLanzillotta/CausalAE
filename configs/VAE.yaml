@@ -27,5 +27,14 @@ logging_params:
   name: "BetaVAE"
   manual_seed: 1265
   version: v14
+
+
+vis_params:
+  save_dir: "vis/"
   plot_every: 1
+  num_animations: 5
+  num_frames: 5
+  fpd: 10
+  num_points_irs: 10000
+
 
