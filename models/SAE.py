@@ -72,6 +72,7 @@ class SAE(nn.Module, GenerativeAE):
         output = self.decode(noise)
         return  output
 
+
     @staticmethod
     def loss_function(*args):
         #TODO: include FID

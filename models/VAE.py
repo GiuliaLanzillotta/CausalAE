@@ -26,23 +26,22 @@ class VAE(nn.Module, GenerativeAE):
         z, logvar, mu = self.gaussian_latent(conv_result)
         return [z, mu, logvar]
 
-    def decode(self, z: Tensor) -> Tensor:
-        trans_conv_res = self.trans_conv_net(z)
+    def decode(self, noise: Tensor) -> Tensor:
+        trans_conv_res = self.trans_conv_net(noise)
         return self.act(trans_conv_res)
 
     def generate_standard(self, num_samples:int, device) -> Tensor:
         """ Sampling noise from the latent space and generating images
         through the decoder"""
-        z = self.gaussian_latent.sample_standard(num_samples, device)
+        z = self.gaussian_latent.sample_standard(num_samples).to(device)
         samples = self.decode(z)
         return samples
 
     def sample_noise_from_prior(self, num_samples:int):
-        pass
+        return self.gaussian_latent.sample_standard(num_samples)
 
     def sample_noise_from_posterior(self, inputs: Tensor):
-        pass
-
+        return self.encode(inputs)[0]
 
     def generate(self, x: Tensor) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from

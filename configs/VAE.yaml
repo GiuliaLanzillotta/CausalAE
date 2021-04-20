@@ -26,6 +26,6 @@ logging_params:
   save_dir: "logs/"
   name: "BetaVAE"
   manual_seed: 1265
-  version: v13
+  version: v14
   plot_every: 1
 

@@ -200,13 +200,13 @@ class GaussianLayer(nn.Module):
 
         return std * eps + mu, logvar, mu
 
-    def sample_standard(self, num_samples:int, device) -> Tensor:
+    def sample_standard(self, num_samples:int) -> Tensor:
         """ Sampling noise from the latent space and generating images
             through the decoder"""
-        z = torch.randn(num_samples, self.latent_size).to(device)
+        z = torch.randn(num_samples, self.latent_size)
         return z
 
-    def interpolate_standard(self):
+    def interpolate_standard(self, num_steps:int, dim:int):
         #TODO: implement interpolation
         pass
 
