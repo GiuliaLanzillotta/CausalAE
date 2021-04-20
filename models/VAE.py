@@ -37,7 +37,7 @@ class VAE(nn.Module, GenerativeAE):
         samples = self.decode(z)
         return samples
 
-    def sample_noise_from_prior(self):
+    def sample_noise_from_prior(self, num_samples:int):
         pass
 
     def sample_noise_from_posterior(self, inputs: Tensor):

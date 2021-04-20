@@ -22,6 +22,7 @@ class SAEXperiment(pl.LightningModule):
         self.model = SAE(params["model_params"], dim_in)
         print(self.model)
         self.burn_in = params["opt_params"]["auto_epochs"]
+        self.model.mode="auto" if self.burn_in>0 else "hybrid"
         # For tensorboard logging (saving the graph)
         self.example_input_array = torch.rand((1,) + self.loader.data_shape, requires_grad=False)
 
@@ -29,9 +30,9 @@ class SAEXperiment(pl.LightningModule):
         return self.model(inputs, **kwargs)
 
     def training_step(self, batch, batch_idx):
-        mode="auto" if self.current_epoch<=self.burn_in else "hybrid"
+        if self.current_epoch==self.burn_in: self.model.mode="hybrid"
         input_imgs, labels = batch
-        X_hat = self.forward(input_imgs, mode=mode)
+        X_hat = self.forward(input_imgs)
         BCE, FID, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
         self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
@@ -44,9 +45,8 @@ class SAEXperiment(pl.LightningModule):
             self.plot_grad_flow(self.model.named_parameters())
 
     def validation_step(self, batch, batch_idx):
-        mode="auto" if self.current_epoch<=self.burn_in else "hybrid"
         input_imgs, labels = batch
-        X_hat = self.forward(input_imgs, mode=mode)
+        X_hat = self.forward(input_imgs)
         BCE, FID, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
         self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)

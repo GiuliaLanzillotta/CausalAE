@@ -14,7 +14,7 @@ class GenerativeAE(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def sample_noise_from_prior(self):
+    def sample_noise_from_prior(self, num_samples:int):
         raise NotImplementedError
 
     @abstractmethod

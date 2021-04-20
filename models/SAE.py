@@ -14,6 +14,7 @@ class SAE(nn.Module, GenerativeAE):
         self.unit_dim = params["unit_dim"]
         self.N = params["latent_vecs"] # number of latent vectors to store for hybrid sampling
         self.dim_in = dim_in # C, H, W
+        self.mode="hybrid"
         # Building encoder
         #TODO: add a selection for non-linearity here
 
@@ -28,6 +29,7 @@ class SAE(nn.Module, GenerativeAE):
         self.scm = SCMDecoder(self.decoder_initial_shape, dim_in, depth=params["dec_depth"],**params)
         self.act = nn.Sigmoid()
 
+
     def encode(self, inputs: Tensor):
         conv_net_out = self.conv_net(inputs)
         codes = self.fc(conv_net_out)
@@ -37,38 +39,37 @@ class SAE(nn.Module, GenerativeAE):
         noise = self.hybrid_layer(codes).to(codes.device)
         return noise
 
-    def sample_noise_from_prior(self):
-        pass
+    def sample_noise_from_prior(self, num_samples:int):
+        return self.hybrid_layer.sample_from_prior(num_samples)
 
     def sample_noise_from_posterior(self, inputs: Tensor):
-        pass
+        codes = self.encode(inputs)
+        return self.sample_noise(codes)
 
-    def decode(self, z: Tensor, x:Tensor, mode:str) -> Tensor:
-        output = self.scm(x, z, mode=mode)
+    def decode(self, noise:Tensor):
+        if self.mode=="auto": x = noise
+        else: x = torch.ones(size = (noise.shape[0],)+self.decoder_initial_shape).to(noise.device)
+        output = self.scm(x, noise, mode=self.mode)
         return self.act(output)
 
     def generate_from_prior(self, num_samples:int):
         """Samples (with hybrid sampling) from the latent space."""
-        noise = self.hybrid_layer.sample_from_prior(num_samples)
+        noise = self.sample_noise_from_prior(num_samples)
         x = torch.ones(size = (num_samples,)+self.decoder_initial_shape)
-        return self.decode(noise, x, mode="hybrid")
+        return self.decode(noise)
 
     def generate(self, x: Tensor) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
         return self.forward(x)
 
-    def forward(self, inputs: Tensor, mode="auto") -> Tensor:
+    def forward(self, inputs: Tensor) -> Tensor:
         codes = self.encode(inputs)
-        if mode=="auto":
-            # normal autoencoder mode (no noise)
-            x = codes.view((-1,)+self.decoder_initial_shape)
-            z = x
-        elif mode=="hybrid":
-            with torch.no_grad():
-                x = torch.ones(size = (codes.shape[0],)+self.decoder_initial_shape).to(codes.device)
-            z = self.sample_noise(codes)
-        output = self.decode(z, x, mode=mode)
+        # normal autoencoder mode (no noise)
+        if self.mode=="auto": noise = codes.view((-1,)+self.decoder_initial_shape)
+        elif self.mode=="hybrid": noise = self.sample_noise(codes)
+        else: raise NotImplementedError
+        output = self.decode(noise)
         return  output
 
     @staticmethod
