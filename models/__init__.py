@@ -1,5 +1,5 @@
 from .layers import *
 from .VAE import VAE
 from .SAE import SAE
+from .BASE import GenerativeAE
 
-models_switch = {'VAE':VAE}

@@ -3,10 +3,11 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock
+from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock, GenerativeAE
 from torch.nn import functional as F
 
-class SAE(nn.Module):
+class SAE(nn.Module, GenerativeAE):
+
     def __init__(self, params:dict, dim_in) -> None:
         super(SAE, self).__init__()
         self.latent_size = params["latent_size"]
@@ -35,6 +36,12 @@ class SAE(nn.Module):
     def sample_noise(self, codes:Tensor):
         noise = self.hybrid_layer(codes).to(codes.device)
         return noise
+
+    def sample_noise_from_prior(self):
+        pass
+
+    def sample_noise_from_posterior(self, inputs: Tensor):
+        pass
 
     def decode(self, z: Tensor, x:Tensor, mode:str) -> Tensor:
         output = self.scm(x, z, mode=mode)

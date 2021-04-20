@@ -40,7 +40,7 @@ class SAEXperiment(pl.LightningModule):
         return BCE
 
     def training_epoch_end(self, outputs) -> None:
-        if self.current_epoch%self.params['logging_params']['plot_every']==0:
+        if self.current_epoch%self.params['vis_params']['plot_every']==0:
             self.plot_grad_flow(self.model.named_parameters())
 
     def validation_step(self, batch, batch_idx):
@@ -56,7 +56,7 @@ class SAEXperiment(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.tensor(outputs).mean()
-        if self.current_epoch%self.params['logging_params']['plot_every']==0:
+        if self.current_epoch%self.params['vis_params']['plot_every']==0:
             self.sample_images() # save images every plot_every_epochs epochs
         self.log("val_loss",avg_val_loss, prog_bar=True)
 
@@ -88,8 +88,8 @@ class SAEXperiment(pl.LightningModule):
         layers = []
         for n, p in named_parameters:
             if(p.requires_grad) and ("bias" not in n):
-                layers.append(n)
                 try:
+                    layers.append(n)
                     ave_grads.append(p.grad.abs().mean())
                     max_grads.append(p.grad.abs().max())
                 except AttributeError:

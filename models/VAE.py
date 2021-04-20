@@ -3,10 +3,10 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, TransConvNet, GaussianLayer
+from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE
 from torch.nn import functional as F
 
-class VAE(nn.Module):
+class VAE(nn.Module, GenerativeAE):
 
     def __init__(self, params:dict, dim_in) -> None:
         super(VAE, self).__init__()
@@ -36,6 +36,13 @@ class VAE(nn.Module):
         z = self.gaussian_latent.sample_standard(num_samples, device)
         samples = self.decode(z)
         return samples
+
+    def sample_noise_from_prior(self):
+        pass
+
+    def sample_noise_from_posterior(self, inputs: Tensor):
+        pass
+
 
     def generate(self, x: Tensor) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
