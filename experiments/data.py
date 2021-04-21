@@ -3,7 +3,8 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA
 import matplotlib.pyplot as plt
-from datasets import RFD
+from datasets import RFD, Shapes3d
+import numpy as np
 import torch
 import os
 
@@ -114,6 +115,22 @@ class DatasetLoader:
                                                              generator=torch.Generator().manual_seed(42))
             already_split = True
 
+        elif args["dataset_name"] == '3DShapes':
+            transform = transforms.ToTensor()
+            data_folder = './datasets/Shapes3d'
+            dataset = Shapes3d(data_folder,
+                               transform=transform,
+                               download=True)
+            # train, val, test set (to be used during training)
+            # note that the split sizes are fixed here (70,20,10 split)
+            tot = len(dataset)
+            train_num = int(0.7*tot)
+            val_num = int(0.2*tot)
+            test_num = tot-train_num-val_num
+            train_set, valid_set, test_set = torch.utils.data.random_split(dataset,
+                                                                           lengths=[train_num, val_num, test_num],
+                                                                           generator=torch.Generator().manual_seed(42))
+            already_split = True
 
         else:
             raise RuntimeError("Unrecognized data set '{}'".format(
@@ -145,27 +162,36 @@ class DatasetLoader:
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]
     
-    def plot_images(self, images, cls_true, cls_pred=None):
+    @staticmethod
+    def plot_images(images, cls_true, cls_pred=None,
+                    num_images:int=9):
         """Plot 9 sample images in a 3x3 sub-plot."""
-        assert len(images) == len(cls_true) == 9
+        assert len(images) == len(cls_true) == num_images
+        ncols = int(np.ceil(num_images**0.5))
+        nrows = int(np.ceil(num_images / ncols))
         # Convert list of torch.Tensor to list numpy.array and 
         # rearrange dimensions from (C,H,W) to (H,W,C)
-        images = [tensor.numpy().transpose() for tensor in images]
+        try: images = [tensor.numpy().transpose() for tensor in images]
+        except: pass
         # Create figure with 3x3 sub-plots.
-        fig, axes = plt.subplots(3, 3)
+        fig, axes = plt.subplots(ncols, nrows, figsize=(nrows * 3, ncols * 3))
+        axes = axes.flatten()
         fig.subplots_adjust(hspace=0.3, wspace=0.3)
-        for i,ax in enumerate(axes.flat):
-            ax.imshow(images[i].reshape(self.data_shape))
-            # Show true and predicted classes.
-            xlabel = "True: {0}, Pred: {1}".format(cls_true[i], cls_pred[i]) if cls_pred else "True: {0}".format(cls_true[i])
-            ax.set_xlabel(xlabel)
-            # Remove ticks
-            ax.set_xticks([])
-            ax.set_yticks([])
 
-    def plot_from_test(self):
+        for i,ax in enumerate(axes.flat):
+            if i < num_images:
+                ax.imshow(images[i], cmap='Greys_r', interpolation='nearest')
+                ax.set_xticks([])
+                ax.set_yticks([])
+                # Show true and predicted classes.
+                xlabel = "True: {0}, Pred: {1}".format(cls_true[i], cls_pred[i]) if cls_pred else "True: {0}".format(cls_true[i])
+                ax.set_xlabel(xlabel)
+            else:
+                ax.axis('off')
+
+    def plot_from_test(self, num_samples:int=9):
         """ Take first 9 images from test set and plot them
-            #TODO: random extraction 
         """
-        images, cls_true = zip(*[self.test.dataset[i] for i in range(9)])
+        indices = np.random.choice(len(self.test), num_samples)
+        images, cls_true = zip(*[self.test.dataset[i] for i in indices])
         self.plot_images(images=images, cls_true=cls_true)

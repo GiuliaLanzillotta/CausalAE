@@ -7,7 +7,7 @@ import torch
 import urllib
 import os
 from torchvision.datasets import VisionDataset
-from . import gen_bar_updater
+from .utils import gen_bar_updater
 
 
 class Shapes3d(VisionDataset):
@@ -25,7 +25,7 @@ class Shapes3d(VisionDataset):
     images: (480000 x 64 x 64 x 3, uint8) RGB images.
     labels: (480000 x 6, float64) Values of the latent factors.
     """
-    url = "https://console.cloud.google.com/storage/browser/_details/3d-shapes/3dshapes.h5"
+    url = "https://storage.googleapis.com/3d-shapes/3dshapes.h5"
     images_file = 'images.pt'
     labels_file = 'labels.pt'
     shape = (3, 64, 64)
@@ -46,12 +46,23 @@ class Shapes3d(VisionDataset):
         if download:
             self.download()
 
-        if not self._check_exists():
+        if not self._check_downloaded():
             raise RuntimeError('Dataset not found.' +
                                ' You can use download=True to download it')
-        self.data = torch.load(os.path.join(self.processed_folder, self.images_file))
-        self.targets = torch.load(os.path.join(self.processed_folder, self.labels_file))
+        # --------- load it
+        self.images, self.labels = self.read_source_file()
+        print("Dataset loaded.")
 
+    def __repr__(self):
+        """ Str representation of the dataset """
+        head = "Dataset {0} info".format(self.__class__.__name__)
+        body = ["Size = {0}".format(len(self)), "Factors of variation : "]
+        for n,v_num in self._NUM_VALUES_PER_FACTOR.items():
+            line = n+" with "+str(v_num)+" values"
+            body.append(line)
+        last_line = "For more info see original paper: http://proceedings.mlr.press/v80/kim18b.html"
+        lines = [head] + [" " * 2 + line for line in body] + [last_line]
+        return '\n'.join(lines)
 
 
     def read_source_file(self):
@@ -60,25 +71,20 @@ class Shapes3d(VisionDataset):
         fpath = str.join("/", [self.raw_folder, filename])
         print("Reading " + filename)
         dataset = h5py.File(fpath, 'r')
-        print(dataset.keys())
         images = dataset['images']  # array shape [480000,64,64,3], uint8 in range(256)
         labels = dataset['labels']  # array shape [480000,6], float64
-        with open(os.path.join(self.processed_folder, self.images_file), 'wb') as f:
-            torch.save(images, f)
-        with open(os.path.join(self.processed_folder, self.labels_file), 'wb') as f:
-            torch.save(labels, f)
+        return images, labels
 
 
     def download(self):
         """ Downloading source files (.h5)"""
-        if self._check_exists():
-            return
         os.makedirs(self.raw_folder, exist_ok=True)
-        os.makedirs(self.processed_folder, exist_ok=True)
         filename = self.url.rpartition('/')[2] #3dshapes.h5
         fpath = str.join("/", [self.raw_folder, filename])
         # --------- download source file
-        if not os.path.exists(fpath):
+        if self._check_downloaded():
+            print("Files already downloaded. Proceed to reading.")
+        else:
             try:
                 print('Downloading ' + self.url + ' to ' + fpath)
                 urllib.request.urlretrieve(
@@ -89,14 +95,16 @@ class Shapes3d(VisionDataset):
                       ' Downloading ' + url + ' to ' + fpath)
                 urllib.request.urlretrieve(
                     url, fpath, reporthook=gen_bar_updater())
-        # --------- load it and save it
-        self.read_source_file()
+            print("Done!")
+
+    def _check_downloaded(self):
+        filename = self.url.rpartition('/')[2] #3dshapes.h5
+        fpath = str.join("/", [self.raw_folder, filename])
+        return os.path.exists(fpath)
 
     def __getitem__(self, index: int) -> Any:
-        img = self.data[index,:]
-        target = self.targets[index, :]
-        img = img / 255. # normalise values to range [0,1]
-        img = img.astype(np.float32)
+        img = np.asarray(self.images[index,:])
+        target = torch.tensor(np.asarray(self.labels[index, :]))
 
         if self.transform is not None:
             img = self.transform(img)
@@ -107,23 +115,13 @@ class Shapes3d(VisionDataset):
         return img, target
 
     def __len__(self) -> int:
-        return self.data.shape[0]
+        return self.images.shape[0]
 
     @property
     def raw_folder(self) -> str:
-        # raw folder should be ("./datasets/3dShapes/Shapes3d/raw
+        # raw folder should be ("./datasets/Shapes3d/Shapes3d/raw
         return os.path.join(self.root, self.__class__.__name__, 'raw')
 
-    @property
-    def processed_folder(self) -> str:
-        # raw folder should be ("./datasets/3dShapes/Shapes3d/processed
-        return os.path.join(self.root, self.__class__.__name__, 'processed')
-
-    def _check_exists(self) -> bool:
-        return (os.path.exists(os.path.join(self.processed_folder,
-                                            self.images_file)) and
-                os.path.exists(os.path.join(self.processed_folder,
-                                            self.labels_file)))
 
 
     # methods for sampling unconditionally/conditionally on a given factor
@@ -166,13 +164,18 @@ class Shapes3d(VisionDataset):
         factors[fixed_factor] = fixed_factor_value
         indices = self.get_index(factors)
         ims = []
+        lbls = []
         for ind in indices:
-            im = self.data[ind]
+            im = self.images[ind]
+            lbl = self.labels[ind]
             im = np.asarray(im)
+            lbl = np.asarray(lbl)
             ims.append(im)
+            lbls.append(lbl)
         ims = np.stack(ims, axis=0)
+        lbls = np.stack(lbls, axis=0)
         ims = ims / 255. # normalise values to range [0,1]
         ims = ims.astype(np.float32)
-        return ims.reshape([batch_size, 64, 64, 3])
+        return ims.reshape([batch_size, 64, 64, 3]), lbls
 
 

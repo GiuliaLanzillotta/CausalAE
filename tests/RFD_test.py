@@ -1,9 +1,12 @@
-import os
 import unittest
 from tests import RFD
-from torch.utils.data import DataLoader
-import torch
 import torchvision
+import unittest
+
+import torchvision
+
+from tests import RFD
+
 
 class TestRFD(unittest.TestCase):
     def setUp(self) -> None:

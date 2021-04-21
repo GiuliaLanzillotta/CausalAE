@@ -6,3 +6,4 @@ datasets/robot_finger_datasets
 datasets/robot_finger_datasets.tar
 */__pycache__
 vis
+datasets/Shapes3d
