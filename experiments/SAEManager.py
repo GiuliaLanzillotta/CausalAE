@@ -60,7 +60,7 @@ class SAEXperiment(pl.LightningModule):
         avg_val_loss = torch.tensor(outputs).mean()
         if self.current_epoch%self.params['vis_params']['plot_every']==0 and self.current_epoch>0:
             self.visualiser.plot_reconstructions(self.current_epoch, device=self.device)
-            try: self.visualiser.plot_samples_from_prior(self.current_epoch)
+            try: self.visualiser.plot_samples_from_prior(self.current_epoch, device=self.device)
             except ValueError:pass
             self.visualiser.plot_latent_traversals(self.current_epoch, device=self.device)
         self.log("val_loss",avg_val_loss, prog_bar=True)

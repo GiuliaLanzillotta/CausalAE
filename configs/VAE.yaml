@@ -31,7 +31,7 @@ logging_params:
 
 vis_params:
   save_dir: "vis/"
-  plot_every: 1
+  plot_every: 10
   num_animations: 5
   num_frames: 5
   fpd: 10

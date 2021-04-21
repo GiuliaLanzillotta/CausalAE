@@ -14,7 +14,6 @@ class RFD(torchvision.datasets.VisionDataset):
     """  The Robot Finger Dataset - Vision dataset version """
     shape = (3, 128,128)
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
-    train_percentage = 0.9
 
     def __init__(self,
                  root: str,

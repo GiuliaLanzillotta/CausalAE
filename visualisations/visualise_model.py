@@ -40,12 +40,12 @@ class ModelVisualiser(object):
         # clean
         del test_input, recons
 
-    def plot_samples_from_prior(self, current_epoch:int=None, grid_size:int=12):
+    def plot_samples_from_prior(self, current_epoch:int=None, grid_size:int=12, device=None):
         """ samples from latent prior and plots reconstructions"""
         num_pics = grid_size**2 # square grid
         with torch.no_grad():
             random_codes = self.model.sample_noise_from_prior(num_pics) #sampling logic here
-        recons = self.model.decode(random_codes)
+        recons = self.model.decode(random_codes.to(device))
         file_name = "prior_samples"
         if current_epoch is not None: file_name+="_"+str(current_epoch)
         tvu.save_image(recons.data,
@@ -71,7 +71,6 @@ class ModelVisualiser(object):
             vec_base = np.stack([vec]*steps)
             # for each latent dimension, change the code in that dimension while keeping the others fixed
             vec_traversals = [list(vec_base + traversals[:,i].reshape(steps,1)) for i in range(latents.shape[1])]
-            #TODO: check this works for VAE as well
             random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
             recons = self.model.decode(torch.tensor(random_codes).to(device)) # (stepsxM) images
             latent_traversals.append(recons)
