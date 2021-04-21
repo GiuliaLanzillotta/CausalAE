@@ -4,6 +4,10 @@ from torch import nn
 from torch import Tensor
 import numpy as np
 
+class Mish(nn.Module):
+    """ MISH nonlinearity - https://arxiv.org/abs/1908.08681"""
+    def forward(self, x):
+        return x * torch.tanh(F.softplus(x))
 
 class FCResidualBlock(nn.Module):
     """ Implements residual fully connected block with adaptive average pooling """

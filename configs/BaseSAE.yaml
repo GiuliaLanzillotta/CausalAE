@@ -3,7 +3,7 @@ model_params:
   latent_size: 12
   enc_depth: 12 #number of convolutional layers in the encoder
   dec_depth: 12
-  pool_every: 3
+  pool_every: 2
   unit_dim: 4
   upsampling_factor: 2
   latent_vecs: 128 # for hybrid sampling
@@ -13,7 +13,7 @@ opt_params:
   LR: 0.0002
   weight_decay: 0.0
   scheduler_gamma: 0.95
-  auto_epochs: -1
+  auto_epochs: 50
 
 data_params:
   dataset_name: MNIST
@@ -35,7 +35,7 @@ logging_params:
   save_dir: "logs/"
   name: "BaseSAE"
   manual_seed: 1265
-  version: cluster1
+  version: standardAE
 
 vis_params:
   save_dir: "vis/"

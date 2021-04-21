@@ -1,7 +1,7 @@
 # Script responsible for data loading and cleaning
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA
+from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA, FashionMNIST
 import matplotlib.pyplot as plt
 from datasets import RFD, Shapes3d
 import numpy as np
@@ -40,6 +40,19 @@ class DatasetLoader:
                                train=False,
                                download=True,
                                transform=transform)
+
+        elif args["dataset_name"] == 'FashionMNIST':
+            transform = transforms.ToTensor()
+            root = os.path.dirname(os.path.realpath(__file__))
+            data_folder = os.path.join(root,'../datasets/FashionMNIST/')
+            train_set = FashionMNIST(data_folder,
+                                     train=True,
+                                     download=True,
+                                     transform=transform)
+            test_set = FashionMNIST(data_folder,
+                                    train=False,
+                                    download=True,
+                                    transform=transform)
 
         elif args["dataset_name"] == 'cifar10':
             transform = transforms.ToTensor()
@@ -85,6 +98,8 @@ class DatasetLoader:
                               download=True,
                               transform=transform)
             already_split = True
+            tot = len(train_set) + len(valid_set) + len(test_set)
+
 
         elif args["dataset_name"] == 'RFD': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
             transform = transforms.ToTensor()
@@ -144,6 +159,7 @@ class DatasetLoader:
                                                                  lengths=[train_num, val_num],
                                                                  generator=torch.Generator().manual_seed(42))
             self.num_samples = tot_train + test_set.data.shape[0]
+        else: self.num_samples = tot
 
         self.train = DataLoader(train_set,
                                 batch_size=args["batch_size"],

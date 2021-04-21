@@ -56,7 +56,7 @@ class ModelVisualiser(object):
         del random_codes, recons
 
     def plot_latent_traversals(self, current_epoch:int=None, num_samples:int=5,
-                               steps:int=26, device=None):
+                               steps:int=10, device=None):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes

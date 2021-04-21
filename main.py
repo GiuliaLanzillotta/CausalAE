@@ -40,12 +40,13 @@ def train_model(config:dict, tuning:bool=False):
     if tuning: callbacks.append(TuneReportCallback(metrics, on="validation_end"))
 
     # resuming from checkpoint
-    checkpoint_path = os.path.join(config['logging_params']['save_dir'],
+    checkpoint_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   config['logging_params']['save_dir'],
                                    config['logging_params']['name'],
                                    config['logging_params']['version'],
                                    "checkpoints/")
     try:
-        latest_checkpoint = max(glob.glob(checkpoint_path + "\*ckpt"), key=os.path.getctime)
+        latest_checkpoint = max(glob.glob(checkpoint_path + "*ckpt"), key=os.path.getctime)
     except ValueError:
         #no checpoints
         latest_checkpoint = "null"

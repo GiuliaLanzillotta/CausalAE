@@ -7,3 +7,5 @@ datasets/robot_finger_datasets.tar
 */__pycache__
 vis
 datasets/Shapes3d
+datasets/FashionMNIST
+datasets/celeba

@@ -1,9 +1,10 @@
-matplotlib==3.3.4
-webdataset==0.1.58
-torchvision==0.9.0
+ray==1.2.0
 torch==1.8.0
 pytorch_lightning==1.2.7
-ray==1.2.0
+webdataset==0.1.58
+torchvision==0.9.0
+h5py==2.10.0
 numpy==1.19.2
+matplotlib==3.3.4
 Pillow==8.2.0
 PyYAML==5.4.1
