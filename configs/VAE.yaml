@@ -1,7 +1,7 @@
 model_params:
   name: 'VAE'
-  beta: 5.0
-  latent_size: 32
+  beta: 4.0
+  latent_size: 12
   enc_depth: 12 #number of convolutional layers in the encoder
   dec_depth: 12
   pool_every: 3
@@ -20,18 +20,19 @@ data_params:
 
 trainer_params:
   gpus: 1
-  max_epochs: 50
+  max_epochs: 100
 
 logging_params:
   save_dir: "logs/"
   name: "BetaVAE"
   manual_seed: 1265
-  version: cluster2
+  version: cluster1
+  score_every: 10
 
 
 vis_params:
   save_dir: "vis/"
-  plot_every: 10
+  plot_every: 20
   num_animations: 5
   num_frames: 5
   fpd: 10

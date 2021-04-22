@@ -2,6 +2,7 @@
 import torch
 from torch import nn
 from torch import Tensor
+import torch.nn.functional as F
 import numpy as np
 
 class Mish(nn.Module):
@@ -45,7 +46,6 @@ class FCBlock(nn.Module):
         return self.fc(inputs)
 
 
-
 class ConvBlock(nn.Module):
     """ Implements logic for a convolutional block [conv2d, normalization, activation]"""
 
@@ -60,6 +60,7 @@ class ConvBlock(nn.Module):
 
     def forward(self, inputs: Tensor) -> Tensor:
         outputs = self.block(inputs)
+
         return outputs
 
     @staticmethod
@@ -84,35 +85,71 @@ class ConvBlock(nn.Module):
         return int(((s-1)*H_in + H_w -s)/2)
 
 
+class PoolingConvBlock(nn.Module):
+    """ Specific version of the conv block with same padding and optionally pooling.
+    This version differs from the standard conv block in that the dimensionality
+    reduction is obtained only through the optional pooling layer."""
+    def __init__(self, C_IN, C_OUT, H_in, k, s, num_groups, pool:bool=False):
+        super(PoolingConvBlock, self).__init__()
+        p = ConvBlock.same_padding(H_in, k, s)
+        self.block = ConvBlock(C_IN, C_OUT, k, s, p, num_groups)
+        self.pool = pool
+        if pool: self.pooling = nn.MaxPool2d(2,2,0)
+
+    def forward(self, inputs:Tensor):
+        out_conv = self.block(inputs)
+        if self.pool: out_conv= self.pooling(out_conv)
+        return out_conv
+
+
+class ResidualConvBlock(PoolingConvBlock):
+    """ Residual version of the PoolingConvBlock
+    Note: pooling layers addition to obtain dimensionality reduction """
+    def __init__(self, C_IN, C_OUT, H_in, k, s, num_groups, pool:bool=False):
+        super(ResidualConvBlock, self).__init__(C_IN, C_OUT, H_in, k, s, num_groups, pool=pool)
+
+    def forward(self, inputs:Tensor):
+        out_conv = self.block(inputs)
+        out_res = inputs + out_conv
+        if self.pool: out_res= self.pooling(out_res)
+        return out_res
+
+
 class ConvNet(nn.Module):
     """ Implements convolutional net with multiple convolutional 
     blocks  + final flattening """
 
     def __init__(self, dim_in, final_dim, depth:int, pool_every:int, **kwargs):
-        #TODO: include MISH non-linearity and add switch for non-linearities
+        #todo: add switch for non_linearities
         super(ConvNet, self).__init__()
         C, H, W = dim_in
         self.depth = depth
-        
+        residual = kwargs.get("residual")
         # Stacking the conv layers  
         modules = []
-        h = H
+        h = H # tracking image size
+        k = 5 # kernel size
+        c = 64 # output channels
         for l in range(depth):
             # conv block with kernel size 2, size 2 and padding 1 
             # halving the input dimension at every step
+            if l==depth-1: c = dim_in[0] # reducing depth at the end
             reduce=l%pool_every==0
-            padding = ConvBlock.same_padding(h, 5 if l==0 else 3, 1) if not reduce else 0
-            modules.append(ConvBlock(C, 64, 5 if l==0 else 3, 2 if reduce else 1, padding , 8))
-            h = ConvBlock.compute_output_size(h, 5 if l==0 else 3, 2 if reduce else 1, padding)
-            if h<3: break
-            if l==0: C = 64
+            if l==1: k=3 # only first layer with kernel=5
+            modules.append(PoolingConvBlock(C, c, h, k, 1, 8, pool=reduce) if not residual
+                           else ResidualConvBlock(C, c, h, k, 1, 8, pool=reduce))
+            h = h//2 if reduce else h
+            k = min(h,k)
+            C = c
 
         # calculating shape of the image after convolution
         self.final_shape = C, h, h # assuming square input image
         assert all(v>0 for v in self.final_shape), "Input not big enough for the convolutions requested"
         flat_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
-        modules.append(FCBlock(flat_dim, [final_dim], nn.ReLU))
+        if flat_dim!=self.final_shape: # re-adjusting the shape
+            modules.append(FCBlock(flat_dim, [final_dim], Mish) if not residual
+                           else FCResidualBlock(flat_dim, [final_dim], Mish))
         self.net = nn.Sequential(*modules)
 
 
@@ -264,7 +301,7 @@ class StrTrf(nn.Module):
     """Implements the structural transform layer. To be used in SAE."""
     def __init__(self, noise_size, n_features):
         super().__init__()
-        self.fc = FCBlock(noise_size, [noise_size*10, noise_size*20, n_features*2], nn.ReLU)
+        self.fc = FCResidualBlock(noise_size, [noise_size*10, noise_size*20, n_features*2], nn.ReLU)
         self.n_features = n_features
 
     def forward(self, x, z):
@@ -290,7 +327,7 @@ class UpsampledConv(nn.Module):
         self.upsampling = nn.Upsample(scale_factor=upsampling_factor, mode="bilinear", align_corners=False)
         padding = ConvBlock.same_padding(H*upsampling_factor, filter_size, stride)
         self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding, num_groups)
-        self.act = nn.ReLU()#TODO: add selection here
+        self.act = Mish()#TODO: add selection here
 
     def forward(self, inputs):
         upsmpld = self.upsampling(inputs)
@@ -320,22 +357,17 @@ class SCMDecoder(nn.Module):
         self.conv_modules = nn.ModuleList([])
         self.str_trf_modules = nn.ModuleList([])
         h = H
+        c = 64 # output channels
         pool_every = kwargs.get("pool_every")
         for l in range(depth):
+            if l == depth-1: c = final_shape[0] # reducing number of channels at the end
             dim_in = (C, h, h)
             if l<self.hierarchy_depth:
                 self.str_trf_modules.append(StrTrf(self.unit_dim, C))
-            self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, 64, 3, 1, 8))
+            self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, c, 3, 1, 8))
             h *= 2 if l%pool_every==0 else 1
-            C = 64
-        # reducing number of channels
-        shape_adjusting_block = []
-        shape_adjusting_block.append(TransConvBlock(C, final_shape[0], 5, 1, 0, 1))
-        h = TransConvBlock.compute_output_size(h, 5, 1, 0)
-        # reshaping into initial size
-        k, p = ConvBlock.get_filter_size(h, 1, final_shape[1])
-        shape_adjusting_block.append(ConvBlock(final_shape[0], final_shape[0], k, 1, p, 1))
-        self.shape_adjusting_block = nn.Sequential(*shape_adjusting_block)
+            C = c
+        self.shape_adjusting_block = nn.AdaptiveAvgPool2d(final_shape[1])
 
     def forward(self, x, z, mode="auto"):
         """ Implements forward pass with 2 possible modes:

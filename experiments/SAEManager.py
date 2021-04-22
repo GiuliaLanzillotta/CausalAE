@@ -7,6 +7,8 @@ from models import SAE
 from experiments.data import DatasetLoader
 from visualisations import ModelVisualiser
 import pytorch_lightning as pl
+from metrics import FIDScorer
+
 
 class SAEXperiment(pl.LightningModule):
 
@@ -23,6 +25,7 @@ class SAEXperiment(pl.LightningModule):
                                           params["logging_params"]["version"],
                                           self.loader.test,
                                           **params["vis_params"])
+        self._fidscorer = FIDScorer()
         self.burn_in = params["opt_params"]["auto_epochs"]
         self.model.mode="auto" if self.burn_in>0 else "hybrid"
         # For tensorboard logging (saving the graph)
@@ -38,8 +41,6 @@ class SAEXperiment(pl.LightningModule):
         BCE, FID, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
         self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
-        # TODO: include FID
-        # self.log('FID', FID, prog_bar=True, on_epoch=True, on_step=True)
         return BCE
 
     def training_epoch_end(self, outputs) -> None:
@@ -52,8 +53,10 @@ class SAEXperiment(pl.LightningModule):
         BCE, FID, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
         self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
-        # TODO: include FID
-        # self.log('FID', FID, prog_bar=True, on_epoch=True, on_step=True)
+        if self.current_epoch%self.params['logging_params']['score_every']==0:
+            if batch_idx==0:# initialise the scoring for the current epoch
+                self._fidscorer.start_new_scoring(len(self.val_dataloader()), device=self.device)
+            self._fidscorer.get_activations(input_imgs, X_hat) #store activations for current batch
         return BCE
 
     def validation_epoch_end(self, outputs):
@@ -63,6 +66,10 @@ class SAEXperiment(pl.LightningModule):
             try: self.visualiser.plot_samples_from_prior(self.current_epoch, device=self.device)
             except ValueError:pass
             self.visualiser.plot_latent_traversals(self.current_epoch, device=self.device)
+        if self.current_epoch%self.params['logging_params']['score_every']==0:
+            # compute and store the fid scoring
+            fid_score = self._fidscorer.calculate_fid()
+            self.log("FID", fid_score, prog_bar=True)
         self.log("val_loss",avg_val_loss, prog_bar=True)
 
     def test_step(self, *args, **kwargs):

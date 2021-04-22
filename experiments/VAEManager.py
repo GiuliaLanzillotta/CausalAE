@@ -5,6 +5,7 @@ from torch import optim
 from experiments.data import DatasetLoader
 from models import VAE
 from visualisations import ModelVisualiser
+from metrics import FIDScorer
 
 class VAEXperiment(pl.LightningModule):
 
@@ -21,6 +22,7 @@ class VAEXperiment(pl.LightningModule):
                                           params["logging_params"]["version"],
                                           self.loader.test,
                                           **params["vis_params"])
+        self._fidscorer = FIDScorer()
         # Additional initialisations (used in training and validation steps)
         self.KL_weight = self.loader.num_samples/self.params['data_params']['batch_size']
         # For tensorboard logging (saving the graph)
@@ -51,6 +53,10 @@ class VAEXperiment(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
+        if self.current_epoch%self.params['logging_params']['score_every']==0:
+            if batch_idx==0:# initialise the scoring for the current epoch
+                self._fidscorer.start_new_scoring(len(self.val_dataloader()), device=self.device)
+            self._fidscorer.get_activations(input_imgs, results) #store activations for current batch
         val_loss = self.model.loss_function(*results,
                                             X = input_imgs,
                                             KL_weight =  self.KL_weight)
@@ -64,6 +70,10 @@ class VAEXperiment(pl.LightningModule):
             self.visualiser.plot_reconstructions(self.current_epoch, device=self.device)
             self.visualiser.plot_samples_from_prior(self.current_epoch, device=self.device)
             self.visualiser.plot_latent_traversals(self.current_epoch, device=self.device)
+        if self.current_epoch%self.params['logging_params']['score_every']==0:
+            # compute and store the fid scoring
+            fid_score = self._fidscorer.calculate_fid()
+            self.log("FID", fid_score, prog_bar=True)
         self.log("val_loss",avg_val_loss, prog_bar=True)
 
     def test_step(self, *args, **kwargs):

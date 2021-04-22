@@ -40,16 +40,20 @@ def train_model(config:dict, tuning:bool=False):
     if tuning: callbacks.append(TuneReportCallback(metrics, on="validation_end"))
 
     # resuming from checkpoint
-    checkpoint_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                   config['logging_params']['save_dir'],
-                                   config['logging_params']['name'],
-                                   config['logging_params']['version'],
-                                   "checkpoints/")
+    base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             config['logging_params']['save_dir'],
+                             config['logging_params']['name'],
+                             config['logging_params']['version'])
+    checkpoint_path = os.path.join(base_path, "checkpoints/")
     try:
         latest_checkpoint = max(glob.glob(checkpoint_path + "*ckpt"), key=os.path.getctime)
-    except ValueError:
-        #no checpoints
-        latest_checkpoint = "null"
+    except ValueError: latest_checkpoint = "null" # no checkpoints to restore available
+
+    #save hyperparameters
+    hparams_path = os.path.join(base_path, "configs.yaml")
+    if not os.path.exists(hparams_path):
+        with open(hparams_path, 'w') as out:
+            yaml.dump(config, out, default_flow_style=False)
 
     runner = Trainer(min_epochs=1,
                      logger=tb_logger,
@@ -107,7 +111,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='VAE')
+                        default='BaseSAE')
 
     args = parser.parse_args()
     config = config_switch[args.name](args.tuning)

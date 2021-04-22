@@ -60,37 +60,24 @@ class ModelVisualiser(object):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
-        test_input, _ = iter(self.test_dataloader).__next__()
-        with torch.no_grad():
-            noises = self.model.sample_noise_from_posterior(test_input[:num_samples].to(device))
-        latents = noises.data.cpu().numpy()
-        traversals = self.do_latent_traversal(latents, steps, width=0.2)
-        latent_traversals = []
-        for idx in range(latents.shape[0]): # for each sample
-            vec = latents[idx,:]
-            vec_base = np.stack([vec]*steps)
+        for idx in np.random.randint(0,100,num_samples): # for each sample
+            test_input, _ = self.test_dataloader.dataset.__getitem__(idx)
+            with torch.no_grad():
+                codes = self.model.encode(test_input.unsqueeze(0).to(device))
+            try: codes = codes[1] # if the output is a list extract the second element (VAE case)
+            except: pass
+            latents = codes.data.cpu().numpy()
+            traversals = np.linspace(-3.0, 3.0, steps) #todo: make this grid more flexible
+            base = np.stack([latents]*steps).squeeze(1)
             # for each latent dimension, change the code in that dimension while keeping the others fixed
-            vec_traversals = [list(vec_base + traversals[:,i].reshape(steps,1)) for i in range(latents.shape[1])]
+            vec_traversals = [list(np.hstack([base[:,:i], traversals.reshape(steps,1), base[:,i+1:]])) for i in range(latents.shape[1])]
             random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
-            recons = self.model.decode(torch.tensor(random_codes).to(device)) # (stepsxM) images
-            latent_traversals.append(recons)
-            file_name = "traversals_{}".format(idx)
-            if current_epoch is not None: file_name+="_"+str(current_epoch)
+            with torch.no_grad(): recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device)) # (stepsxM) images
+            file_name = "traversals_epoch{}_{}".format(current_epoch,idx) if current_epoch is not None else "traversals_{}"
             tvu.save_image(recons.data,
                            fp= f"{self.save_path}/{file_name}.png",
                            normalize=True,
                            nrow=steps) # steps x M grid
-
-    @staticmethod
-    def do_latent_traversal(latent_vectors, steps, width:float=0.5):
-        # latent vectors is a NxM matrix, with M the number of latent dimensions
-        # and N the number of samples
-        minima = latent_vectors.min(0)
-        maxima = latent_vectors.max(0)
-        delta = maxima-minima
-        traversals = np.linspace(-1*width*delta, delta*width, steps)
-        # traversals has shape stepsxM
-        return traversals
 
     def plot_training_gradients(self, current_epoch:int=None):
         '''Plots the gradients flowing through different layers in the net during training.
