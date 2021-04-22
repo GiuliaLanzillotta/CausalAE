@@ -1,1 +1,1 @@
-from FID import FIDScorer
+from .FID import FIDScorer
