@@ -53,7 +53,7 @@ class VAEXperiment(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        if self.current_epoch%self.params['logging_params']['score_every']==0:
+        if self.current_epoch%self.params['logging_params']['score_every']==0 and self.current_epoch!=0:
             if batch_idx==0:# initialise the scoring for the current epoch
                 self._fidscorer.start_new_scoring(len(self.val_dataloader()), device=self.device)
             self._fidscorer.get_activations(input_imgs, results) #store activations for current batch
@@ -70,7 +70,7 @@ class VAEXperiment(pl.LightningModule):
             self.visualiser.plot_reconstructions(self.current_epoch, device=self.device)
             self.visualiser.plot_samples_from_prior(self.current_epoch, device=self.device)
             self.visualiser.plot_latent_traversals(self.current_epoch, device=self.device)
-        if self.current_epoch%self.params['logging_params']['score_every']==0:
+        if self.current_epoch%self.params['logging_params']['score_every']==0 and self.current_epoch!=0:
             # compute and store the fid scoring
             fid_score = self._fidscorer.calculate_fid()
             self.log("FID", fid_score, prog_bar=True)

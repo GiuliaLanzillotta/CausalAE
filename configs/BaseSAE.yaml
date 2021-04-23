@@ -36,7 +36,7 @@ logging_params:
   name: "BaseSAE"
   manual_seed: 1265
   version: cluster1
-  score_every: 10 # more advanced metrics scoring
+  score_every: 10000 # more advanced metrics scoring
 
 vis_params:
   save_dir: "vis/"

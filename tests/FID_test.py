@@ -4,62 +4,42 @@ from . import FIDScorer, DatasetLoader
 unittest.TestLoader.sortTestMethodsUsing = None
 
 class FidTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.args = {"dataset_name": "celeba",
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.args = {"dataset_name": "celeba",
                 "batch_size": 144, # Better to have a square number
                 "test_batch_size": 144}
-        self.batch_size = 144
-
-    def test_model_creation(self):
-
-        self.loader = DatasetLoader(self.args)
-        """ Test correct model creation"""
-        self._fidscorer = FIDScorer()
-        #passes if not failing
-
+        cls.batch_size = 144
 
     def test_everything(self):
-        #todo: reformat code
-        self.loader = DatasetLoader(self.args)
-        """ Test correct model creation"""
-        self._fidscorer = FIDScorer()
+        """ Statefule testing with subTests """
+        loader = DatasetLoader(self.args)
+        fidscorer = FIDScorer()
         #passes if not failing
-        self._fidscorer.start_new_scoring(self.batch_size*2)
-        self.assertEqual(self._fidscorer.generated.shape, (self.batch_size*2, 2048))
-        input_imgs, _ = next(self.loader.train.__iter__())
-        self._fidscorer.get_activations(input_imgs, input_imgs)
-        self.assertEqual(self._fidscorer.start_idx, self.batch_size)
-        input_imgs2, _ = next(self.loader.train.__iter__())
-        self._fidscorer.get_activations(input_imgs, input_imgs)
-        self.assertEqual(self._fidscorer.start_idx, self.batch_size*2)
-        mu_generated, sigma_generated, mu_originals, sigma_originals = self._fidscorer.calculate_activation_statistics()
-        self.assertEqual(mu_generated, mu_originals)
-        self.assertEqual(sigma_generated, sigma_originals)
-        fid = self._fidscorer.calculate_fid()
-        self.assertEqual(fid, 0)
+        with self.subTest():
+            fidscorer.start_new_scoring(self.batch_size*2)
+            self.assertEqual(fidscorer.generated.shape, (self.batch_size*2, 2048))
 
+        with self.subTest(msg="Activations update for first batch"):
+            input_imgs, _ = next(loader.train.__iter__())
+            fidscorer.get_activations(input_imgs, input_imgs)
+            self.assertEqual(fidscorer.start_idx, self.batch_size)
 
-    def test_start_new_scoring(self):
-        self._fidscorer.start_new_scoring(self.batch_size*2)
-        self.assertEqual(self._fidscorer.generated.shape, (self.batch_size*2, 2048))
+        with self.subTest(msg="Activations update for second batch"):
+            input_imgs2, _ = next(loader.train.__iter__())
+            fidscorer.get_activations(input_imgs, input_imgs)
+            self.assertEqual(fidscorer.start_idx, self.batch_size*2)
 
-    def test_get_activations(self):
-        input_imgs, _ = next(self.loader.train.__iter__())
-        self._fidscorer.get_activations(input_imgs, input_imgs)
-        self.assertEqual(self._fidscorer.start_idx, self.batch_size)
-        input_imgs2, _ = next(self.loader.train.__iter__())
-        self._fidscorer.get_activations(input_imgs, input_imgs)
-        self.assertEqual(self._fidscorer.start_idx, self.batch_size*2)
+        with self.subTest("Activation statistics not equal"):
+            mu_generated, sigma_generated, mu_originals, sigma_originals = fidscorer.calculate_activation_statistics()
+            self.assertTrue(all(mu_generated==mu_originals))
+            self.assertTrue(all((sigma_generated==sigma_originals).reshape(-1)))
 
-    def test_calculate_activation_statistics(self):
-        mu_generated, sigma_generated, mu_originals, sigma_originals = self._fidscorer.calculate_activation_statistics()
-        self.assertEqual(mu_generated, mu_originals)
-        self.assertEqual(sigma_generated, sigma_originals)
-
-    def test_calculate_fid(self):
-        fid = self._fidscorer.calculate_fid()
-        self.assertEqual(fid, 0)
-
+        with self.subTest("FID value not 0"):
+            fid = fidscorer.calculate_fid()
+            eps = 10e-5
+            self.assertTrue(fid<eps)
 
 if __name__ == '__main__':
     unittest.main()

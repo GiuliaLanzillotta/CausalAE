@@ -27,7 +27,7 @@ logging_params:
   name: "BetaVAE"
   manual_seed: 1265
   version: cluster1
-  score_every: 10
+  score_every: 1000
 
 
 vis_params:
