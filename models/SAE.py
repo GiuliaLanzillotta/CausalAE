@@ -20,7 +20,7 @@ class SAE(nn.Module, GenerativeAE):
 
         conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params)
         self.conv_net = conv_net # returns vector of latent_dim size
-        fc_class = FCResidualBlock if params["residual_fc"] else FCBlock
+        fc_class = FCResidualBlock if params["residual"] else FCBlock
         self.fc = fc_class(256, [128, 64,  self.latent_size], nn.ReLU)
         # hybrid sampling to get the noise vector
         self.hybrid_layer = HybridLayer(self.latent_size, self.unit_dim, self.N)

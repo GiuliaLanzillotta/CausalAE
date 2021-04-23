@@ -49,13 +49,13 @@ class FCBlock(nn.Module):
 class ConvBlock(nn.Module):
     """ Implements logic for a convolutional block [conv2d, normalization, activation]"""
 
-    def __init__(self, C_IN, C_OUT, k, s, p, num_groups):
+    def __init__(self, C_IN, C_OUT, k, s, p, num_groups): #todo add switch for batch norm
         #TODO: add check for the norm
         #TODO: add selector for activation 
         super(ConvBlock, self).__init__()
         self.block = nn.Sequential(
             nn.Conv2d(C_IN, out_channels=C_OUT, kernel_size=k, stride=s, padding=p),
-            nn.GroupNorm(num_groups, C_OUT),
+            nn.BatchNorm2d(C_OUT),
             nn.LeakyReLU())
 
     def forward(self, inputs: Tensor) -> Tensor:
@@ -105,8 +105,8 @@ class PoolingConvBlock(nn.Module):
 class ResidualConvBlock(PoolingConvBlock):
     """ Residual version of the PoolingConvBlock
     Note: pooling layers addition to obtain dimensionality reduction """
-    def __init__(self, C_IN, C_OUT, H_in, k, s, num_groups, pool:bool=False):
-        super(ResidualConvBlock, self).__init__(C_IN, C_OUT, H_in, k, s, num_groups, pool=pool)
+    def __init__(self, C_IN, H_in, k, s, num_groups, pool:bool=False):
+        super(ResidualConvBlock, self).__init__(C_IN, C_IN, H_in, k, s, num_groups, pool=pool)
 
     def forward(self, inputs:Tensor):
         out_conv = self.block(inputs)
@@ -136,8 +136,8 @@ class ConvNet(nn.Module):
             if l==depth-1: c = dim_in[0] # reducing depth at the end
             reduce=l%pool_every==0
             if l==1: k=3 # only first layer with kernel=5
-            modules.append(PoolingConvBlock(C, c, h, k, 1, 8, pool=reduce) if not residual
-                           else ResidualConvBlock(C, c, h, k, 1, 8, pool=reduce))
+            modules.append(PoolingConvBlock(C, c, h, k, 1, 8, pool=reduce) if (not residual) or (l in [0,depth-1]) # changing num channels here
+                           else ResidualConvBlock(C, h, k, 1, 8, pool=reduce))
             h = h//2 if reduce else h
             k = min(h,k)
             C = c
@@ -321,12 +321,14 @@ class StrTrf(nn.Module):
 class UpsampledConv(nn.Module):
     """Implements layer to be used in structural decoder:
     bilinear upsampling + convolution (with activtion) (with no dimensionality reduction)"""
-    def __init__(self, upsampling_factor, dim_in, channels:int, filter_size:int=2, stride:int=2, num_groups:int=8):
+    def __init__(self, upsampling_factor, dim_in, channels:int, filter_size:int=2, stride:int=2,
+                 num_groups:int=8, residual:bool=False):
         super().__init__()
         C, H, W = dim_in
         self.upsampling = nn.Upsample(scale_factor=upsampling_factor, mode="bilinear", align_corners=False)
         padding = ConvBlock.same_padding(H*upsampling_factor, filter_size, stride)
-        self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding, num_groups)
+        self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding, num_groups) if not residual \
+            else ResidualConvBlock(C, filter_size, stride, padding, num_groups)
         self.act = Mish()#TODO: add selection here
 
     def forward(self, inputs):
@@ -359,12 +361,14 @@ class SCMDecoder(nn.Module):
         h = H
         c = 64 # output channels
         pool_every = kwargs.get("pool_every")
+        residual = kwargs.get("residual")
         for l in range(depth):
             if l == depth-1: c = final_shape[0] # reducing number of channels at the end
             dim_in = (C, h, h)
             if l<self.hierarchy_depth:
                 self.str_trf_modules.append(StrTrf(self.unit_dim, C))
-            self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, c, 3, 1, 8))
+            self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, c, 3, 1, 8,
+                                                   residual=residual and C==c))
             h *= 2 if l%pool_every==0 else 1
             C = c
         self.shape_adjusting_block = nn.AdaptiveAvgPool2d(final_shape[1])

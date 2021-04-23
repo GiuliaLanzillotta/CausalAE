@@ -4,7 +4,7 @@ model_params:
   enc_depth: 12 #number of convolutional layers in the encoder
   dec_depth: 12
   pool_every: 3
-  unit_dim: 12
+  unit_dim: 1
   latent_vecs: 128 # for hybrid sampling
   residual: True
 
@@ -25,7 +25,7 @@ data_params:
 
 trainer_params:
   gpus: 1
-  max_epochs: 300
+  max_epochs: 600
 
 tuner_params:
   num_samples: 1

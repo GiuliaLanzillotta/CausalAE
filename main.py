@@ -51,6 +51,7 @@ def train_model(config:dict, tuning:bool=False):
 
     #save hyperparameters
     hparams_path = os.path.join(base_path, "configs.yaml")
+    os.makedirs(hparams_path, exist_ok=True)
     if not os.path.exists(hparams_path):
         with open(hparams_path, 'w') as out:
             yaml.dump(config, out, default_flow_style=False)
