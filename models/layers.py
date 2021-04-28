@@ -133,7 +133,7 @@ class ConvNet(nn.Module):
         for l in range(depth):
             # conv block with kernel size 2, size 2 and padding 1 
             # halving the input dimension at every step
-            if l==depth-1: c = dim_in[0] # reducing depth at the end
+            if l==depth-1: c = 1 # reducing depth at the end
             reduce=l%pool_every==0
             if l==1: k=3 # only first layer with kernel=5
             modules.append(PoolingConvBlock(C, c, h, k, 1, 8, pool=reduce) if (not residual) or (l in [0,depth-1]) # changing num channels here
@@ -335,6 +335,45 @@ class UpsampledConv(nn.Module):
         upsmpld = self.upsampling(inputs)
         output = self.act(self.conv_layer(upsmpld))
         return output
+
+
+class UpsampledConvNet(nn.Module):
+    """ Implements upsampling convolutional network, consisting in a series of
+    UpsampleConv blocks - to be used in the decoders of fully convolutional networks."""
+    def __init__(self, initial_shape, final_shape, depth:int, **kwargs):
+        """
+        @latent_size:int = size of the noise vector in input (obtained by hybrid/parametric sampling)
+        @unit_dim:int = dimension of one "noise unit"- not necessarily 1
+        # the noise will be processed one unit at a time -> the noise vector is
+        # split in units during the forward pass
+
+        """
+        super().__init__()
+        self.initial_shape = initial_shape
+        self.final_shape = final_shape
+        self.depth = depth
+        C, H, W = initial_shape # the initial shape refers to the constant input block
+        _modules = []
+        h = H
+        c = 64 # output channels
+        pool_every = kwargs.get("pool_every")
+        residual = kwargs.get("residual")
+        for l in range(depth):
+            if l == depth-1: c = final_shape[0] # reducing number of channels at the end
+            dim_in = (C, h, h)
+            _modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, c, 3, 1, 8,
+                                                   residual=residual and C==c))
+            h *= 2 if l%pool_every==0 else 1
+            C = c
+        _modules.append(nn.AdaptiveAvgPool2d(final_shape[1]))
+        self.net = nn.Sequential(*_modules)
+
+    def forward(self, inputs):
+        """ Simply the forward pass """
+        reshaped = inputs.view((-1,) + self.initial_shape)
+        outputs = self.net(reshaped)
+        return outputs
+
 
 class SCMDecoder(nn.Module):
     """ Implements SCM layer (to be used in SAE): given a latent noise vector the

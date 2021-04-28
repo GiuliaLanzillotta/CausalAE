@@ -46,38 +46,31 @@ class SAE(nn.Module, GenerativeAE):
         codes = self.encode(inputs)
         return self.sample_noise(codes)
 
-    def decode(self, noise:Tensor):
+    def decode(self, noise:Tensor, activate:bool):
         if self.mode=="auto": x = noise
         else: x = torch.ones(size = (noise.shape[0],)+self.decoder_initial_shape).to(noise.device)
         output = self.scm(x, noise, mode=self.mode)
-        return self.act(output)
+        if activate: output = self.act(output)
+        return output
 
-    def generate_from_prior(self, num_samples:int):
-        """Samples (with hybrid sampling) from the latent space."""
-        noise = self.sample_noise_from_prior(num_samples)
-        x = torch.ones(size = (num_samples,)+self.decoder_initial_shape)
-        return self.decode(noise)
-
-    def generate(self, x: Tensor) -> Tensor:
+    def generate(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
-        return self.forward(x)
+        return self.forward(x, activate)
 
-    def forward(self, inputs: Tensor) -> Tensor:
+    def forward(self, inputs: Tensor, activate:bool=False) -> Tensor:
         codes = self.encode(inputs)
         # normal autoencoder mode (no noise)
         if self.mode=="auto": noise = codes.view((-1,)+self.decoder_initial_shape)
         elif self.mode=="hybrid": noise = self.sample_noise(codes)
         else: raise NotImplementedError
-        output = self.decode(noise)
+        output = self.decode(noise, activate)
         return  output
 
-
-    @staticmethod
-    def loss_function(*args):
+    def loss_function(self, *args):
         X_hat = args[0]
         X = args[1]
         FID = 0
-        MSE = F.mse_loss(X_hat, X, reduction="sum")
-        BCE = F.binary_cross_entropy(X_hat, X, reduction="sum")
+        MSE = F.mse_loss(self.act(X_hat), X, reduction="mean")
+        BCE = F.binary_cross_entropy_with_logits(X_hat, X, reduction="mean")
         return BCE, FID, MSE

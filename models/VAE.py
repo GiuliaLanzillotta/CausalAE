@@ -3,7 +3,7 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE
+from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet
 from torch.nn import functional as F
 
 class VAE(nn.Module, GenerativeAE):
@@ -17,9 +17,9 @@ class VAE(nn.Module, GenerativeAE):
         conv_net = ConvNet(dim_in, self.latent_size, depth=params["enc_depth"], **params)
         self.conv_net = conv_net
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size)
-        self.trans_conv_net = TransConvNet(self.latent_size, conv_net.final_shape,
-                                           dim_in, depth=params["dec_depth"])
-        print()
+        self.upsmpld_conv_net = UpsampledConvNet((self.latent_size, 1, 1), self.dim_in,
+                                                 depth=params["dec_depth"], **params)
+        self.act = nn.Sigmoid()
 
 
     def encode(self, inputs: Tensor):
@@ -27,16 +27,10 @@ class VAE(nn.Module, GenerativeAE):
         z, logvar, mu = self.gaussian_latent(conv_result)
         return [z, mu, logvar]
 
-    def decode(self, noise: Tensor) -> Tensor:
-        trans_conv_res = self.trans_conv_net(noise)
-        return trans_conv_res
-
-    def generate_standard(self, num_samples:int, device) -> Tensor:
-        """ Sampling noise from the latent space and generating images
-        through the decoder"""
-        z = self.gaussian_latent.sample_standard(num_samples).to(device)
-        samples = self.decode(z)
-        return samples
+    def decode(self, noise: Tensor, activate:bool) -> Tensor:
+        upsmpld_res = self.upsmpld_conv_net(noise)
+        if activate: upsmpld_res = self.act(upsmpld_res)
+        return upsmpld_res
 
     def sample_noise_from_prior(self, num_samples:int):
         return self.gaussian_latent.sample_standard(num_samples)
@@ -44,14 +38,14 @@ class VAE(nn.Module, GenerativeAE):
     def sample_noise_from_posterior(self, inputs: Tensor):
         return self.encode(inputs)[0]
 
-    def generate(self, x: Tensor) -> Tensor:
+    def generate(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
-        return self.forward(x)[0]
+        return self.forward(x, activate)[0]
 
-    def forward(self, inputs: Tensor) -> list:
+    def forward(self, inputs: Tensor, activate:bool=False) -> list:
         z, mu, logvar = self.encode(inputs)
-        return  [self.decode(z), mu, logvar]
+        return  [self.decode(z, activate), mu, logvar]
 
     def loss_function(self, *args, **kwargs) -> dict:
         X_hat = args[0]

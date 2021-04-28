@@ -15,7 +15,7 @@ opt_params:
 
 
 data_params:
-  dataset_name: 3DShapes
+  dataset_name: RFD
   batch_size: 500 # Better to have a square number
   test_batch_size: 500
 
@@ -27,7 +27,7 @@ logging_params:
   save_dir: "logs/"
   name: "BetaVAE"
   manual_seed: 1265
-  version: VAE12_shapes3d
+  version: VAE12_RFD
   score_every: 20
 
 

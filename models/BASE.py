@@ -11,7 +11,7 @@ class GenerativeAE(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def decode(self, noise:Tensor) -> Tensor:
+    def decode(self, noise:Tensor, activate:bool) -> Tensor:
         """ returns generated sample given noise"""
         raise NotImplementedError
 
@@ -24,7 +24,7 @@ class GenerativeAE(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def generate(self, inputs:Tensor) -> Tensor:
+    def generate(self, inputs:Tensor, activate:bool) -> Tensor:
         """ generates output from input"""
         raise NotImplementedError
 

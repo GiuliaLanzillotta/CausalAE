@@ -112,7 +112,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='VAE')
+                        default='BaseSAE')
 
     args = parser.parse_args()
     config = config_switch[args.name](args.tuning)

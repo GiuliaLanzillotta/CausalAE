@@ -167,7 +167,7 @@ class DatasetLoader:
                                 batch_size=args["batch_size"],
                                 shuffle=False,
                                 drop_last=True,
-                                num_workers=2) #todo: dynamically set this value
+                                num_workers=8)
         self.val = DataLoader(valid_set,
                               batch_size=args["batch_size"],
                               shuffle=False,

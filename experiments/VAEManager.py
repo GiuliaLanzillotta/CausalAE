@@ -27,7 +27,6 @@ class VAEXperiment(pl.LightningModule):
         # For tensorboard logging (saving the graph)
         self.example_input_array = torch.rand((1,) + self.loader.data_shape)
         self._fidscorer = FIDScorer()
-        self.act = torch.nn.Sigmoid()
 
 
     def forward(self, inputs: Tensor, **kwargs) -> Tensor:
@@ -60,7 +59,7 @@ class VAEXperiment(pl.LightningModule):
                     self.params['data_params']['batch_size']*len(self.val_dataloader())//20,
                     device=self.device)
             if batch_idx%20==0:#only one every 20 batches is included to avoid memory issues
-                try: self._fidscorer.get_activations(input_imgs, self.act(results[0])) #store activations for current batch
+                try: self._fidscorer.get_activations(input_imgs, self.model.act(results[0])) #store activations for current batch
                 except: print(self._fidscorer.start_idx)
         val_loss = self.model.loss_function(*results,
                                             X = input_imgs,

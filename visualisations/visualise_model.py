@@ -20,14 +20,12 @@ class ModelVisualiser(object):
         self.test_dataloader = test_dataloader
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
-        self.act = torch.nn.Sigmoid()
 
     def plot_reconstructions(self, current_epoch:int=None, grid_size:int=12, device=None):
         """ plots reconstructions from test set samples"""
         test_input, _ = iter(self.test_dataloader).__next__()
         with torch.no_grad():
-            recons = self.model.generate(test_input.to(device))
-            recons = self.act(recons)
+            recons = self.model.generate(test_input.to(device), activate=True)
         file_name = "reconstructions"
         if current_epoch is not None: file_name+="_"+str(current_epoch)
         tvu.save_image(recons.data,
@@ -47,8 +45,7 @@ class ModelVisualiser(object):
         num_pics = grid_size**2 # square grid
         with torch.no_grad():
             random_codes = self.model.sample_noise_from_prior(num_pics) #sampling logic here
-        recons = self.model.decode(random_codes.to(device))
-        recons = self.act(recons)
+        recons = self.model.decode(random_codes.to(device), activate=True)
         file_name = "prior_samples"
         if current_epoch is not None: file_name+="_"+str(current_epoch)
         tvu.save_image(recons.data,
@@ -76,8 +73,7 @@ class ModelVisualiser(object):
             vec_traversals = [list(np.hstack([base[:,:i], traversals.reshape(steps,1), base[:,i+1:]])) for i in range(latents.shape[1])]
             random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
             with torch.no_grad():
-                recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device)) # (stepsxM) images
-                recons = self.act(recons)
+                recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device), activate=True) # (stepsxM) images
             file_name = "traversals_epoch{}_{}".format(current_epoch,idx) if current_epoch is not None else "traversals_{}"
             tvu.save_image(recons.data,
                            fp= f"{self.save_path}/{file_name}.png",
