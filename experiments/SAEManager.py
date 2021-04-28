@@ -59,7 +59,8 @@ class SAEXperiment(pl.LightningModule):
                     self.params['data_params']['batch_size']*len(self.val_dataloader())//20,
                     device=self.device)
             if batch_idx%20==0:#only one every 50 batches is included to avoid memory issues
-                self._fidscorer.get_activations(input_imgs, self.model.act(X_hat)) #store activations for current batch
+                try: self._fidscorer.get_activations(input_imgs, self.model.act(X_hat)) #store activations for current batch
+                except: print(self._fidscorer.start_idx)
         return BCE
 
     def validation_epoch_end(self, outputs):

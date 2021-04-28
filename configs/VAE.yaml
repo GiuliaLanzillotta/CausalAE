@@ -11,11 +11,11 @@ opt_params:
   LR: 0.0001
   weight_decay: 0.0
   scheduler_gamma: 0.95
-  KL_decay: 0.9
+  KL_decay: 0.9999
 
 
 data_params:
-  dataset_name: RFD
+  dataset_name: 3DShapes
   batch_size: 500 # Better to have a square number
   test_batch_size: 500
 
@@ -27,7 +27,7 @@ logging_params:
   save_dir: "logs/"
   name: "BetaVAE"
   manual_seed: 1265
-  version: VAE12_RFD
+  version: VAE12_shapes3d
   score_every: 20
 
 

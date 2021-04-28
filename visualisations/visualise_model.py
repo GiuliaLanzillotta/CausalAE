@@ -24,6 +24,8 @@ class ModelVisualiser(object):
     def plot_reconstructions(self, current_epoch:int=None, grid_size:int=12, device=None):
         """ plots reconstructions from test set samples"""
         test_input, _ = iter(self.test_dataloader).__next__()
+        num_plots = grid_size**2
+        test_input = test_input[:num_plots]
         with torch.no_grad():
             recons = self.model.generate(test_input.to(device), activate=True)
         file_name = "reconstructions"
@@ -106,7 +108,7 @@ class ModelVisualiser(object):
         plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
         plt.tick_params(axis='both', labelsize=4)
         plt.xlim(left=0, right=len(ave_grads))
-        plt.ylim(bottom = -0.001, top=0.02) # zoom in on the lower gradient regions
+        plt.ylim(bottom = -0.001, top=0.002) # zoom in on the lower gradient regions
         plt.xlabel("Layers")
         plt.ylabel("average gradient")
         plt.title("Gradient flow")

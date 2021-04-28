@@ -17,7 +17,7 @@ opt_params:
 
 data_params:
   dataset_name: RFD
-  batch_size: 500 # Better to have a square number
+  batch_size: 1000 # Better to have a square number
   test_batch_size: 500
   heldout: False
   real: False

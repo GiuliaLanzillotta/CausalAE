@@ -446,10 +446,10 @@ class FIDScorer(object):
                    the inception model.
         """
         assert self.generated is not None and self.originals is not None, "No activations have been recorded. "
-        mu_generated = np.mean(self.generated, axis=0)
-        sigma_generated = np.cov(self.generated, rowvar=False)
-        mu_originals = np.mean(self.generated, axis=0)
-        sigma_originals = np.cov(self.generated, rowvar=False)
+        mu_generated = np.mean(self.generated[:self.start_idx], axis=0)
+        sigma_generated = np.cov(self.generated[:self.start_idx], rowvar=False)
+        mu_originals = np.mean(self.originals[:self.start_idx], axis=0)
+        sigma_originals = np.cov(self.originals[:self.start_idx], rowvar=False)
         return mu_generated, sigma_generated, mu_originals, sigma_originals
 
     def calculate_fid(self):

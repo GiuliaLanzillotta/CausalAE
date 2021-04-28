@@ -56,6 +56,7 @@ def train_model(config:dict, tuning:bool=False):
         with open(hparams_path, 'w') as out:
             yaml.dump(config, out, default_flow_style=False)
 
+
     runner = Trainer(min_epochs=1,
                      logger=tb_logger,
                      log_every_n_steps=50,
