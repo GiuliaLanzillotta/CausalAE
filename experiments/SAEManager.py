@@ -55,13 +55,17 @@ class SAEXperiment(pl.LightningModule):
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
         if self.current_epoch%self.params['logging_params']['score_every']==0 and self.current_epoch!=0:
             if batch_idx==0:# initialise the scoring for the current epoch
-                self._fidscorer.start_new_scoring(len(self.val_dataloader()), device=self.device)
-            self._fidscorer.get_activations(input_imgs, X_hat) #store activations for current batch
+                self._fidscorer.start_new_scoring(
+                    self.params['data_params']['batch_size']*len(self.val_dataloader())//100,
+                    device=self.device)
+            if batch_idx%100==0:#only one every 50 batches is included to avoid memory issues
+                self._fidscorer.get_activations(input_imgs, X_hat) #store activations for current batch
         return BCE
 
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.tensor(outputs).mean()
-        if self.current_epoch%self.params['vis_params']['plot_every']==0 and self.current_epoch>0:
+        if self.current_epoch%self.params['vis_params']['plot_every']==0 or \
+                self.current_epoch==self.params["trainer_params"]["max_epochs"]:
             self.visualiser.plot_reconstructions(self.current_epoch, device=self.device)
             try: self.visualiser.plot_samples_from_prior(self.current_epoch, device=self.device)
             except ValueError:pass

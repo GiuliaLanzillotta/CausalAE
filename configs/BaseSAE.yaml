@@ -10,22 +10,22 @@ model_params:
 
 
 opt_params:
-  LR: 0.0002
+  LR: 0.0005
   weight_decay: 0.0
   scheduler_gamma: 0.95
   auto_epochs: 0
 
 data_params:
-  dataset_name: MNIST
-  batch_size: 144 # Better to have a square number
-  test_batch_size: 144
+  dataset_name: 3DShapes
+  batch_size: 500 # Better to have a square number
+  test_batch_size: 500
   heldout: False
   real: False
   subset: False #limit number of samples to 100'000 (to avoid memory errors)
 
 trainer_params:
   gpus: 1
-  max_epochs: 600
+  max_epochs: 500
 
 tuner_params:
   num_samples: 1
@@ -35,12 +35,12 @@ logging_params:
   save_dir: "logs/"
   name: "BaseSAE"
   manual_seed: 1265
-  version: cluster1
-  score_every: 10000 # more advanced metrics scoring
+  version: SAE12_shapes3d
+  score_every: 20 # more advanced metrics scoring
 
 vis_params:
   save_dir: "vis/"
-  plot_every: 20
+  plot_every: 10
   num_animations: 5
   num_frames: 5
   fpd: 10

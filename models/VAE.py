@@ -19,7 +19,8 @@ class VAE(nn.Module, GenerativeAE):
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size)
         self.trans_conv_net = TransConvNet(self.latent_size, conv_net.final_shape,
                                            dim_in, depth=params["dec_depth"])
-        self.act = nn.Sigmoid()
+        print()
+
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
@@ -28,7 +29,7 @@ class VAE(nn.Module, GenerativeAE):
 
     def decode(self, noise: Tensor) -> Tensor:
         trans_conv_res = self.trans_conv_net(noise)
-        return self.act(trans_conv_res)
+        return trans_conv_res
 
     def generate_standard(self, num_samples:int, device) -> Tensor:
         """ Sampling noise from the latent space and generating images
@@ -62,7 +63,7 @@ class VAE(nn.Module, GenerativeAE):
         # across different latent layer sizes and different datasets
         KL_weight = kwargs["KL_weight"] # usually weight = M/N
         # ELBO = reconstruction term + prior-matching term
-        recons_loss= F.binary_cross_entropy(X_hat, X, reduction="sum")
+        recons_loss= F.binary_cross_entropy_with_logits(X_hat, X, reduction="mean")
         KL_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
         loss = recons_loss + self.beta * KL_weight * KL_loss
         return {'loss': loss, 'Reconstruction_loss':recons_loss, 'KL':KL_loss}

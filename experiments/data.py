@@ -99,6 +99,7 @@ class DatasetLoader:
                               transform=transform)
             already_split = True
             tot = len(train_set) + len(valid_set) + len(test_set)
+            self.num_samples = tot
 
 
         elif args["dataset_name"] == 'RFD': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
@@ -122,6 +123,7 @@ class DatasetLoader:
             # train, val, test set for standard set (to be used during training)
             # note that the split sizes are fixed here (70,20,10 split)
             tot = standard_set.size
+            self.num_samples = tot
             train_num = int(0.7*tot)
             val_num = int(0.2*tot)
             test_num = tot-train_num-val_num
@@ -139,6 +141,7 @@ class DatasetLoader:
             # train, val, test set (to be used during training)
             # note that the split sizes are fixed here (70,20,10 split)
             tot = len(dataset)
+            self.num_samples = tot
             train_num = int(0.7*tot)
             val_num = int(0.2*tot)
             test_num = tot-train_num-val_num
@@ -159,24 +162,27 @@ class DatasetLoader:
                                                                  lengths=[train_num, val_num],
                                                                  generator=torch.Generator().manual_seed(42))
             self.num_samples = tot_train + test_set.data.shape[0]
-        else: self.num_samples = tot
 
         self.train = DataLoader(train_set,
                                 batch_size=args["batch_size"],
-                                shuffle=True,
-                                drop_last=True)
+                                shuffle=False,
+                                drop_last=True,
+                                num_workers=2) #todo: dynamically set this value
         self.val = DataLoader(valid_set,
                               batch_size=args["batch_size"],
                               shuffle=False,
-                              drop_last=True)
+                              drop_last=True,
+                              num_workers=2)
         self.test = DataLoader(test_set,
                                batch_size=args["test_batch_size"],
-                               shuffle=False)
+                               shuffle=False,
+                               num_workers=2)
 
 
         self.data_shape = self.train.dataset[0][0].size()
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]
+
     
     @staticmethod
     def plot_images(images, cls_true, cls_pred=None,

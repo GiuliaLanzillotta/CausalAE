@@ -71,8 +71,8 @@ class Shapes3d(VisionDataset):
         fpath = str.join("/", [self.raw_folder, filename])
         print("Reading " + filename)
         dataset = h5py.File(fpath, 'r')
-        images = dataset['images']  # array shape [480000,64,64,3], uint8 in range(256)
-        labels = dataset['labels']  # array shape [480000,6], float64
+        images = dataset['images'][:]  # array shape [480000,64,64,3], uint8 in range(256)
+        labels = dataset['labels'][:]  # array shape [480000,6], float64
         return images, labels
 
 
@@ -103,8 +103,8 @@ class Shapes3d(VisionDataset):
         return os.path.exists(fpath)
 
     def __getitem__(self, index: int) -> Any:
-        img = np.asarray(self.images[index,:])
-        target = torch.tensor(np.asarray(self.labels[index, :]))
+        img = np.asarray(self.images[index])
+        target = torch.tensor(np.asarray(self.labels[index]))
 
         if self.transform is not None:
             img = self.transform(img)

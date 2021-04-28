@@ -167,7 +167,7 @@ class TransConvBlock(nn.Module):
         super(TransConvBlock, self).__init__()
         self.block = nn.Sequential(
             nn.ConvTranspose2d(C_IN, out_channels=C_OUT, kernel_size=k, stride=s, padding=p),
-            nn.GroupNorm(num_groups, C_OUT),
+            nn.BatchNorm2d(C_OUT),
             nn.LeakyReLU())
 
     def forward(self, inputs: Tensor) -> Tensor:

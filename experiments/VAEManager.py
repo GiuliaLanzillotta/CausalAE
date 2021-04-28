@@ -22,11 +22,12 @@ class VAEXperiment(pl.LightningModule):
                                           params["logging_params"]["version"],
                                           self.loader.test,
                                           **params["vis_params"])
-        self._fidscorer = FIDScorer()
         # Additional initialisations (used in training and validation steps)
         self.KL_weight = self.loader.num_samples/self.params['data_params']['batch_size']
         # For tensorboard logging (saving the graph)
         self.example_input_array = torch.rand((1,) + self.loader.data_shape)
+        self._fidscorer = FIDScorer()
+        self.act = torch.nn.Sigmoid()
 
 
     def forward(self, inputs: Tensor, **kwargs) -> Tensor:
@@ -55,8 +56,12 @@ class VAEXperiment(pl.LightningModule):
         results = self.forward(input_imgs)
         if self.current_epoch%self.params['logging_params']['score_every']==0 and self.current_epoch!=0:
             if batch_idx==0:# initialise the scoring for the current epoch
-                self._fidscorer.start_new_scoring(len(self.val_dataloader()), device=self.device)
-            self._fidscorer.get_activations(input_imgs, results) #store activations for current batch
+                self._fidscorer.start_new_scoring(
+                    self.params['data_params']['batch_size']*len(self.val_dataloader())//20,
+                    device=self.device)
+            if batch_idx%20==0:#only one every 20 batches is included to avoid memory issues
+                try: self._fidscorer.get_activations(input_imgs, self.act(results[0])) #store activations for current batch
+                except: print(self._fidscorer.start_idx)
         val_loss = self.model.loss_function(*results,
                                             X = input_imgs,
                                             KL_weight =  self.KL_weight)
@@ -66,7 +71,8 @@ class VAEXperiment(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         avg_val_loss = torch.tensor([x['loss'] for x in outputs]).mean()
-        if self.current_epoch%self.params['vis_params']['plot_every']==0 and self.current_epoch>0:
+        if (self.current_epoch%self.params['vis_params']['plot_every']==0) or \
+                self.current_epoch==self.params["trainer_params"]["max_epochs"]:
             self.visualiser.plot_reconstructions(self.current_epoch, device=self.device)
             self.visualiser.plot_samples_from_prior(self.current_epoch, device=self.device)
             self.visualiser.plot_latent_traversals(self.current_epoch, device=self.device)

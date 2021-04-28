@@ -75,7 +75,6 @@ class SAE(nn.Module, GenerativeAE):
 
     @staticmethod
     def loss_function(*args):
-        #TODO: include FID
         X_hat = args[0]
         X = args[1]
         FID = 0
