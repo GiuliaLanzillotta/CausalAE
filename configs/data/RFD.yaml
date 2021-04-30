@@ -1,0 +1,5 @@
+dataset_name: RFD
+batch_size: 1000 # Better to have a square number
+test_batch_size: 500
+score_every: 20
+plot_every: 5

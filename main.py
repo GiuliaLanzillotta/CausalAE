@@ -11,13 +11,15 @@ from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 
 from experiments import experiments_switch
-from configs import config_switch
+from configs import get_config
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 from ray import tune
 import ray
+
+
 
 
 
@@ -113,9 +115,19 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='BaseSAE')
+                        default='BetaVAE')
+    parser.add_argument('--data', '-d',
+                        dest="data",
+                        metavar="DATA",
+                        help = 'Name of the dataset to use',
+                        default="MNIST")
+    parser.add_argument('--version', '-v',
+                        dest="version",
+                        metavar="VERSION",
+                        help= "Name of version to use",
+                        default="standard")
 
     args = parser.parse_args()
-    config = config_switch[args.name](args.tuning)
+    config = get_config(args.tuning, args.name, args.data, args.version)
     if args.tuning: do_tuning(config)
     else: train_model(config)

@@ -16,7 +16,7 @@ opt_params:
   auto_epochs: 0
 
 data_params:
-  dataset_name: RFD
+  dataset_name: 3DShapes
   batch_size: 1000 # Better to have a square number
   test_batch_size: 500
   heldout: False
@@ -35,7 +35,7 @@ logging_params:
   save_dir: "logs/"
   name: "BaseSAE"
   manual_seed: 1265
-  version: SAE12_RFD
+  version: SAE12_shapes3d
   score_every: 20 # more advanced metrics scoring
 
 vis_params:

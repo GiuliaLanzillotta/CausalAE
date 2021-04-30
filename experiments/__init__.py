@@ -6,5 +6,5 @@ from .VAEManager import VAEXperiment
 from .SAEManager import SAEXperiment
 
 
-experiments_switch = {'VAE':VAEXperiment,
+experiments_switch = {'BetaVAE':VAEXperiment,
                       'BaseSAE':SAEXperiment}

@@ -1,0 +1,5 @@
+model_params:
+  latent_size: 12
+  enc_depth: 12 #number of convolutional layers in the encoder
+  dec_depth: 12
+  pool_every: 3
