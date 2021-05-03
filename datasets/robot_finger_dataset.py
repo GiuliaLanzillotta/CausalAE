@@ -91,6 +91,9 @@ class RFD(torchvision.datasets.VisionDataset):
         if self.transform is not None:
             img = self.transform(img)
 
+        # this could fail if image is not a torch tensor
+        img = img.view(self.shape)
+
         if self.target_transform is not None:
             target = self.target_transform(target)
 
@@ -197,35 +200,37 @@ class RFDIterable(IterableDataset):
         self.origin_folder = self.raw_subfolders[0]
         print("===== Reading files =====")
         images, labels = self.load_files()
-        print(self)
+
         if real: self.iterator = self.RFD_real_set_iterator(images, labels, transform, target_transform)
         else: self.iterator = self.RFD_standard_iterator(images, labels, transform, target_transform)
 
+        print(self)
+
 
     def load_files(self):
-        """ Initialises dataset by loading files from disk"""
+        """ Initialises dataset by loading files from disk and (in case of .tar saving format) opening the web Dataset"""
         # switching folder
         if self.heldout_test: folder_index=1
         elif self.real_test: folder_index=2
         else: folder_index=0
         raw_folder = self.raw_subfolders[folder_index]
-        self.origin_folder=raw_folder
+        self.origin_folder=raw_folder # save the root folder for the dataset (needed later)
         if folder_index == 2:
             # no need to read .tar file
             path =self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.npz"
             images = np.load(path, allow_pickle=True)["images"]
         else:
-            # need to split in test and training
             path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.tar"
             images = iter(wds.Dataset(path).decode("pil")\
-                          .map(lambda tup: (tup["__key__"].split("/")[-1], tup["png"]))
-                          .shuffle(1000))
+                          .map(lambda tup: (tup["__key__"].split("/")[-1], tup["png"])) # e.g. (00012, PIL_IMAGE-png format)
+                          .shuffle(1000)) # shuffling blocks of 1k images
         # loading labels
         path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_labels.npz"
         labels = np.load(path, allow_pickle=True)["labels"]
         return images, labels
 
     def __iter__(self) -> Iterator:
+        #TODO: must enable multiple workers here
         return self.iterator
 
     def __len__(self):
@@ -254,4 +259,4 @@ class RFDIterable(IterableDataset):
     @property
     def raw_folder(self) -> str:
         # this will be something like './datasets/robot_finger_datasets/RFD/raw'
-        return self.root +self.__class__.__name__+"/"+'raw'
+        return self.root +self.__class__.__name__[:3]+"/"+'raw'

@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA, FashionMNIST
 import matplotlib.pyplot as plt
-from datasets import RFD, Shapes3d
+from datasets import RFD, Shapes3d, RFDIterable
 import numpy as np
 import torch
 import os
@@ -101,7 +101,6 @@ class DatasetLoader:
             tot = len(train_set) + len(valid_set) + len(test_set)
             self.num_samples = tot
 
-
         elif args["dataset_name"] == 'RFD': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
             transform = transforms.ToTensor()
             cluster_data_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
@@ -131,6 +130,20 @@ class DatasetLoader:
                                                              lengths=[train_num, val_num, test_num],
                                                              generator=torch.Generator().manual_seed(42))
             already_split = True
+
+        elif args["dataset_name"] == 'RFD_IT': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
+            transform = transforms.ToTensor()
+            data_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
+            train_set = RFDIterable(data_folder,
+                               transform=transform)
+            valid_set = RFDIterable(data_folder, # using OOD2-A as validation set
+                              heldout_colors=True,
+                              transform=transform)
+            test_set = RFDIterable(data_folder, #using OOD2-B as test set
+                           real=True,
+                           transform=transform)
+            already_split = True
+            self.num_samples = len(train_set) + len(valid_set) + len(test_set)
 
         elif args["dataset_name"] == '3DShapes':
             transform = transforms.ToTensor()
@@ -167,19 +180,20 @@ class DatasetLoader:
                                 batch_size=args["batch_size"],
                                 shuffle=False,
                                 drop_last=True,
-                                num_workers=8)
+                                num_workers=args["num_workers"])
         self.val = DataLoader(valid_set,
                               batch_size=args["batch_size"],
                               shuffle=False,
                               drop_last=True,
-                              num_workers=2)
+                              num_workers=args["num_workers"])
         self.test = DataLoader(test_set,
                                batch_size=args["test_batch_size"],
                                shuffle=False,
-                               num_workers=2)
+                               num_workers=args["num_workers"])
 
 
-        self.data_shape = self.train.dataset[0][0].size()
+        #TODO: check whether this iter call affects the iterator
+        self.data_shape = self.test.__iter__().__next__()[0].shape[1:]
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]
 

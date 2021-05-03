@@ -1,4 +1,5 @@
 from ray import tune
+import os
 import yaml
 
 
@@ -38,21 +39,35 @@ def get_config(tuning:bool, model_name:str, data:str, version:str):
     # loading the base config file: this will be updated
     with open('configs/standard.yaml', 'r') as file:
         config = yaml.safe_load(file)
+    # load from file if already existing (this is the case when the training has
+    # already been launched previously and then interrupted)
+    base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             config['logging_params']['save_dir'],
+                             model_name, version)
+    hparams_path = os.path.join(base_path, "configs.yaml")
+    if os.path.exists(hparams_path):
+        print("Found existing config file: loading.")
+        with open(hparams_path, 'r') as file:
+            config = yaml.safe_load(file)
+            if tuning: config = config_switch[model_name](config)
+            return config
+    # BUILDING CONFIG FILE ---
     # loading the standard model config (each model has a standard version config)
     with open(standard_model_path, 'r') as file:
         standard_fig = yaml.safe_load(file)
         for k in standard_fig.keys():
             config[k].update(standard_fig[k])
-    if version!="standard":
-        # updating the model parameters with the ones specific to this version
-        with open(model_path, 'r') as file:
-            model_fig = yaml.safe_load(file)
-            for k in model_fig.keys():
-                config[k].update(model_fig[k])
     # including data parameters
     with open(data_path, 'r') as file:
         data_fig = yaml.safe_load(file)
         config["data_params"].update(data_fig)
+    if version!="standard":
+        # updating the hyper-parameters with the ones specific to this version
+        # note that the version config file could contain hyper-parameters regarding data figs
+        with open(model_path, 'r') as file:
+            model_fig = yaml.safe_load(file)
+            for k in model_fig.keys():
+                config[k].update(model_fig[k])
     # updating logging information
     config["vis_params"]["plot_every"] = data_fig["plot_every"]
     logging_fig = {

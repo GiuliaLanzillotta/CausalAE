@@ -62,8 +62,9 @@ class ModelVisualiser(object):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
-        for idx in np.random.randint(0,100,num_samples): # for each sample
-            test_input, _ = self.test_dataloader.dataset.__getitem__(idx)
+        test_batch = self.test_dataloader.__iter__().__next__()
+        for idx in np.random.randint(0,test_batch[0].shape[0],num_samples): # for each sample
+            test_input= test_batch[0][idx]
             with torch.no_grad():
                 codes = self.model.encode(test_input.unsqueeze(0).to(device))
             try: codes = codes[1] # if the output is a list extract the second element (VAE case)

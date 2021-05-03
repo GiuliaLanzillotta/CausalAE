@@ -3,6 +3,7 @@ model_params:
   enc_depth: 12 #number of convolutional layers in the encoder
   dec_depth: 12
   pool_every: 3
+  beta: 2.0
 
 data_params:
   batch_size: 500

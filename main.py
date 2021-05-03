@@ -120,7 +120,7 @@ if __name__ == '__main__':
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="MNIST")
+                        default="RFD_IT")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",

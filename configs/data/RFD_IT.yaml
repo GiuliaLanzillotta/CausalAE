@@ -1,6 +1,6 @@
-dataset_name: 3DShapes
+dataset_name: RFD_IT
 batch_size: 500 # Better to have a square number
 test_batch_size: 500
 score_every: 20
-plot_every: 10
-num_workers: 80
+plot_every: 5
+num_workers: 0

@@ -39,6 +39,16 @@ class TestRDFIterable(unittest.TestCase):
         print(RDF_dataset)
         # passed if nothing fails
 
+    def test_make_dataloader(self):
+        RDF_dataset = RFDIterable(root = self.root,
+                                  transform=self.transform)
+        loader = DataLoader(RDF_dataset,
+                            batch_size=500,
+                            shuffle=False,
+                            drop_last=True)
+        item = loader.__iter__().__next__()
+        print(item[0].shape, item[1].shape)
+
 
 if __name__ == '__main__':
     unittest.main()
