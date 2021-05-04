@@ -8,7 +8,7 @@ import torchvision.datasets
 import webdataset as wds
 from PIL import Image
 from torch.utils.data import IterableDataset
-
+from itertools import islice
 
 class RFD(torchvision.datasets.VisionDataset):
     """  The Robot Finger Dataset - Vision dataset version """
@@ -135,23 +135,33 @@ class RFDIterable(IterableDataset):
         def __init__(self,
                      images_iterator:Iterator,
                      labels:numpy.ndarray,
+                     images_path:str,
+                     batch_size:int,
                      transform: Optional[Callable] = None,
                      target_transform: Optional[Callable] = None):
             super().__init__()
+            self.path = images_path
             self.images_iterator = images_iterator
             self.labels = labels
             self.transform = transform
+            self.batch_size = batch_size
             self.target_transform = target_transform
 
         def __next__(self) -> Tuple:
-            next_item = next(self.images_iterator)
+            try: next_item = next(self.images_iterator)
+            except:
+                # iterator is finished, starting again
+                print("Reached the end of iterator: rolling it back to beginning.")
+                self.images_iterator = RFDIterable.initialise_web_dataset(self.path, self.batch_size)
+                next_item = next(self.images_iterator)
             next_idx, next_image = next_item
-            next_label = torch.tensor(self.labels[int(next_idx)], requires_grad=False)
+            next_label = [torch.tensor(self.labels[int(idx)], requires_grad=False) for idx in next_idx]
             if self.transform is not None:
-                next_image = self.transform(next_image)
+                next_image = [self.transform(img) for img in next_image]
             if self.target_transform is not None:
-                next_label = self.target_transform(next_label)
-            return (next_image, next_label)
+                next_label = [self.target_transform(lbl) for lbl in next_label]
+
+            return (torch.stack(next_image), torch.stack(next_label))
 
     class RFD_real_set_iterator(Iterator):
         """ This iterator class accomplishes the following:
@@ -163,13 +173,21 @@ class RFDIterable(IterableDataset):
                      transform: Optional[Callable] = None,
                      target_transform: Optional[Callable] = None):
             super().__init__()
+            self.images = images
+            self.labels = labels
             self.images_iterator = iter(images)
             self.labels_iterator = iter(labels)
             self.transform = transform
             self.target_transform = target_transform
 
         def __next__(self) -> Tuple:
-            next_image = next(self.images_iterator)
+            try: next_image = next(self.images_iterator)
+            except:
+                # iterator is finished, starting again
+                print("Reached the end of iterator: rolling it back to beginning.")
+                self.images_iterator = iter(self.images)
+                self.labels_iterator = iter(self.labels)
+                next_image = next(self.images_iterator)
             next_label = torch.tensor(next(self.labels_iterator), requires_grad=False)
             if self.transform is not None:
                 next_image = self.transform(next_image)
@@ -180,6 +198,7 @@ class RFDIterable(IterableDataset):
 
     def __init__(self,
                  root: str,
+                 batch_size:int = 500,
                  heldout_colors: bool =False,
                  real: bool=False,
                  transform: Optional[Callable] = None,
@@ -189,8 +208,6 @@ class RFDIterable(IterableDataset):
         - the heldout_colors test set
         - the real images test set
         Note: only one of the test sets can be loaded at a time.
-        (Ideally this could be changed)
-        #TODO: change here
         """
         super(RFDIterable, self).__init__()
         self.root = root
@@ -198,13 +215,22 @@ class RFDIterable(IterableDataset):
         self.heldout_test = heldout_colors
         self.real_test = real
         self.origin_folder = self.raw_subfolders[0]
+        self.batch_size = batch_size
         print("===== Reading files =====")
-        images, labels = self.load_files()
+        images, labels = self.load_files() # this call will create the class variable 'tar_path'
 
         if real: self.iterator = self.RFD_real_set_iterator(images, labels, transform, target_transform)
-        else: self.iterator = self.RFD_standard_iterator(images, labels, transform, target_transform)
+        else: self.iterator = self.RFD_standard_iterator(images, labels, self.tar_path, self.batch_size, #TODO: make cleaner
+                                                         transform, target_transform)
 
         print(self)
+
+    @staticmethod
+    def initialise_web_dataset(path, batch_size):
+        itr = iter((wds.Dataset(path).decode("pil") \
+                    .map(lambda tup: (tup["__key__"].split("/")[-1], tup["png"]))  # e.g. (00012, PIL_IMAGE-png format)
+                    .shuffle(10000)).batched(batch_size)) # shuffling blocks of 1k images and pre-batching
+        return itr
 
 
     def load_files(self):
@@ -220,21 +246,24 @@ class RFDIterable(IterableDataset):
             path =self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.npz"
             images = np.load(path, allow_pickle=True)["images"]
         else:
-            path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.tar"
-            images = iter(wds.Dataset(path).decode("pil")\
-                          .map(lambda tup: (tup["__key__"].split("/")[-1], tup["png"])) # e.g. (00012, PIL_IMAGE-png format)
-                          .shuffle(1000)) # shuffling blocks of 1k images
+            self.tar_path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.tar"
+            images = self.initialise_web_dataset(self.tar_path, self.batch_size)
         # loading labels
         path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_labels.npz"
         labels = np.load(path, allow_pickle=True)["labels"]
         return images, labels
 
     def __iter__(self) -> Iterator:
-        #TODO: must enable multiple workers here
-        return self.iterator
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:  # single-process data loading, return the full iterator
+            return self.iterator
+        # in a worker process
+        worker_id = worker_info.id
+        n_workers = worker_info.num_workers
+        return islice(self.iterator, worker_id, None, n_workers)
 
     def __len__(self):
-        return self.size
+        return self.size//self.batch_size #TODO: batch size is None here
 
     def read_dataset_info(self):
         # loading info

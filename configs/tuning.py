@@ -41,10 +41,7 @@ def get_config(tuning:bool, model_name:str, data:str, version:str):
         config = yaml.safe_load(file)
     # load from file if already existing (this is the case when the training has
     # already been launched previously and then interrupted)
-    base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             config['logging_params']['save_dir'],
-                             model_name, version)
-    hparams_path = os.path.join(base_path, "configs.yaml")
+    hparams_path = str.join("/", [".",config['logging_params']['save_dir'],model_name, version+"_"+data, "configs.yaml"])
     if os.path.exists(hparams_path):
         print("Found existing config file: loading.")
         with open(hparams_path, 'r') as file:

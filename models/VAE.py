@@ -44,6 +44,7 @@ class VAE(nn.Module, GenerativeAE):
         return self.forward(x, activate)[0]
 
     def forward(self, inputs: Tensor, activate:bool=False) -> list:
+        inputs = inputs.view((-1, )+self.dim_in)
         z, mu, logvar = self.encode(inputs)
         return  [self.decode(z, activate), mu, logvar]
 

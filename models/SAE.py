@@ -59,6 +59,7 @@ class SAE(nn.Module, GenerativeAE):
         return self.forward(x, activate)
 
     def forward(self, inputs: Tensor, activate:bool=False) -> Tensor:
+        inputs = inputs.view((-1, )+self.dim_in)
         codes = self.encode(inputs)
         # normal autoencoder mode (no noise)
         if self.mode=="auto": noise = codes.view((-1,)+self.decoder_initial_shape)

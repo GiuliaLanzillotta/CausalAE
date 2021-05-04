@@ -17,17 +17,16 @@ class ModelVisualiser(object):
         self.name = name+"_"+version
         self.save_path = str.join("/",[".", kwargs.get("save_dir"), name, version])
         os.makedirs(self.save_path, exist_ok=True)
-        self.test_dataloader = test_dataloader
+        self.test_input, _ = iter(test_dataloader).__next__()
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
     def plot_reconstructions(self, current_epoch:int=None, grid_size:int=12, device=None):
         """ plots reconstructions from test set samples"""
-        test_input, _ = iter(self.test_dataloader).__next__()
         num_plots = grid_size**2
-        test_input = test_input[:num_plots]
+        test_sample = self.test_input[:num_plots]
         with torch.no_grad():
-            recons = self.model.generate(test_input.to(device), activate=True)
+            recons = self.model.generate(test_sample.to(device), activate=True)
         file_name = "reconstructions"
         if current_epoch is not None: file_name+="_"+str(current_epoch)
         tvu.save_image(recons.data,
@@ -35,12 +34,12 @@ class ModelVisualiser(object):
                        normalize=True,
                        nrow=grid_size) # plot a square grid
         if current_epoch is not None and current_epoch==0: # print the originals
-            tvu.save_image(test_input,
+            tvu.save_image(test_sample,
                            fp= f"{self.save_path}original.png",
                            normalize=True,
                            nrow=grid_size) # plot a square grid
         # clean
-        del test_input, recons
+        del recons
 
     def plot_samples_from_prior(self, current_epoch:int=None, grid_size:int=12, device=None):
         """ samples from latent prior and plots reconstructions"""
@@ -62,11 +61,10 @@ class ModelVisualiser(object):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
-        test_batch = self.test_dataloader.__iter__().__next__()
-        for idx in np.random.randint(0,test_batch[0].shape[0],num_samples): # for each sample
-            test_input= test_batch[0][idx]
+        for idx in np.random.randint(0,self.test_input.shape[0],num_samples): # for each sample
+            test_sample= self.test_input[idx]
             with torch.no_grad():
-                codes = self.model.encode(test_input.unsqueeze(0).to(device))
+                codes = self.model.encode(test_sample.unsqueeze(0).to(device))
             try: codes = codes[1] # if the output is a list extract the second element (VAE case)
             except: pass
             latents = codes.data.cpu().numpy()
