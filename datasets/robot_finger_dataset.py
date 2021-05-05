@@ -148,13 +148,13 @@ class RFDIterable(IterableDataset):
         def __next__(self) -> Tuple:
             next_item = next(self.images_iterator)
             next_idx, next_image = next_item
-            next_label = [torch.tensor(self.labels[int(idx)], requires_grad=False) for idx in next_idx]
+            next_label = torch.tensor(self.labels[int(next_idx)], requires_grad=False)
             if self.transform is not None:
-                next_image = [self.transform(img) for img in next_image]
+                next_image = self.transform(next_image)
             if self.target_transform is not None:
-                next_label = [self.target_transform(lbl) for lbl in next_label]
+                next_label = self.target_transform(next_label)
 
-            return (torch.stack(next_image), torch.stack(next_label))
+            return next_image, next_label
 
     class RFD_real_set_iterator(Iterator):
         """ This iterator class accomplishes the following:

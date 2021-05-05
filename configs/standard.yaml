@@ -24,12 +24,12 @@ logging_params:
   save_dir: "logs/"
   manual_seed: 1265
   version: 'null'
-  score_every: 5 # number of steps
+  score_every: 20 # number of steps
 
 
 vis_params:
   save_dir: "vis/"
-  plot_every: 2
+  plot_every: 10
   num_animations: 5
   num_frames: 5
   fpd: 10

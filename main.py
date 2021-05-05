@@ -63,7 +63,7 @@ def train_model(config:dict, tuning:bool=False):
 
     runner = Trainer(min_epochs=1,
                      accelerator=None,#todo: look into this
-                     gpus = -1,
+                     gpus = 1,
                      auto_select_gpus=True, #select all the gpus available
                      logger=tb_logger,
                      log_every_n_steps=50,
