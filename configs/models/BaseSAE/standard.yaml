@@ -9,4 +9,4 @@ model_params:
   unit_dim: 1
 
 opt_params:
-  auto_epochs: 0
+  auto_steps: 0

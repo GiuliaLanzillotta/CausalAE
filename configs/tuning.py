@@ -66,9 +66,7 @@ def get_config(tuning:bool, model_name:str, data:str, version:str):
             for k in model_fig.keys():
                 config[k].update(model_fig[k])
     # updating logging information
-    config["vis_params"]["plot_every"] = data_fig["plot_every"]
     logging_fig = {
-        "score_every":data_fig["score_every"],
         "name":model_name,
         "version":version+"_"+data
     }

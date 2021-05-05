@@ -136,7 +136,6 @@ class RFDIterable(IterableDataset):
                      images_iterator:Iterator,
                      labels:numpy.ndarray,
                      images_path:str,
-                     batch_size:int,
                      transform: Optional[Callable] = None,
                      target_transform: Optional[Callable] = None):
             super().__init__()
@@ -144,16 +143,10 @@ class RFDIterable(IterableDataset):
             self.images_iterator = images_iterator
             self.labels = labels
             self.transform = transform
-            self.batch_size = batch_size
             self.target_transform = target_transform
 
         def __next__(self) -> Tuple:
-            try: next_item = next(self.images_iterator)
-            except:
-                # iterator is finished, starting again
-                print("Reached the end of iterator: rolling it back to beginning.")
-                self.images_iterator = RFDIterable.initialise_web_dataset(self.path, self.batch_size)
-                next_item = next(self.images_iterator)
+            next_item = next(self.images_iterator)
             next_idx, next_image = next_item
             next_label = [torch.tensor(self.labels[int(idx)], requires_grad=False) for idx in next_idx]
             if self.transform is not None:
@@ -181,13 +174,7 @@ class RFDIterable(IterableDataset):
             self.target_transform = target_transform
 
         def __next__(self) -> Tuple:
-            try: next_image = next(self.images_iterator)
-            except:
-                # iterator is finished, starting again
-                print("Reached the end of iterator: rolling it back to beginning.")
-                self.images_iterator = iter(self.images)
-                self.labels_iterator = iter(self.labels)
-                next_image = next(self.images_iterator)
+            next_image = next(self.images_iterator)
             next_label = torch.tensor(next(self.labels_iterator), requires_grad=False)
             if self.transform is not None:
                 next_image = self.transform(next_image)
@@ -220,16 +207,16 @@ class RFDIterable(IterableDataset):
         images, labels = self.load_files() # this call will create the class variable 'tar_path'
 
         if real: self.iterator = self.RFD_real_set_iterator(images, labels, transform, target_transform)
-        else: self.iterator = self.RFD_standard_iterator(images, labels, self.tar_path, self.batch_size, #TODO: make cleaner
+        else: self.iterator = self.RFD_standard_iterator(images, labels, self.tar_path,
                                                          transform, target_transform)
 
         print(self)
 
     @staticmethod
-    def initialise_web_dataset(path, batch_size):
-        itr = iter((wds.Dataset(path).decode("pil") \
+    def initialise_web_dataset(path):
+        itr = iter((wds.Dataset(path).decode("pil")
                     .map(lambda tup: (tup["__key__"].split("/")[-1], tup["png"]))  # e.g. (00012, PIL_IMAGE-png format)
-                    .shuffle(10000)).batched(batch_size)) # shuffling blocks of 1k images and pre-batching
+                    .shuffle(10000))) # shuffling blocks of 1k images and pre-batching
         return itr
 
 
@@ -247,7 +234,7 @@ class RFDIterable(IterableDataset):
             images = np.load(path, allow_pickle=True)["images"]
         else:
             self.tar_path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.tar"
-            images = self.initialise_web_dataset(self.tar_path, self.batch_size)
+            images = self.initialise_web_dataset(self.tar_path)
         # loading labels
         path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_labels.npz"
         labels = np.load(path, allow_pickle=True)["labels"]
@@ -263,7 +250,7 @@ class RFDIterable(IterableDataset):
         return islice(self.iterator, worker_id, None, n_workers)
 
     def __len__(self):
-        return self.size//self.batch_size #TODO: batch size is None here
+        return self.size
 
     def read_dataset_info(self):
         # loading info

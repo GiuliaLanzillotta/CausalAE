@@ -49,7 +49,7 @@ def train_model(config:dict, tuning:bool=False):
     checkpoint_path = os.path.join(base_path, "checkpoints/")
     try:
         latest_checkpoint = max(glob.glob(checkpoint_path + "*ckpt"), key=os.path.getctime)
-    except ValueError: latest_checkpoint = "null" # no checkpoints to restore available
+    except ValueError: latest_checkpoint = None # no checkpoints to restore available
 
     #save hyperparameters
     hparams_path = os.path.join(base_path, "configs.yaml")
@@ -58,18 +58,21 @@ def train_model(config:dict, tuning:bool=False):
         with open(hparams_path, 'w') as out:
             yaml.dump(config, out, default_flow_style=False)
 
+    #todo: add profiler for "debugging mode"
+    # see here: https://pytorch-lightning.readthedocs.io/en/latest/advanced/profiler.html
 
     runner = Trainer(min_epochs=1,
+                     accelerator=None,#todo: look into this
+                     gpus = -1,
+                     auto_select_gpus=True, #select all the gpus available
                      logger=tb_logger,
                      log_every_n_steps=50,
                      callbacks=callbacks,
-                     progress_bar_refresh_rate=20,
-                     checkpoint_callback=True,
+                     progress_bar_refresh_rate=50,
+                     weights_summary='full',
                      resume_from_checkpoint=latest_checkpoint,
-                     benchmark=False,
-                     deterministic=True,
-                     auto_select_gpus=True,
-                     #track_grad_norm = 2,
+                     reload_dataloaders_every_epoch=config['data_params']['reload_dataloaders_every_epoch'],
+                     track_grad_norm=2, # tracking the norm
                      #gradient_clip_val = 2.0,
                      **config['trainer_params'])
 
@@ -115,12 +118,12 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='BetaVAE')
+                        default='BaseSAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="RFD_IT")
+                        default="MNIST")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",

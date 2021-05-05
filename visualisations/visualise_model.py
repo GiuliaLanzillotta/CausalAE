@@ -21,34 +21,34 @@ class ModelVisualiser(object):
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
-    def plot_reconstructions(self, current_epoch:int=None, grid_size:int=12, device=None):
+    def plot_reconstructions(self, global_step:int=None, grid_size:int=12, device=None):
         """ plots reconstructions from test set samples"""
         num_plots = grid_size**2
         test_sample = self.test_input[:num_plots]
         with torch.no_grad():
             recons = self.model.generate(test_sample.to(device), activate=True)
         file_name = "reconstructions"
-        if current_epoch is not None: file_name+="_"+str(current_epoch)
+        if global_step is not None: file_name+="_"+str(global_step)
         tvu.save_image(recons.data,
                        fp= f"{self.save_path}/{file_name}.png",
                        normalize=True,
                        nrow=grid_size) # plot a square grid
-        if current_epoch is not None and current_epoch==0: # print the originals
+        if global_step is not None and global_step==0: # print the originals
             tvu.save_image(test_sample,
-                           fp= f"{self.save_path}original.png",
+                           fp= f"{self.save_path}/originals.png",
                            normalize=True,
                            nrow=grid_size) # plot a square grid
         # clean
         del recons
 
-    def plot_samples_from_prior(self, current_epoch:int=None, grid_size:int=12, device=None):
+    def plot_samples_from_prior(self, global_step:int=None, grid_size:int=12, device=None):
         """ samples from latent prior and plots reconstructions"""
         num_pics = grid_size**2 # square grid
         with torch.no_grad():
             random_codes = self.model.sample_noise_from_prior(num_pics) #sampling logic here
         recons = self.model.decode(random_codes.to(device), activate=True)
         file_name = "prior_samples"
-        if current_epoch is not None: file_name+="_"+str(current_epoch)
+        if global_step is not None: file_name+="_"+str(global_step)
         tvu.save_image(recons.data,
                        fp= f"{self.save_path}/{file_name}.png",
                        normalize=True,
@@ -56,7 +56,7 @@ class ModelVisualiser(object):
         # clean
         del random_codes, recons
 
-    def plot_latent_traversals(self, current_epoch:int=None, num_samples:int=5,
+    def plot_latent_traversals(self, global_step:int=None, num_samples:int=1,
                                steps:int=10, device=None):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
@@ -75,13 +75,13 @@ class ModelVisualiser(object):
             random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
             with torch.no_grad():
                 recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device), activate=True) # (stepsxM) images
-            file_name = "traversals_epoch{}_{}".format(current_epoch,idx) if current_epoch is not None else "traversals_{}"
+            file_name = "traversals_{}_{}".format(global_step,idx) if global_step is not None else "traversals_{}"
             tvu.save_image(recons.data,
                            fp= f"{self.save_path}/{file_name}.png",
                            normalize=True,
                            nrow=steps) # steps x M grid
 
-    def plot_training_gradients(self, current_epoch:int=None):
+    def plot_training_gradients(self, global_step:int=None):
         '''Plots the gradients flowing through different layers in the net during training.
         Can be used for checking for possible gradient vanishing / exploding problems.
 
@@ -117,5 +117,5 @@ class ModelVisualiser(object):
                     Line2D([0], [0], color="b", lw=4),
                     Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
         pic_name = "gradient"
-        if current_epoch is not None: pic_name+="_"+str(current_epoch)
+        if global_step is not None: pic_name+="_"+str(global_step)
         plt.savefig(f"{self.save_path}/{pic_name}.png", dpi=200)

@@ -20,8 +20,6 @@ data_params:
   test_batch_size: 500
 
 trainer_params:
-  gpus: 1
-  max_epochs: 300
 
 logging_params:
   save_dir: "logs/"

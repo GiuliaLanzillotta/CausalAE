@@ -357,6 +357,7 @@ class FIDScorer(object):
         self.model = InceptionV3([block_idx])
 
     def start_new_scoring(self, set_size, device="cpu"):
+        print("Starting new FID scoring")
         self.model.to(device)
         self.generated = np.empty((set_size, self.dims))
         self.originals = np.empty((set_size, self.dims))
@@ -453,6 +454,7 @@ class FIDScorer(object):
         return mu_generated, sigma_generated, mu_originals, sigma_originals
 
     def calculate_fid(self):
+        print("Calculating FID distance")
         mu_generated, sigma_generated, mu_originals, sigma_originals = self.calculate_activation_statistics()
         fid_value = self.calculate_frechet_distance(mu_generated,sigma_generated, mu_originals, sigma_originals)
         return fid_value

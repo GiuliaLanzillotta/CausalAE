@@ -14,7 +14,7 @@ class SAE(nn.Module, GenerativeAE):
         self.unit_dim = params["unit_dim"]
         self.N = params["latent_vecs"] # number of latent vectors to store for hybrid sampling
         self.dim_in = dim_in # C, H, W
-        self.mode="hybrid"
+        self.mode="auto"
         # Building encoder
         #TODO: add a selection for non-linearity here
 
@@ -62,7 +62,7 @@ class SAE(nn.Module, GenerativeAE):
         inputs = inputs.view((-1, )+self.dim_in)
         codes = self.encode(inputs)
         # normal autoencoder mode (no noise)
-        if self.mode=="auto": noise = codes.view((-1,)+self.decoder_initial_shape)
+        if self.mode=="auto": noise = codes.view((-1,)+self.decoder_initial_shape) #TODO: not working: 2D instead of 3D output
         elif self.mode=="hybrid": noise = self.sample_noise(codes)
         else: raise NotImplementedError
         output = self.decode(noise, activate)
@@ -71,7 +71,6 @@ class SAE(nn.Module, GenerativeAE):
     def loss_function(self, *args):
         X_hat = args[0]
         X = args[1]
-        FID = 0
         MSE = F.mse_loss(self.act(X_hat), X, reduction="mean")
         BCE = F.binary_cross_entropy_with_logits(X_hat, X, reduction="mean")
-        return BCE, FID, MSE
+        return BCE, MSE

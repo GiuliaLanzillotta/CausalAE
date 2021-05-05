@@ -134,17 +134,17 @@ class DatasetLoader:
         elif args["dataset_name"] == 'RFD_IT': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
             transform = transforms.ToTensor()
             data_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
-            bs = 500 if type(args["batch_size"]) == "NoneType" else args["batch_size"]
             train_set = RFDIterable(data_folder,
                                     transform=transform,
-                                    batch_size=bs) # .tar storage datasets need batch size
+                                    batch_size=args["batch_size"]) # .tar storage datasets need batch size
             valid_set = RFDIterable(data_folder, # using OOD2-A as validation set
                                     heldout_colors=True,
                                     transform=transform,
-                                    batch_size=bs)
+                                    batch_size=args["batch_size"])
             test_set = RFDIterable(data_folder, #using OOD2-B as test set
                                    real=True,
-                                   transform=transform)
+                                   transform=transform,
+                                   batch_size=args["test_batch_size"])
             already_split = True
             self.num_samples = len(train_set) + len(valid_set) + len(test_set)
 

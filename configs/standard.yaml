@@ -7,22 +7,29 @@ opt_params:
   scheduler_gamma: 0.95
 
 data_params:
-  dataset_name: 'null'
+  dataset_name: null
+  batch_size: 128 # Better to have a square number
+  test_batch_size: 128
+  reload_dataloaders_every_epoch: False
 
 trainer_params:
-  gpus: 1
-  max_epochs: 300
+  val_check_interval: 200 #check validation every 200 steps
+  fast_dev_run: False # must be used only for debugging purposes
+  max_steps: 100000
+  num_sanity_val_steps: 2
+  benchmark: False
+  deterministic: True #might make the system slower
 
 logging_params:
   save_dir: "logs/"
   manual_seed: 1265
   version: 'null'
-  score_every: 20
+  score_every: 5 # number of steps
 
 
 vis_params:
   save_dir: "vis/"
-  plot_every: 10
+  plot_every: 2
   num_animations: 5
   num_frames: 5
   fpd: 10
