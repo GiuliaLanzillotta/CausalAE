@@ -1,2 +1,3 @@
 dataset_name: RFD
 num_workers: 80
+batch_size: 32

@@ -146,7 +146,13 @@ class RFDIterable(IterableDataset):
             self.target_transform = target_transform
 
         def __next__(self) -> Tuple:
-            next_item = next(self.images_iterator)
+            try: next_item = next(self.images_iterator)
+            except Exception as e:
+                # iterator is finished, starting again
+                print(e)
+                print("Reached the end of iterator: rolling it back to beginning.")
+                self.images_iterator = RFDIterable.initialise_web_dataset(self.path)
+                next_item = next(self.images_iterator)
             next_idx, next_image = next_item
             next_label = torch.tensor(self.labels[int(next_idx)], requires_grad=False)
             if self.transform is not None:
@@ -174,7 +180,14 @@ class RFDIterable(IterableDataset):
             self.target_transform = target_transform
 
         def __next__(self) -> Tuple:
-            next_image = next(self.images_iterator)
+            try: next_image = next(self.images_iterator)
+            except Exception as e:
+                # iterator is finished, starting again
+                print(e)
+                print("Reached the end of iterator: rolling it back to beginning.")
+                self.images_iterator = iter(self.images)
+                self.labels_iterator = iter(self.labels)
+                next_image = next(self.images_iterator)
             next_label = torch.tensor(next(self.labels_iterator), requires_grad=False)
             if self.transform is not None:
                 next_image = self.transform(next_image)

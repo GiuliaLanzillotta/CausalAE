@@ -357,7 +357,7 @@ class FIDScorer(object):
         self.model = InceptionV3([block_idx])
 
     def start_new_scoring(self, set_size, device="cpu"):
-        print("Starting new FID scoring")
+        print("\nStarting new FID scoring\n")
         self.model.to(device)
         self.generated = np.empty((set_size, self.dims))
         self.originals = np.empty((set_size, self.dims))

@@ -2,13 +2,8 @@
 import torch
 from torch import nn
 from torch import Tensor
-import torch.nn.functional as F
 import numpy as np
-
-class Mish(nn.Module):
-    """ MISH nonlinearity - https://arxiv.org/abs/1908.08681"""
-    def forward(self, x):
-        return x * torch.tanh(F.softplus(x))
+from .utils import Mish, act_switch, norm_switch
 
 class FCResidualBlock(nn.Module):
     """ Implements residual fully connected block with adaptive average pooling """
@@ -49,18 +44,18 @@ class FCBlock(nn.Module):
 class ConvBlock(nn.Module):
     """ Implements logic for a convolutional block [conv2d, normalization, activation]"""
 
-    def __init__(self, C_IN, C_OUT, k, s, p, num_groups): #todo add switch for batch norm
-        #TODO: add check for the norm
-        #TODO: add selector for activation 
+    def __init__(self, C_IN, C_OUT, k, s, p, num_groups,
+                 pool:bool=False, act=Mish, norm="batch"):
         super(ConvBlock, self).__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(C_IN, out_channels=C_OUT, kernel_size=k, stride=s, padding=p),
-            nn.BatchNorm2d(C_OUT),
-            nn.LeakyReLU())
+        norm_layer = norm_switch(norm, C_OUT, num_groups)
+        modules = [nn.Conv2d(C_IN, out_channels=C_OUT, kernel_size=k, stride=s, padding=p),
+                   act(),
+                   norm_layer]
+        if pool: modules.insert(1, nn.MaxPool2d(2,2,0))
+        self.block = nn.Sequential(*modules)
 
     def forward(self, inputs: Tensor) -> Tensor:
         outputs = self.block(inputs)
-
         return outputs
 
     @staticmethod
@@ -89,30 +84,31 @@ class PoolingConvBlock(nn.Module):
     """ Specific version of the conv block with same padding and optionally pooling.
     This version differs from the standard conv block in that the dimensionality
     reduction is obtained only through the optional pooling layer."""
-    def __init__(self, C_IN, C_OUT, H_in, k, s, num_groups, pool:bool=False):
+    def __init__(self, C_IN, C_OUT, H_in, k, s, num_groups, pool:bool=False, act=Mish, norm="group"):
         super(PoolingConvBlock, self).__init__()
-        p = ConvBlock.same_padding(H_in, k, s)
-        self.block = ConvBlock(C_IN, C_OUT, k, s, p, num_groups)
-        self.pool = pool
-        if pool: self.pooling = nn.MaxPool2d(2,2,0)
+        same_padding = ConvBlock.same_padding(H_in, k, s)
+        self.block = ConvBlock(C_IN, C_OUT, k, s, same_padding, num_groups, pool, act=act, norm=norm)
 
     def forward(self, inputs:Tensor):
         out_conv = self.block(inputs)
-        if self.pool: out_conv= self.pooling(out_conv)
         return out_conv
 
 
 class ResidualConvBlock(PoolingConvBlock):
     """ Residual version of the PoolingConvBlock
     Note: pooling layers addition to obtain dimensionality reduction """
-    def __init__(self, C_IN, H_in, k, s, num_groups, pool:bool=False):
-        super(ResidualConvBlock, self).__init__(C_IN, C_IN, H_in, k, s, num_groups, pool=pool)
+    def __init__(self, C_IN, H_in, k, s, num_groups, pool:bool=False, act=Mish, norm="batch"):
+        super(ResidualConvBlock, self).__init__(C_IN, C_IN, H_in, k, s, num_groups,
+                                                pool=pool, act=act, norm=norm)
 
     def forward(self, inputs:Tensor):
-        out_conv = self.block(inputs)
-        out_res = inputs + out_conv
-        if self.pool: out_res= self.pooling(out_res)
-        return out_res
+        for i, lyr in enumerate(self.block.modules()):
+            if i<2: pass #skip first two modules, which are the "containers" of the layers
+            elif i==2: out = lyr(inputs) + inputs
+            else: out = lyr(out)
+        return out
+
+#todo: new version of residual block
 
 
 class ConvNet(nn.Module):
@@ -120,24 +116,26 @@ class ConvNet(nn.Module):
     blocks  + final flattening """
 
     def __init__(self, dim_in, final_dim, depth:int, pool_every:int, **kwargs):
-        #todo: add switch for non_linearities
         super(ConvNet, self).__init__()
         C, H, W = dim_in
         self.depth = depth
         residual = kwargs.get("residual")
-        # Stacking the conv layers  
+        norm = kwargs.get("norm")
+        act = act_switch(kwargs.get("act"))
+        channels = kwargs.get("channels")
+        # Stacking the conv layers
         modules = []
         h = H # tracking image size
         k = 5 # kernel size
-        c = 64 # output channels
+        c = channels
         for l in range(depth):
             # conv block with kernel size 2, size 2 and padding 1 
             # halving the input dimension at every step
             if l==depth-1: c = 1 # reducing depth at the end
             reduce=l%pool_every==0
             if l==1: k=3 # only first layer with kernel=5
-            modules.append(PoolingConvBlock(C, c, h, k, 1, 8, pool=reduce) if (not residual) or (l in [0,depth-1]) # changing num channels here
-                           else ResidualConvBlock(C, h, k, 1, 8, pool=reduce))
+            modules.append(PoolingConvBlock(C, c, h, k, 1, 8, pool=reduce, act=act, norm=norm) if (not residual) or (l in [0,depth-1]) # changing num channels here
+                           else ResidualConvBlock(C, h, k, 1, 8, pool=reduce, act=act, norm=norm))
             h = h//2 if reduce else h
             k = min(h,k)
             C = c
@@ -148,8 +146,7 @@ class ConvNet(nn.Module):
         flat_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
         if flat_dim!=self.final_shape: # re-adjusting the shape
-            modules.append(FCBlock(flat_dim, [final_dim], Mish) if not residual
-                           else FCResidualBlock(flat_dim, [final_dim], Mish))
+            modules.append(FCBlock(flat_dim, [final_dim], Mish))
         self.net = nn.Sequential(*modules)
 
 
@@ -247,7 +244,6 @@ class GaussianLayer(nn.Module):
         z = torch.randn(num_samples, self.latent_size)
         return z
 
-
 class HybridLayer(nn.Module):
     """Stochastic layer based on Hybrid sampling"""
     def __init__(self, dim, unit_dim, N):
@@ -299,9 +295,9 @@ class AdaIN(nn.Module):
 
 class StrTrf(nn.Module):
     """Implements the structural transform layer. To be used in SAE."""
-    def __init__(self, noise_size, n_features):
+    def __init__(self, noise_size, n_features, act=Mish):
         super().__init__()
-        self.fc = FCResidualBlock(noise_size, [noise_size*10, noise_size*20, n_features*2], nn.ReLU)
+        self.fc = FCBlock(noise_size, [noise_size*10, noise_size*20, n_features*2], act)
         self.n_features = n_features
 
     def forward(self, x, z):
@@ -322,14 +318,14 @@ class UpsampledConv(nn.Module):
     """Implements layer to be used in structural decoder:
     bilinear upsampling + convolution (with activtion) (with no dimensionality reduction)"""
     def __init__(self, upsampling_factor, dim_in, channels:int, filter_size:int=2, stride:int=2,
-                 num_groups:int=8, residual:bool=False):
+                 num_groups:int=8, residual:bool=False, act=Mish, norm="batch"):
         super().__init__()
         C, H, W = dim_in
         self.upsampling = nn.Upsample(scale_factor=upsampling_factor, mode="bilinear", align_corners=False)
         padding = ConvBlock.same_padding(H*upsampling_factor, filter_size, stride)
-        self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding, num_groups) if not residual \
-            else ResidualConvBlock(C, filter_size, stride, padding, num_groups)
-        self.act = Mish()#TODO: add selection here
+        self.conv_layer = ConvBlock(C, channels, filter_size, stride, padding, num_groups, pool=False, act=act, norm=norm) if not residual \
+            else ResidualConvBlock(C, H*upsampling_factor, filter_size, stride, num_groups, pool=False, act=act, norm=norm)
+        self.act = act()
 
     def forward(self, inputs):
         upsmpld = self.upsampling(inputs)
@@ -355,14 +351,16 @@ class UpsampledConvNet(nn.Module):
         C, H, W = initial_shape # the initial shape refers to the constant input block
         _modules = []
         h = H
-        c = 64 # output channels
         pool_every = kwargs.get("pool_every")
         residual = kwargs.get("residual")
+        channels = kwargs.get("channels")
+        c = channels # output channels
+        norm = kwargs.get("norm")
         for l in range(depth):
             if l == depth-1: c = final_shape[0] # reducing number of channels at the end
             dim_in = (C, h, h)
             _modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, c, 3, 1, 8,
-                                                   residual=residual and C==c))
+                                                   residual=residual and C==c, act=Mish, norm=norm))
             h *= 2 if l%pool_every==0 else 1
             C = c
         _modules.append(nn.AdaptiveAvgPool2d(final_shape[1]))
@@ -398,16 +396,19 @@ class SCMDecoder(nn.Module):
         self.conv_modules = nn.ModuleList([])
         self.str_trf_modules = nn.ModuleList([])
         h = H
-        c = 64 # output channels
         pool_every = kwargs.get("pool_every")
         residual = kwargs.get("residual")
+        channels = kwargs.get("channels")
+        c = channels # output channels
+        norm = kwargs.get("norm")
+        act = act_switch(kwargs.get("act"))
         for l in range(depth):
             if l == depth-1: c = final_shape[0] # reducing number of channels at the end
             dim_in = (C, h, h)
             if l<self.hierarchy_depth:
-                self.str_trf_modules.append(StrTrf(self.unit_dim, C))
+                self.str_trf_modules.append(StrTrf(self.unit_dim, C, act=act))
             self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, c, 3, 1, 8,
-                                                   residual=residual and C==c))
+                                                   residual=residual and C==c, act=act, norm=norm))
             h *= 2 if l%pool_every==0 else 1
             C = c
         self.shape_adjusting_block = nn.AdaptiveAvgPool2d(final_shape[1])

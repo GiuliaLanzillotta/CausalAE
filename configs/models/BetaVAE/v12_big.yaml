@@ -1,0 +1,15 @@
+model_params:
+  name: 'BetaVAE'
+  beta: 4.0
+  residual: True
+  latent_size: 32
+  enc_depth: 16 #number of convolutional layers in the encoder
+  dec_depth: 16
+  pool_every: 3
+  channels: 128
+
+opt_params:
+  KL_decay: 1.0
+
+trainer_params:
+  max_steps: 200000

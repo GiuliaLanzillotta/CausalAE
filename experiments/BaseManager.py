@@ -50,6 +50,7 @@ class BaseExperiment(pl.LightningModule):
 
         self.num_val_steps+=1
 
+
     def configure_optimizers(self):
         opt_params = self.params["opt_params"]
         optimizer = optim.Adam(self.model.parameters(),

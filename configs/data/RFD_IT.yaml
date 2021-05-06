@@ -1,3 +1,4 @@
 dataset_name: RFD_IT
 num_workers: 0
 reload_dataloaders_every_epoch: True
+batch_size: 32

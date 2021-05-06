@@ -5,6 +5,7 @@ from torch import Tensor
 import torch
 from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock, GenerativeAE
 from torch.nn import functional as F
+from utils import act_switch
 
 class SAE(nn.Module, GenerativeAE):
 
@@ -16,12 +17,9 @@ class SAE(nn.Module, GenerativeAE):
         self.dim_in = dim_in # C, H, W
         self.mode="auto"
         # Building encoder
-        #TODO: add a selection for non-linearity here
 
-        conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params)
+        conv_net = ConvNet(dim_in, self.latent_size, depth=params["enc_depth"], **params)
         self.conv_net = conv_net # returns vector of latent_dim size
-        fc_class = FCResidualBlock if params["residual"] else FCBlock
-        self.fc = fc_class(256, [128, 64,  self.latent_size], nn.ReLU)
         # hybrid sampling to get the noise vector
         self.hybrid_layer = HybridLayer(self.latent_size, self.unit_dim, self.N)
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
@@ -31,8 +29,7 @@ class SAE(nn.Module, GenerativeAE):
 
 
     def encode(self, inputs: Tensor):
-        conv_net_out = self.conv_net(inputs)
-        codes = self.fc(conv_net_out)
+        codes = self.conv_net(inputs)
         return codes
 
     def sample_noise(self, codes:Tensor):

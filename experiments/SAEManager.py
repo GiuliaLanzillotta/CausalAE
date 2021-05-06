@@ -42,10 +42,16 @@ class SAEXperiment(BaseExperiment):
         self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0:
+        if self.num_val_steps%self.score_every==0:
+            print("\nHELLO\n")
+            print(self.num_val_steps)
+        if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
             if batch_idx==0:
                 self._fidscorer.start_new_scoring(self.params['data_params']['batch_size']*self.num_FID_steps,device=self.device)
             if  batch_idx<=self.num_FID_steps:#only one every 50 batches is included to avoid memory issues
                 try: self._fidscorer.get_activations(input_imgs, self.model.act(X_hat)) #store activations for current batch
-                except: print(self._fidscorer.start_idx)
+                except Exception as e:
+                    print(e)
+                    print(self._fidscorer.start_idx)
         return BCE
+

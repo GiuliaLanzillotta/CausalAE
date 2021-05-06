@@ -1,0 +1,14 @@
+model_params:
+  latent_size: 32
+  latent_vecs: 32 # for hybrid sampling
+  residual: True
+  enc_depth: 16 #number of convolutional layers in the encoder
+  dec_depth: 16
+  pool_every: 3
+  unit_dim: 1
+  channels: 128
+
+trainer_params:
+  max_steps: 200000
+
+

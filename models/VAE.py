@@ -3,8 +3,9 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet
+from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock
 from torch.nn import functional as F
+from utils import act_switch
 
 class VAE(nn.Module, GenerativeAE):
 
@@ -14,8 +15,9 @@ class VAE(nn.Module, GenerativeAE):
         self.latent_size = params["latent_size"]
         self.dim_in = dim_in # C, H, W
         # Building encoder
-        conv_net = ConvNet(dim_in, self.latent_size, depth=params["enc_depth"], **params)
+        conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params)
         self.conv_net = conv_net
+        self.fc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size)
         self.upsmpld_conv_net = UpsampledConvNet((self.latent_size, 1, 1), self.dim_in,
                                                  depth=params["dec_depth"], **params)
@@ -24,7 +26,8 @@ class VAE(nn.Module, GenerativeAE):
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
-        z, logvar, mu = self.gaussian_latent(conv_result)
+        codes = self.fc(conv_result)
+        z, logvar, mu = self.gaussian_latent(codes)
         return [z, mu, logvar]
 
     def decode(self, noise: Tensor, activate:bool) -> Tensor:

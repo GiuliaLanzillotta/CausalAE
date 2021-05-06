@@ -6,6 +6,7 @@ model_params:
   enc_depth: 6 #number of convolutional layers in the encoder
   dec_depth: 6
   pool_every: 2
+  channels: 64
 
 opt_params:
   KL_decay: 1.0
