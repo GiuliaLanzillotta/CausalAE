@@ -5,7 +5,7 @@ from torch import Tensor
 import torch
 from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock, GenerativeAE
 from torch.nn import functional as F
-from utils import act_switch
+from .utils import act_switch
 
 class SAE(nn.Module, GenerativeAE):
 

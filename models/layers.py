@@ -3,6 +3,8 @@ import torch
 from torch import nn
 from torch import Tensor
 import numpy as np
+from torch.autograd import Variable
+
 from .utils import Mish, act_switch, norm_switch
 
 class FCResidualBlock(nn.Module):
@@ -40,11 +42,10 @@ class FCBlock(nn.Module):
     def forward(self, inputs:Tensor) -> Tensor:
         return self.fc(inputs)
 
-
 class ConvBlock(nn.Module):
     """ Implements logic for a convolutional block [conv2d, normalization, activation]"""
 
-    def __init__(self, C_IN, C_OUT, k, s, p, num_groups,
+    def __init__(self, C_IN, C_OUT, k, s, p, num_groups=0,
                  pool:bool=False, act=Mish, norm="batch"):
         super(ConvBlock, self).__init__()
         norm_layer = norm_switch(norm, C_OUT, num_groups)
@@ -97,19 +98,54 @@ class PoolingConvBlock(nn.Module):
 class ResidualConvBlock(PoolingConvBlock):
     """ Residual version of the PoolingConvBlock
     Note: pooling layers addition to obtain dimensionality reduction """
-    def __init__(self, C_IN, H_in, k, s, num_groups, pool:bool=False, act=Mish, norm="batch"):
+    def __init__(self, C_IN, H_in, k, s, num_groups, pool:bool=False,
+                 act=Mish, norm="batch", scaling:bool=True):
+        """ scaling: whether or not to add a scalar scaling factor as suggested in
+        Bachlechner et al. (2020) """
         super(ResidualConvBlock, self).__init__(C_IN, C_IN, H_in, k, s, num_groups,
                                                 pool=pool, act=act, norm=norm)
+        self.scaling = scaling
+        if self.scaling: self.scalar = nn.Parameter(torch.zeros(1), requires_grad = True)
 
-    def forward(self, inputs:Tensor):
+
+def forward(self, inputs:Tensor):
         for i, lyr in enumerate(self.block.modules()):
             if i<2: pass #skip first two modules, which are the "containers" of the layers
-            elif i==2: out = lyr(inputs) + inputs
+            elif i==2: # residual convolution block
+                if self.scaling: delta = self.scalar*lyr(inputs)
+                else: delta = lyr(inputs)
+                out = delta + inputs
             else: out = lyr(out)
         return out
 
-#todo: new version of residual block
 
+class DittadiResidualBlock(nn.Module):
+    """ Implementation of the Residual block from the paper by Dittadi et al."""
+    def __init__(self, channels):
+        super(DittadiResidualBlock, self).__init__()
+        modules = [nn.LeakyReLU(0.02),
+                   nn.Conv2d(channels, channels, 3, 1, 1),
+                   nn.LeakyReLU(0.02),
+                   nn.Conv2d(channels, channels, 3, 1, 1)]
+        # scalar gating mechanisms as suggested by Bachlechner et al. (2020)
+        self.scalar = nn.Parameter(torch.zeros(1), requires_grad = True)
+        self.block = nn.Sequential(*modules)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        outputs = self.block(inputs)
+        scaled_outputs = self.scalar * outputs
+        final = inputs + scaled_outputs
+        return final
+
+class FeatureMap(nn.Module):
+    """Implementation of feature maps (1x1 convolutions with varying channel size)
+    as shown in the paper by Dittadi et al."""
+    def __init__(self, channels_in, channels_out):
+        super().__init__()
+        self.block = nn.Conv2d(channels_in, channels_out, 1)
+
+    def forward(self, inputs:Tensor)->Tensor:
+        return self.block(inputs)
 
 class ConvNet(nn.Module):
     """ Implements convolutional net with multiple convolutional 
@@ -129,7 +165,7 @@ class ConvNet(nn.Module):
         k = 5 # kernel size
         c = channels
         for l in range(depth):
-            # conv block with kernel size 2, size 2 and padding 1 
+            # conv block with kernel size 2, size 2 and padding 1
             # halving the input dimension at every step
             if l==depth-1: c = 1 # reducing depth at the end
             reduce=l%pool_every==0
@@ -145,13 +181,56 @@ class ConvNet(nn.Module):
         assert all(v>0 for v in self.final_shape), "Input not big enough for the convolutions requested"
         flat_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
+        modules.append(nn.LayerNorm(flat_dim)) # idea taken by Dittadi et al. -should help in training
         if flat_dim!=self.final_shape: # re-adjusting the shape
             modules.append(FCBlock(flat_dim, [final_dim], Mish))
         self.net = nn.Sequential(*modules)
 
 
-    def forward(self, inputs: Tensor) -> Tensor: 
+    def forward(self, inputs: Tensor) -> Tensor:
         outputs = self.net(inputs)
+        return outputs
+
+class DittadiConvNet(nn.Module):
+    """ Implementation of Conv net as in Dittadi et al. (RFD dataset paper)
+    Note: this network is designed to work on a 128x128x3 input
+
+    This net takes as input (128,128,3) images and returns a final_dimx1 vector
+    """
+    def __init__(self, final_dim):
+        super(DittadiConvNet, self).__init__()
+        # Stacking the conv layers
+        self.conv_modules = nn.Sequential(nn.Conv2d(3,64,5,2,2),
+                                          DittadiResidualBlock(64),
+                                          DittadiResidualBlock(64),
+                                          FeatureMap(64, 128),
+                                          nn.AvgPool2d(2, 2, 0), #32x32
+                                          DittadiResidualBlock(128),
+                                          DittadiResidualBlock(128),
+                                          nn.AvgPool2d(2, 2, 0), #16x16
+                                          DittadiResidualBlock(128),
+                                          DittadiResidualBlock(128),
+                                          FeatureMap(128, 256),
+                                          nn.AvgPool2d(2,2,0), #8x8
+                                          DittadiResidualBlock(256),
+                                          DittadiResidualBlock(256),
+                                          nn.AvgPool2d(2, 2, 0), #4x4
+                                          DittadiResidualBlock(256),
+                                          DittadiResidualBlock(256))
+        # calculating shape of the image after convolution
+        self.final_shape = (256, 4, 4)
+        # fully connected head of the net
+        self.fc_head = nn.Sequential(nn.Flatten(),
+                                     nn.LeakyReLU(0.02),
+                                     nn.Linear(4096, 512),
+                                     nn.LeakyReLU(0.02),
+                                     nn.LayerNorm(512),
+                                     nn.Linear(512, final_dim))
+
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        conv_outputs = self.conv_modules(inputs)
+        outputs = self.fc_head(conv_outputs)
         return outputs
 
 class TransConvBlock(nn.Module):
@@ -372,6 +451,48 @@ class UpsampledConvNet(nn.Module):
         outputs = self.net(reshaped)
         return outputs
 
+
+class DittadiUpsampledConv(nn.Module):
+    """ Implementation of upsampling conv net used in the decoder for
+    the architecture described in Dittadi et al.
+
+    Input: vector of shape dim_inx1
+    Ouptut: image of size (128,128,3)
+    """
+    def __init__(self, dim_in):
+        """ dim_in: dimension of input vector"""
+        super().__init__()
+
+        self._linear_modules = nn.Sequential(nn.Linear(dim_in, 512),
+                                             nn.LeakyReLU(0.02),
+                                             nn.Linear(512, 4096))
+        # here reshape in a 4x4x256 image
+        self._conv_modules = nn.Sequential(DittadiResidualBlock(256),
+                                           DittadiResidualBlock(256),
+                                           nn.UpsamplingBilinear2d(scale_factor=2), #8x8x256
+                                           DittadiResidualBlock(256),
+                                           DittadiResidualBlock(256),
+                                           FeatureMap(256,128),
+                                           nn.UpsamplingBilinear2d(scale_factor=2), #16x16x128
+                                           DittadiResidualBlock(128),
+                                           DittadiResidualBlock(128),
+                                           nn.UpsamplingBilinear2d(scale_factor=2), #32x32x128
+                                           DittadiResidualBlock(128),
+                                           DittadiResidualBlock(128),
+                                           FeatureMap(128,64),
+                                           nn.UpsamplingBilinear2d(scale_factor=2), #64x64x64
+                                           DittadiResidualBlock(64),
+                                           DittadiResidualBlock(64),
+                                           nn.UpsamplingBilinear2d(scale_factor=2), #128x128x64
+                                           nn.LeakyReLU(0.02),
+                                           nn.Conv2d(64,3,5,1,2))
+
+    def forward(self, inputs:Tensor)->Tensor:
+        """ Simply the forward pass """
+        fc_out = self._linear_modules(inputs)
+        reshaped = fc_out.view((-1,) + (256, 4, 4))
+        outputs = self._conv_modules(reshaped)
+        return outputs
 
 class SCMDecoder(nn.Module):
     """ Implements SCM layer (to be used in SAE): given a latent noise vector the

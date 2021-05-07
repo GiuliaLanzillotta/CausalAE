@@ -2,7 +2,7 @@
 from . import VAEManager
 from . import data
 from .data import DatasetLoader
-from .VAEManager import VAEXperiment
+from .VAEManager import VAEXperiment, cyclic_beta_schedule
 from .SAEManager import SAEXperiment
 
 

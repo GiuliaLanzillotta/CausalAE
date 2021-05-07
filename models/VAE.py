@@ -3,9 +3,9 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock
+from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv
 from torch.nn import functional as F
-from utils import act_switch
+from .utils import act_switch, Dittadi_weight_init_rule
 
 class VAE(nn.Module, GenerativeAE):
 
@@ -13,20 +13,25 @@ class VAE(nn.Module, GenerativeAE):
         super(VAE, self).__init__()
         self.beta = params["beta"]
         self.latent_size = params["latent_size"]
+        self.dittadi_v = params["dittadi"] # boolean flag determining whether or not to use Dittadi convolutional structure
         self.dim_in = dim_in # C, H, W
         # Building encoder
-        conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params)
+        conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params) if not self.dittadi_v \
+            else DittadiConvNet(self.latent_size)
         self.conv_net = conv_net
-        self.fc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
+        if not self.dittadi_v:
+            self.fc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size)
         self.upsmpld_conv_net = UpsampledConvNet((self.latent_size, 1, 1), self.dim_in,
-                                                 depth=params["dec_depth"], **params)
+                                                 depth=params["dec_depth"], **params) if not self.dittadi_v \
+            else DittadiUpsampledConv(self.latent_size)
         self.act = nn.Sigmoid()
 
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
-        codes = self.fc(conv_result)
+        if not self.dittadi_v: codes = self.fc(conv_result)
+        else: codes = conv_result
         z, logvar, mu = self.gaussian_latent(codes)
         return [z, mu, logvar]
 

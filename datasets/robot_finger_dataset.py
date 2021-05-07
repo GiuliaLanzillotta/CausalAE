@@ -137,19 +137,21 @@ class RFDIterable(IterableDataset):
                      labels:numpy.ndarray,
                      images_path:str,
                      transform: Optional[Callable] = None,
-                     target_transform: Optional[Callable] = None):
+                     target_transform: Optional[Callable] = None,
+                     name:str="RFD_std"):
             super().__init__()
             self.path = images_path
             self.images_iterator = images_iterator
             self.labels = labels
             self.transform = transform
             self.target_transform = target_transform
+            self.name = name
 
         def __next__(self) -> Tuple:
             try: next_item = next(self.images_iterator)
             except Exception as e:
                 # iterator is finished, starting again
-                print(e)
+                print(self.name)
                 print("Reached the end of iterator: rolling it back to beginning.")
                 self.images_iterator = RFDIterable.initialise_web_dataset(self.path)
                 next_item = next(self.images_iterator)
@@ -170,7 +172,8 @@ class RFDIterable(IterableDataset):
                      images:numpy.ndarray,
                      labels:numpy.ndarray,
                      transform: Optional[Callable] = None,
-                     target_transform: Optional[Callable] = None):
+                     target_transform: Optional[Callable] = None,
+                     name:str="RFD_real"):
             super().__init__()
             self.images = images
             self.labels = labels
@@ -178,12 +181,13 @@ class RFDIterable(IterableDataset):
             self.labels_iterator = iter(labels)
             self.transform = transform
             self.target_transform = target_transform
+            self.name = name
 
         def __next__(self) -> Tuple:
             try: next_image = next(self.images_iterator)
             except Exception as e:
                 # iterator is finished, starting again
-                print(e)
+                print(self.name)
                 print("Reached the end of iterator: rolling it back to beginning.")
                 self.images_iterator = iter(self.images)
                 self.labels_iterator = iter(self.labels)
@@ -219,9 +223,9 @@ class RFDIterable(IterableDataset):
         print("===== Reading files =====")
         images, labels = self.load_files() # this call will create the class variable 'tar_path'
 
-        if real: self.iterator = self.RFD_real_set_iterator(images, labels, transform, target_transform)
+        if real: self.iterator = self.RFD_real_set_iterator(images, labels, transform, target_transform, name="TEST RFD")
         else: self.iterator = self.RFD_standard_iterator(images, labels, self.tar_path,
-                                                         transform, target_transform)
+                                                         transform, target_transform, name="TRAIN RFD" if not self.heldout_test else "VALID RFD")
 
         print(self)
 

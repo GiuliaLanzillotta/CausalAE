@@ -1,0 +1,5 @@
+model_params:
+  dittadi: True
+
+opt_params:
+  KL_decay: 1.0
