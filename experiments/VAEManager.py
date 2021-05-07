@@ -14,6 +14,22 @@ def cyclic_beta_schedule(initial_beta, iter_num):
     beta = min(initial_beta, beta)
     return beta
 
+def linear_determ_warmup(initial_beta, iter_num):
+    """ Implements linear deterministich warm-up for beta to solve KL annealing problem
+    - initial_beta: the original value for beta to take
+    - iter_num: number of current iteration
+    Taken from (Bowman et al.,2015; Sønderby et al., 2016)
+    """
+    warmup_time = 10000
+    increase_every = 100 #100 steps
+    slope = initial_beta/(warmup_time//increase_every)
+    beta = min(initial_beta, slope*(iter_num//increase_every))
+    return beta
+
+scheduler_switch = {
+    'cyclic':cyclic_beta_schedule,
+    'linear':linear_determ_warmup
+}
 
 class VAEXperiment(BaseExperiment):
 
@@ -24,13 +40,14 @@ class VAEXperiment(BaseExperiment):
         model.apply(Dittadi_weight_init_rule)
         super(VAEXperiment, self).__init__(params, model, loader)
         # Additional initialisations (used in training and validation steps)
-        self.KL_weight = self.params["model_params"]["latent_size"]/self.params['data_params']['batch_size'] #this might be too high for the big datasets
+        self.KL_weight = max(1.0, self.params["model_params"]["latent_size"]/self.params['data_params']['batch_size']) #this might be too high for the big datasets
+        self.beta_scheduler = scheduler_switch[self.params["opt_params"]["beta_schedule"]]
 
 
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        KL_weight = cyclic_beta_schedule(self.KL_weight, self.global_step) # decaying the KL term
+        KL_weight = self.beta_scheduler(self.KL_weight, self.global_step) # decaying the KL term
         train_loss = self.model.loss_function(*results,
                                               X = input_imgs,
                                               KL_weight =  KL_weight)
@@ -47,7 +64,7 @@ class VAEXperiment(BaseExperiment):
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        KL_weight = cyclic_beta_schedule(self.KL_weight, self.global_step)# decaying the KL term
+        KL_weight = self.beta_scheduler(self.KL_weight, self.global_step)# decaying the KL term
         val_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = KL_weight)
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)

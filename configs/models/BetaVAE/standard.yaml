@@ -11,3 +11,4 @@ model_params:
 
 opt_params:
   KL_decay: 1.0
+  beta_schedule: 'cyclic'
