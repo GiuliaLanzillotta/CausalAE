@@ -8,6 +8,7 @@ model_params:
   pool_every: 2
   channels: 64
   dittadi: False
+  gaussian_init: 'xavier' #other option: 'normal'
 
 opt_params:
   KL_decay: 1.0

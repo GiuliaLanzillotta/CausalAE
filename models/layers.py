@@ -5,7 +5,7 @@ from torch import Tensor
 import numpy as np
 from torch.autograd import Variable
 
-from .utils import Mish, act_switch, norm_switch
+from .utils import Mish, act_switch, norm_switch, standard_initialisation
 
 class FCResidualBlock(nn.Module):
     """ Implements residual fully connected block with adaptive average pooling """
@@ -185,7 +185,7 @@ class ConvNet(nn.Module):
         if flat_dim!=self.final_shape: # re-adjusting the shape
             modules.append(FCBlock(flat_dim, [final_dim], Mish))
         self.net = nn.Sequential(*modules)
-
+        self.net.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
     def forward(self, inputs: Tensor) -> Tensor:
         outputs = self.net(inputs)
@@ -226,7 +226,8 @@ class DittadiConvNet(nn.Module):
                                      nn.LeakyReLU(0.02),
                                      nn.LayerNorm(512),
                                      nn.Linear(512, final_dim))
-
+        self.conv_modules.apply(lambda m: standard_initialisation(m, 'leaky_relu'))
+        self.fc_head.apply(lambda m: standard_initialisation(m, 'leaky_relu'))
 
     def forward(self, inputs: Tensor) -> Tensor:
         conv_outputs = self.conv_modules(inputs)
@@ -289,9 +290,10 @@ class TransConvNet(nn.Module):
         k, p = ConvBlock.get_filter_size(h, 1, final_shape[1])
         modules.append(ConvBlock(C, final_shape[0], k, 1, p, 1))
         self.trans_net = nn.Sequential(*modules)
+        self.trans_net.apply(lambda m: standard_initialisation(m, 'mish'))
 
 
-    def forward(self, inputs: Tensor) -> Tensor: 
+    def forward(self, inputs: Tensor) -> Tensor:
         reshaped = self.fc_reshape(inputs).view((-1,) + self.initial_shape)
         outputs = self.trans_net(reshaped)
         return outputs
@@ -300,11 +302,12 @@ class GaussianLayer(nn.Module):
     """Stochastic layer with Gaussian distribution.
     This layer parametrizes a Gaussian distribution on the latent space of size
     "latent_size" """
-    def __init__(self, hidden_size, latent_size):
+    def __init__(self, hidden_size, latent_size, init_type):
         super().__init__()
         self.latent_size = latent_size
         self.mu = nn.Linear(hidden_size, latent_size)
         self.logvar = nn.Linear(hidden_size, latent_size)
+        self.init_weights(init_type)
 
     def forward(self, inputs):
         # Split the result into mu and var components
@@ -322,6 +325,17 @@ class GaussianLayer(nn.Module):
             through the decoder"""
         z = torch.randn(num_samples, self.latent_size)
         return z
+
+    def init_weights(self, init_type="xavier"):
+        if init_type=="normal":
+            torch.nn.init.normal_(self.logvar.weight, std=0.01)
+            torch.nn.init.zeros_(self.logvar.bias)
+        elif init_type=="xavier":
+            torch.nn.init.xavier_uniform_(self.logvar.weight, gain=0.1)
+            torch.nn.init.constant_(self.logvar.bias, -1.0)
+        else: raise NotImplementedError("Selected initialization type -"+init_type+"- not recognised.")
+
+
 
 class HybridLayer(nn.Module):
     """Stochastic layer based on Hybrid sampling"""
@@ -444,6 +458,7 @@ class UpsampledConvNet(nn.Module):
             C = c
         _modules.append(nn.AdaptiveAvgPool2d(final_shape[1]))
         self.net = nn.Sequential(*_modules)
+        self.net.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
     def forward(self, inputs):
         """ Simply the forward pass """
@@ -486,6 +501,8 @@ class DittadiUpsampledConv(nn.Module):
                                            nn.UpsamplingBilinear2d(scale_factor=2), #128x128x64
                                            nn.LeakyReLU(0.02),
                                            nn.Conv2d(64,3,5,1,2))
+        self._linear_modules.apply(lambda m: standard_initialisation(m, 'leaky_relu'))
+        self._conv_modules.apply(lambda m: standard_initialisation(m, 'leaky_relu'))
 
     def forward(self, inputs:Tensor)->Tensor:
         """ Simply the forward pass """
@@ -533,6 +550,8 @@ class SCMDecoder(nn.Module):
             h *= 2 if l%pool_every==0 else 1
             C = c
         self.shape_adjusting_block = nn.AdaptiveAvgPool2d(final_shape[1])
+        self.str_trf_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
+        self.conv_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
     def forward(self, x, z, mode="auto"):
         """ Implements forward pass with 2 possible modes:

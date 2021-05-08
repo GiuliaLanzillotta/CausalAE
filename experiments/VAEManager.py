@@ -1,6 +1,6 @@
 from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseExperiment
-from models import VAE, Dittadi_weight_init_rule
+from models import VAE
 
 def cyclic_beta_schedule(initial_beta, iter_num):
     """ Implements cyclic scheduling for beta to solve KL annealing problem
@@ -37,7 +37,6 @@ class VAEXperiment(BaseExperiment):
         loader = DatasetLoader(params["data_params"])
         dim_in =  loader.data_shape # C, H, W
         model = VAE(params["model_params"], dim_in)
-        model.apply(Dittadi_weight_init_rule)
         super(VAEXperiment, self).__init__(params, model, loader)
         # Additional initialisations (used in training and validation steps)
         self.KL_weight = max(1.0, self.params["model_params"]["latent_size"]/self.params['data_params']['batch_size']) #this might be too high for the big datasets

@@ -5,7 +5,7 @@ from torch import Tensor
 import torch
 from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv
 from torch.nn import functional as F
-from .utils import act_switch, Dittadi_weight_init_rule
+from .utils import act_switch
 
 class VAE(nn.Module, GenerativeAE):
 
@@ -21,7 +21,7 @@ class VAE(nn.Module, GenerativeAE):
         self.conv_net = conv_net
         if not self.dittadi_v:
             self.fc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
-        self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size)
+        self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
         self.upsmpld_conv_net = UpsampledConvNet((self.latent_size, 1, 1), self.dim_in,
                                                  depth=params["dec_depth"], **params) if not self.dittadi_v \
             else DittadiUpsampledConv(self.latent_size)
@@ -66,7 +66,9 @@ class VAE(nn.Module, GenerativeAE):
         # across different latent layer sizes and different datasets
         KL_weight = kwargs["KL_weight"] # usually weight = M/N
         # ELBO = reconstruction term + prior-matching term
-        recons_loss= F.binary_cross_entropy_with_logits(X_hat, X, reduction="mean")
-        KL_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
+        # Note: for both losses we take the average over the batch and sum over the other dimensions
+        recons_loss = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
+                               tuple(range(X_hat.dim()))[1:]).mean() #sum over all dimensions except the first one (batch)
+        KL_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), 1).mean()
         loss = recons_loss + self.beta * KL_weight * KL_loss
         return {'loss': loss, 'Reconstruction_loss':recons_loss, 'KL':KL_loss}
