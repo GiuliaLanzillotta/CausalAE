@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA, FashionMNIST
 import matplotlib.pyplot as plt
-from datasets import RFD, Shapes3d, RFDIterable
+from datasets import RFD, Shapes3d, RFDIterable, AdditiveNoise
 import numpy as np
 import torch
 import os
@@ -30,6 +30,8 @@ class DatasetLoader:
         already_split = False
         if args["dataset_name"] == 'MNIST':
             transform = transforms.ToTensor()
+            if args["add_noise"]:
+                transform = transforms.Compose([transform, AdditiveNoise(4)])
             root = os.path.dirname(os.path.realpath(__file__))
             data_folder = os.path.join(root,'../datasets/MNIST/')
             train_set = MNIST(data_folder,
@@ -43,6 +45,8 @@ class DatasetLoader:
 
         elif args["dataset_name"] == 'FashionMNIST':
             transform = transforms.ToTensor()
+            if args["add_noise"]:
+                transform = transforms.Compose([transform, AdditiveNoise(4)])
             root = os.path.dirname(os.path.realpath(__file__))
             data_folder = os.path.join(root,'../datasets/FashionMNIST/')
             train_set = FashionMNIST(data_folder,
@@ -56,6 +60,8 @@ class DatasetLoader:
 
         elif args["dataset_name"] == 'cifar10':
             transform = transforms.ToTensor()
+            if args["add_noise"]:
+                transform = transforms.Compose([transform, AdditiveNoise()])
             data_folder = './datasets/cifar10/'
             train_set = CIFAR10(data_folder,
                                 train=True,
@@ -68,6 +74,8 @@ class DatasetLoader:
 
         elif args["dataset_name"] == 'svhn':
             transform = transforms.ToTensor()
+            if args["add_noise"]:
+                transform = transforms.Compose([transform, AdditiveNoise()])
             data_folder = './datasets/svhn/'
             train_set = SVHN(data_folder,
                              split='train',
@@ -79,11 +87,14 @@ class DatasetLoader:
                             transform=transform)
 
         elif args["dataset_name"] == 'celeba':
-            transform = transforms.Compose([
+            trfs = [
                 transforms.CenterCrop(148),
                 transforms.Resize((64, 64)),
                 transforms.ToTensor(),
-            ])
+            ]
+            if args["add_noise"]:
+                trfs.append(AdditiveNoise())
+            transform = transforms.Compose(trfs)
             data_folder = './datasets/celeba/'
             train_set = CelebA(data_folder,
                                split='train',
@@ -103,6 +114,8 @@ class DatasetLoader:
 
         elif args["dataset_name"] == 'RFD': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
             transform = transforms.ToTensor()
+            if args["add_noise"]:
+                transform = transforms.Compose([transform, AdditiveNoise()])
             cluster_data_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
             standard_set = RFD(cluster_data_folder,
                             transform=transform)
@@ -133,24 +146,25 @@ class DatasetLoader:
 
         elif args["dataset_name"] == 'RFD_IT': #new dataset: https://arxiv.org/pdf/2010.14407.pdf
             transform = transforms.ToTensor()
+            if args["add_noise"]:
+                transform = transforms.Compose([transform, AdditiveNoise()])
             data_folder = './datasets/robot_finger_datasets/'
             cluster_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
             train_set = RFDIterable(cluster_folder,
-                                    transform=transform,
-                                    batch_size=args["batch_size"]) # .tar storage datasets need batch size
+                                    transform=transform) # .tar storage datasets need batch size
             valid_set = RFDIterable(cluster_folder, # using OOD2-A as validation set
                                     heldout_colors=True,
-                                    transform=transform,
-                                    batch_size=args["batch_size"])
+                                    transform=transform)
             test_set = RFDIterable(cluster_folder, #using OOD2-B as test set
                                    real=True,
-                                   transform=transform,
-                                   batch_size=args["test_batch_size"])
+                                   transform=transform)
             already_split = True
             self.num_samples = len(train_set) + len(valid_set) + len(test_set)
 
         elif args["dataset_name"] == '3DShapes':
             transform = transforms.ToTensor()
+            if args["add_noise"]:
+                transform = transforms.Compose([transform, AdditiveNoise()])
             data_folder = './datasets/Shapes3d'
             dataset = Shapes3d(data_folder,
                                transform=transform,
@@ -194,7 +208,7 @@ class DatasetLoader:
                                num_workers=args["num_workers"])
 
 
-        #TODO: check whether this iter call affects the iterator
+        #TODO: this iter call affects the test iterator
         self.data_shape = self.test.__iter__().__next__()[0].shape[1:]
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]

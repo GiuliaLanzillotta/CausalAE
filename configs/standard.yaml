@@ -13,6 +13,7 @@ data_params:
   batch_size: 128 # Better to have a square number
   test_batch_size: 128
   reload_dataloaders_every_epoch: False
+  add_noise: False
 
 trainer_params:
   val_check_interval: 200 #check validation every 200 steps
@@ -27,6 +28,7 @@ logging_params:
   manual_seed: 1265
   version: 'null'
   score_every: 20 # number of steps
+  log_every: 100
 
 
 vis_params:
@@ -36,5 +38,6 @@ vis_params:
   num_frames: 5
   fpd: 10
   num_points_irs: 10000
+
 
 

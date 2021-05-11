@@ -343,7 +343,7 @@ class HybridLayer(nn.Module):
         super(HybridLayer, self).__init__()
         self.dim = dim
         self.unit_dim = unit_dim
-        self.N = N
+        self.N = N # number of vectors to store (these vectors will constitute the set from which samples will be taken)
         self.weights = torch.ones(self.N) # unnormalised probability weights for each sample (equivalent to uniform)
         self.weights.requires_grad = False
         self.prior = None
@@ -371,10 +371,27 @@ class HybridLayer(nn.Module):
         new_vectors = []
         for chunk in prior_chunks:
             # num_samples x N one-hot matrix
-            idx = torch.multinomial(self.weights[:self.prior.shape[0]], num_samples, replacement=True).to(chunk.device)
+            idx = torch.multinomial(self.weights[:self.prior.shape[0]],
+                                    num_samples, replacement=True).to(chunk.device)
             new_vectors.append(torch.index_select(chunk, 0, idx))
         noise = torch.cat(new_vectors, dim=1)
         return noise
+
+    def partial_sampling(self, input_shape, proportion):
+        """
+        Obtaines new latent codes by samling only a portion of the vectors,
+        specified by the "proportion" parameters. The remaining samples will be
+        drawn without hybridization by the prior.
+        """
+        num_samples = input_shape[0]
+        num_hybrid_samples = int(proportion*num_samples)
+        num_normal_samples = num_samples - num_hybrid_samples
+        hybrid_samples = self.sample_from_prior((num_hybrid_samples, )+input_shape[1:])
+        normal_samples_idx = torch.multinomial(self.weights[:self.prior.shape[0]],
+                                               num_normal_samples, replacement=True).to(chunk.device)
+        normal_samples = torch.index_select(self.prior, 0, normal_samples_idx)
+        samples = torch.cat([hybrid_samples, normal_samples], dim=0)
+        return samples
 
     def forward(self, inputs):
         """Performs hybrid sampling on the latent space"""

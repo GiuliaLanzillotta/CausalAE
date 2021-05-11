@@ -1,0 +1,6 @@
+model_params:
+  dittadi: True
+  latent_size: 32
+
+data_params:
+  add_noise: True

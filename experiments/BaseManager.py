@@ -28,6 +28,7 @@ class BaseExperiment(pl.LightningModule):
         self.val_every = self.params["trainer_params"]["val_check_interval"]
         self.plot_every = self.params['vis_params']['plot_every']
         self.score_every = self.params['logging_params']['score_every']
+        self.log_every = self.params['logging_params']['log_every']
         self.num_FID_steps = len(self.val_dataloader())//20 # basically take 5% of the batches available
         self.num_val_steps = 0 #counts number of validation steps done
 
@@ -50,6 +51,15 @@ class BaseExperiment(pl.LightningModule):
 
         self.num_val_steps+=1
 
+    def test_step_end(self, outputs):
+        self.visualiser.plot_reconstructions(device=self.device)
+        try: self.visualiser.plot_samples_from_prior(device=self.device)
+        except ValueError:pass #no prior samples stored yet
+        self.visualiser.plot_latent_traversals(device=self.device)
+        fid_score = self._fidscorer.calculate_fid()
+        self.log("FID", fid_score, prog_bar=True)
+
+
 
     def configure_optimizers(self):
         opt_params = self.params["opt_params"]
@@ -62,11 +72,6 @@ class BaseExperiment(pl.LightningModule):
             return optimizer
         """
         return optimizer
-
-
-    def test_step(self, *args, **kwargs):
-        #TODO
-        pass
 
     def train_dataloader(self):
         return self.loader.train

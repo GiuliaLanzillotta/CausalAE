@@ -51,14 +51,24 @@ class VAEXperiment(BaseExperiment):
                                               X = input_imgs,
                                               KL_weight =  KL_weight)
         # Logging
-        self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
-        self.log_dict({key: val.item() for key, val in train_loss.items()})
-        self.log('step', self.global_step, prog_bar=True)
-        self.log('beta', KL_weight*self.model.beta, prog_bar=True)
+
+        if self.global_step%self.log_every==0:
+            self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
+            self.log_dict({key: val.item() for key, val in train_loss.items()})
+            self.log('step', self.global_step, prog_bar=True)
+            self.log('beta', KL_weight*self.model.beta, prog_bar=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
             self.visualiser.plot_training_gradients(self.global_step)
 
         return train_loss["loss"]
+
+
+    def score_FID(self, batch_idx, inputs, results):
+        if batch_idx==0:
+            self._fidscorer.start_new_scoring(self.params['data_params']['batch_size']*self.num_FID_steps,device=self.device)
+        if  batch_idx<=self.num_FID_steps:#only one every 50 batches is included to avoid memory issues
+            try: self._fidscorer.get_activations(inputs, self.model.act(results[0])) #store activations for current batch
+            except Exception as e: print("Reached the end of FID scorer buffer")
 
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
@@ -66,12 +76,19 @@ class VAEXperiment(BaseExperiment):
         KL_weight = self.beta_scheduler(self.KL_weight, self.global_step)# decaying the KL term
         val_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = KL_weight)
         # Calling self.log will surface up scalars for you in TensorBoard
-        self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        if self.global_step%self.log_every==0:
+            self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
 
         if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0:
-            if batch_idx==0:
-                self._fidscorer.start_new_scoring(self.params['data_params']['batch_size']*self.num_FID_steps,device=self.device)
-            if  batch_idx<=self.num_FID_steps:#only one every 50 batches is included to avoid memory issues
-                try: self._fidscorer.get_activations(input_imgs, self.model.act(results[0])) #store activations for current batch
-                except: print(self._fidscorer.start_idx)
+            self.score_FID(batch_idx, input_imgs, results)
         return val_loss
+
+
+    def test_step(self, batch, batch_idx):
+        input_imgs, labels = batch
+        results = self.forward(input_imgs)#
+        test_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = self.KL_weight)# no decay in KL weight
+        # Calling self.log will surface up scalars for you in TensorBoard
+        self.log('test_loss', test_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        self.score_FID(batch_idx, input_imgs, results)
+

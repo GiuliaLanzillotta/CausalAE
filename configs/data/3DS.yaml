@@ -1,2 +1,3 @@
 dataset_name: 3DShapes
 num_workers: 80
+add_noise: True
