@@ -37,7 +37,7 @@ class RFDh5Test(unittest.TestCase):
 
     def test_heldout(self):
         dataset = RFDh5(self.root, heldout_colors=True)
-        self.assertEqual(len(dataset.partitions_dict.keys()), 1)
+        self.assertEqual(len(dataset.partitions_dict.keys()), 2)
         img, lbl = dataset[20]
         self.assertEqual(img.shape, (3, 128, 128))
         self.assertEqual(lbl.shape, (9,))
@@ -56,7 +56,7 @@ class RFDh5Test(unittest.TestCase):
         delta1 = end-start
 
         start = time.time()
-        _ = dataset[1000] #TODO: fix here
+        _ = dataset[1000]
         end = time.time()
         delta2 = end-start
 

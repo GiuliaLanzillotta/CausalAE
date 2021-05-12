@@ -306,24 +306,26 @@ class RFDtoHDF5(object):
     Exploits the RFD dataset class to do so.
     The class will write the dataset to the ./processed/RFD.h5 file under the specified root."""
 
-    #TODO: standard + heldout + test
-    #TODO: look into splitting
-
-    read_root = './datasets/robot_finger_datasets/'
-    save_root = './datasets/robot_finger_datasets/'
-    filepath = save_root + "RFD/processed/"
     train_test_split = 0.8 # note that also the number of files will be split with this percentage
 
-    def __init__(self, chunksize:int=32,
-                 heldout_colors: bool=False):
+    def __init__(self,
+                 read_root:str= './datasets/robot_finger_datasets/',
+                 save_root:str= './datasets/robot_finger_datasets/',
+                 chunksize:int=32, heldout_colors: bool=False):
+        self.read_root = read_root
+        self.save_root = save_root
+        self.filepath = save_root + "RFD/processed/"
         self.chunksize = chunksize
         self.heldout = heldout_colors
         self.split = not self.heldout
         self.init_RFD_dataloader()
         os.makedirs(self.filepath, exist_ok=True)
 
+
     def init_RFD_dataloader(self):
-        transform = transforms.ToTensor()
+        def PILtoNumpy(img):
+            return np.asarray(img)
+        transform = torchvision.transforms.Lambda(PILtoNumpy)
         _set = RFDIterable(self.read_root, heldout_colors=self.heldout, transform=transform) #in torch tensor format
         self.loader = DataLoader(_set, batch_size=self.chunksize, shuffle=False)
 
@@ -351,26 +353,29 @@ class RFDtoHDF5(object):
         imgs, lbls = next(iter(self.loader))
         with h5py.File(self.filepath+filename, 'w') as f:
             #create the datasets
-            images = f.create_dataset('images', shape=imgs.shape, maxshape=(None,)+imgs.shape[1:],
-                                      chunks=imgs.shape, dtype=np.float)
-            images[:] = imgs.cpu().detach().numpy()
-            labels = f.create_dataset('labels', shape=lbls.shape, maxshape=(None,)+lbls.shape[1:],
-                                      chunks=lbls.shape, dtype=np.float)
-            labels[:] = lbls.cpu().detach().numpy()
+            images = f.create_dataset('images', shape=(num_chunks*imgs.shape[0],)+imgs.shape[1:],
+                                      maxshape=(num_chunks*imgs.shape[0],)+imgs.shape[1:],
+                                      chunks=imgs.shape, dtype=np.uint8, compression="gzip")
+            images[:row_count] = imgs.cpu().detach().numpy()
+            labels = f.create_dataset('labels', shape=(num_chunks*imgs.shape[0],)+lbls.shape[1:],
+                                      maxshape=(num_chunks*imgs.shape[0],)+lbls.shape[1:],
+                                      chunks=lbls.shape, dtype=np.uint8, compression="gzip")
+            labels[:row_count] = lbls.cpu().detach().numpy()
             # iterate over the rest
             for imgs, lbls in self.loader:
                 # Resize the dataset to accommodate the next chunk of rows
-                images.resize(row_count + imgs.shape[0], axis=0)
-                labels.resize(row_count + lbls.shape[0], axis=0)
+                next_row_count = row_count + imgs.shape[0]#less than chunksize if last batch
                 # Write the next chunk
-                images[row_count:] = imgs.cpu().detach().numpy()
-                labels[row_count:] = lbls.cpu().detach().numpy()
+                images[row_count:next_row_count] = imgs.cpu().detach().numpy()
+                labels[row_count:next_row_count] = lbls.cpu().detach().numpy()
                 # Increment the row count
-                row_count += imgs.shape[0] #less than chunksize if last batch
+                row_count = next_row_count
                 chunks_count+=1
                 if chunks_count%notify_every==0:
                     updater(chunks_count, self.chunksize, min(num_chunks*self.chunksize, len(self.loader.dataset)))
-                if chunks_count==num_chunks: return
+                if chunks_count==num_chunks: return images.shape[0]
+
+            return images.shape[0]
 
     def __call__(self, overwrite=False, **kwargs):
         num_files = kwargs.get('num_files',10)
@@ -403,7 +408,8 @@ class RFDtoHDF5(object):
                     print("Removing existing file.")
                     os.remove(self.filepath+file_name)
             print(f'Writing file number {n}')
-            self._write_to_HDF5(file_name, partitions[n])
+            num_images_read = self._write_to_HDF5(file_name, partitions[n])
+            print(f"{num_images_read} images read")
 
 
 
@@ -411,7 +417,7 @@ class RFDh5(torchvision.datasets.VisionDataset):
     """ Implementing RA dataset for RFD based on .h5 storage"""
     shape = (3, 128,128)
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
-    raw_files = [8, 2, 1] #TODO: see here
+    raw_files = [8, 2, 2] #TODO: see here
 
     def __init__(self,
                  root: str,
@@ -432,7 +438,7 @@ class RFDh5(torchvision.datasets.VisionDataset):
         else: self.real_set = self.read_real_images_and_labels()
 
     def close_all(self):
-        #TODO: use this when finished
+        #TODO: use this when finished to close all the hdf5 files opened
         pass
 
 
@@ -476,14 +482,13 @@ class RFDh5(torchvision.datasets.VisionDataset):
         else:
             par_idx, rel_idx = self.get_relative_index(index)
             imgs, lbls = self.partitions_dict[par_idx][0]
-        img = torch.Tensor(imgs[rel_idx])
-        if self.real: img = img.permute(2,0,1)
+        img = torch.Tensor(imgs[rel_idx]/255.0) #rescaling the uint8
+        img = img.permute(2,0,1) # from (H,W,C) to (C, H, W)
         lbl = torch.Tensor(lbls[rel_idx])
         # both the above are numpy arrays
         # so they need to be cast to torch tensors
         #Note: no rescaling needed as the imgs have already been
         # processed by the ToTensor transformation.
-        #TODO: check rescaling for real images
         if self.transform is not None:
             img = self.transform(img)
         if self.target_transform is not None:
