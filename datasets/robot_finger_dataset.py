@@ -1,4 +1,5 @@
 """ Implementation of loading functions for robot_finger_dataset"""
+from math import ceil
 from typing import Any, Callable, Optional, Tuple, Iterator
 
 import numpy
@@ -311,31 +312,33 @@ class RFDtoHDF5(object):
     read_root = './datasets/robot_finger_datasets/'
     save_root = './datasets/robot_finger_datasets/'
     filepath = save_root + "RFD/processed/"
+    train_test_split = 0.8 # note that also the number of files will be split with this percentage
 
-
-    def __init__(self, chunksize:int=32):
+    def __init__(self, chunksize:int=32,
+                 heldout_colors: bool=False):
         self.chunksize = chunksize
+        self.heldout = heldout_colors
+        self.split = not self.heldout
         self.init_RFD_dataloader()
         os.makedirs(self.filepath, exist_ok=True)
 
     def init_RFD_dataloader(self):
         transform = transforms.ToTensor()
-        standard_set = RFD(self.read_root, transform=transform) #in torch tensor format
-        self.dataset = DataLoader(standard_set, batch_size=self.chunksize, shuffle=True)
+        _set = RFDIterable(self.read_root, heldout_colors=self.heldout, transform=transform) #in torch tensor format
+        self.loader = DataLoader(_set, batch_size=self.chunksize, shuffle=False)
 
-    @staticmethod
-    def compute_files_partitions(length, num_files):
-        len_per_file = (length//num_files)
-        lens_per_files = [len_per_file]*num_files
-        if len_per_file*num_files<length: #last file bigger
-            lens_per_files[-1] += (length - len_per_file*num_files)
-        return lens_per_files
+    @property
+    def set_name(self) -> str:
+        if self.heldout: return "HC"
+        return ""
 
-    def compute_num_chunks_per_file(self, file_len):
-        num_chunks = file_len//self.chunksize
-        if len(self.dataset.dataset)%self.chunksize!=0:
-            num_chunks+=1
-        return num_chunks
+    def compute_files_partitions(self, length, num_files):
+        num_chunks = (length//self.chunksize) #40
+        chunks_per_file = num_chunks//num_files #4
+        chunks_per_files = [chunks_per_file]*num_files
+        if chunks_per_file*num_files*self.chunksize<length: #last file bigger
+            chunks_per_files[-1] += ceil((length - chunks_per_file*num_files*self.chunksize)/self.chunksize)
+        return chunks_per_files
 
     def _write_to_HDF5(self, filename:str, num_chunks:int):
         """ Test version of the write function
@@ -345,7 +348,7 @@ class RFDtoHDF5(object):
         notify_every = 20
         updater = gen_bar_updater()
         # collect the first batch
-        imgs, lbls = next(iter(self.dataset))
+        imgs, lbls = next(iter(self.loader))
         with h5py.File(self.filepath+filename, 'w') as f:
             #create the datasets
             images = f.create_dataset('images', shape=imgs.shape, maxshape=(None,)+imgs.shape[1:],
@@ -355,7 +358,7 @@ class RFDtoHDF5(object):
                                       chunks=lbls.shape, dtype=np.float)
             labels[:] = lbls.cpu().detach().numpy()
             # iterate over the rest
-            for imgs, lbls in self.dataset:
+            for imgs, lbls in self.loader:
                 # Resize the dataset to accommodate the next chunk of rows
                 images.resize(row_count + imgs.shape[0], axis=0)
                 labels.resize(row_count + lbls.shape[0], axis=0)
@@ -366,16 +369,32 @@ class RFDtoHDF5(object):
                 row_count += imgs.shape[0] #less than chunksize if last batch
                 chunks_count+=1
                 if chunks_count%notify_every==0:
-                    updater(chunks_count, self.chunksize, min(num_chunks*self.chunksize, len(self.dataset.dataset)))
+                    updater(chunks_count, self.chunksize, min(num_chunks*self.chunksize, len(self.loader.dataset)))
                 if chunks_count==num_chunks: return
 
     def __call__(self, overwrite=False, **kwargs):
         num_files = kwargs.get('num_files',10)
         self.num_files = num_files
-        partitions = self.compute_files_partitions(kwargs.get('length', len(self.dataset.dataset)), num_files)
+        base_name = f"RFD_{self.set_name}{kwargs.get('id', '')}_"
+        length = kwargs.get('length', len(self.loader.dataset))
         print("Writing RFD dataset to .h5 file")
+
+        if self.split and not kwargs.get("called", False):
+            print("Splitting dataset into training and test")
+            # Here we use recursion to avoid writing the same code twice
+            # What happens: if we need to 'split' the dataset then we 'split' the 'call' to
+            # first work on the training and then work on the test.
+            # writing the training set
+            self(overwrite=overwrite, num_files = int(self.train_test_split*num_files),
+                 called=True, id="train", length=int(self.train_test_split*length))
+            # writing the test set
+            self(overwrite=overwrite, num_files = num_files - int(self.train_test_split*num_files),
+                 called=True, id="test", length=length - int(self.train_test_split*length))
+            return
+
+        partitions = self.compute_files_partitions(length, num_files)
         for n in range(num_files):
-            file_name = f"RFD{n}.h5"
+            file_name = f"{base_name}{n}.h5"
             if os.path.exists(self.filepath+file_name):
                 if not overwrite:
                     print(f"file {file_name} already there and overwrite=False. Nothing to do.")
@@ -384,7 +403,7 @@ class RFDtoHDF5(object):
                     print("Removing existing file.")
                     os.remove(self.filepath+file_name)
             print(f'Writing file number {n}')
-            self._write_to_HDF5(file_name, self.compute_num_chunks_per_file(partitions[n]))
+            self._write_to_HDF5(file_name, partitions[n])
 
 
 
@@ -392,84 +411,112 @@ class RFDh5(torchvision.datasets.VisionDataset):
     """ Implementing RA dataset for RFD based on .h5 storage"""
     shape = (3, 128,128)
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
-    raw_files = [10, 1, 1] #TODO: see here
-    #TODO: extend to heldout and real test dataset
+    raw_files = [8, 2, 1] #TODO: see here
 
     def __init__(self,
                  root: str,
+                 test: bool= False,
                  heldout_colors: bool =False,
                  real: bool=False,
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None) -> None:
         super().__init__(root)
+        self.test = test
         self.heldout = heldout_colors
         self.real = real
+        self.transform = transform
+        self.target_transform = target_transform
         print("====== Opening RFD Dataset ======")
         self.info = self.read_info()
-        self.partitions = self.shuffle_indices_up_to(self.num_files)
-        self.partition = -1 #no partition loaded
+        if not self.real: self.partitions_dict = self.init_partitions() #open the partitions files
+        else: self.real_set = self.read_real_images_and_labels()
 
-    @staticmethod
-    def shuffle_indices_up_to(num):
-        indices = list(range(num))
-        random.Random(11).shuffle(indices)
-        return indices
 
-    def get_file_from_index(self, index):
-        avg_len_per_file = (len(self)//self.num_files)
-        partition_idx = self.partitions[index//avg_len_per_file]
-        return partition_idx
+    def read_real_images_and_labels(self):
+        """ Loading function only for real test dataset images"""
+        images = np.load(self.raw_folder+"_images.npz", allow_pickle=True)["images"]
+        labels = np.load(self.raw_folder+"_labels.npz", allow_pickle=True)["labels"]
+        return (images, labels)
+
+    def init_partitions(self):
+        """Initialising the .h5 files and their order.
+        Note: when reading .h5 file it won't be loaded into memory until its
+        entries are called."""
+        partitions_dict = {idx: self.open_partition(idx) for idx in range(self.num_files)}
+        return partitions_dict
+
+    def get_relative_index(self, index):
+        """ Given absolute index it returns the partition index and the
+        relative index inside the partition
+        #TODO: test
+        #TODO: make it work for multiple indices"""
+        len_per_file = self.partitions_dict[0][1]
+        partition_idx = index//len_per_file
+        relative_index = index%len_per_file
+        if index >= len_per_file*self.num_files:
+            # contained in last partition
+            relative_index = index - len_per_file*self.num_files
+        return partition_idx, relative_index
 
     def open_partition(self, number):
-        if self.partition == number: return
-        filename = f"RFD_{self.set_name}{number}.h5" #TODO: make sure to save this way
+        filename = f"RFD_{self.set_name}_{number}.h5"
         with h5py.File(self.processed_folder + filename, 'r') as f:
             images = f['images']
             labels = f['labels']
-        self.partition = number
-        self.images = images
-        self.labels = labels
-        self.partition_indices = self.shuffle_indices_up_to(images.shape[0])
+        length = images.shape[0]
+        return (images, labels), length
 
     def __getitem__(self, index: int) -> Any:
-        par_idx = self.get_file_from_index(index)
-        self.open_partition(par_idx)
-        avg_len_per_file = (len(self)//self.num_files)
-        relative_index = index%avg_len_per_file
-        if index >= avg_len_per_file*self.num_files:
-            relative_index = index - avg_len_per_file*self.num_files
-        index = self.partition_indices[relative_index]
-        image = self.images[index]
-        labels = self.labels[index]
-
+        if self.real: imgs, lbls = self.real_set
+        else:
+            par_idx, rel_idx = self.get_relative_index(index)
+            imgs, lbls = self.partitions_dict[par_idx][0]
+        img = torch.Tensor(imgs[index])
+        lbl = torch.Tensor(lbls[index])
+        # both the above are numpy arrays
+        # so they need to be cast to torch tensors
+        #Note: no rescaling needed as the imgs have already been
+        # processed by the ToTensor transformation.
+        #TODO: check rescaling for real images
+        if self.transform is not None:
+            img = self.transform(img)
+        if self.target_transform is not None:
+            lbl = self.target_transform(lbl)
+        return img, lbl
 
     def __len__(self) -> int:
-        return self.size #TODO: see here too
+        #TODO: see here too for the "batched" case
+        if self.heldout or self.real: return self.size
+        if not self.test: return int(self.size*0.8)
+        # only test is remaining
+        return self.size -  int(self.size*0.8)
 
     def read_info(self):
         """ Opens the labels and info .npz files and stores them in the class"""
         # loading labels
-        path = str.join("/", [self.raw_folder, self.set_name, self.set_name])
-        info = dict(np.load(path+"_info.npz", allow_pickle=True))
+        info = dict(np.load(self.raw_folder+"_info.npz", allow_pickle=True))
         self.size = info["dataset_size"].item()
         #TODO: extract interesting properties from the info here
         return info
 
     @property
     def raw_folder(self) -> str:
-        return self.root + 'RFD/raw'
+        base = self.root + 'RFD/raw'
+        if self.heldout: return str.join("/", [base, self.raw_subfolders[1], self.raw_subfolders[1]])
+        if self.real: return str.join("/", [base, self.raw_subfolders[2], self.raw_subfolders[2]])
+        return str.join("/", [base, self.raw_subfolders[0], self.raw_subfolders[0]])
 
     @property
     def num_files(self) -> int:
-        if self.heldout: return self.raw_files[1]
-        if self.real: return self.raw_files[2]
+        if self.test: return self.raw_files[1]
+        if self.heldout: return self.raw_files[2]
         return self.raw_files[0]
 
     @property
     def set_name(self) -> str:
-        if self.heldout: return self.raw_subfolders[1]
-        if self.real: return self.raw_subfolders[2]
-        return self.raw_subfolders[0]
+        if self.test: return "test"
+        if self.heldout: return "HC"
+        return "train"
 
     @property
     def processed_folder(self) -> str:
