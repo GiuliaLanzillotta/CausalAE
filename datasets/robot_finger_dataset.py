@@ -484,7 +484,7 @@ class RFDh5(torchvision.datasets.VisionDataset):
             imgs, lbls = self.partitions_dict[par_idx][0]
         img = torch.Tensor(imgs[rel_idx]/255.0) #rescaling the uint8
         img = img.permute(2,0,1) # from (H,W,C) to (C, H, W)
-        lbl = torch.Tensor(lbls[rel_idx])
+        lbl = torch.from_numpy(lbls[rel_idx]) #labels are integers
         # both the above are numpy arrays
         # so they need to be cast to torch tensors
         #Note: no rescaling needed as the imgs have already been
