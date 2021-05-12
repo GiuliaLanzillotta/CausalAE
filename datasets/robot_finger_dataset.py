@@ -431,6 +431,10 @@ class RFDh5(torchvision.datasets.VisionDataset):
         if not self.real: self.partitions_dict = self.init_partitions() #open the partitions files
         else: self.real_set = self.read_real_images_and_labels()
 
+    def close_all(self):
+        #TODO: use this when finished
+        pass
+
 
     def read_real_images_and_labels(self):
         """ Loading function only for real test dataset images"""
@@ -448,7 +452,6 @@ class RFDh5(torchvision.datasets.VisionDataset):
     def get_relative_index(self, index):
         """ Given absolute index it returns the partition index and the
         relative index inside the partition
-        #TODO: test
         #TODO: make it work for multiple indices"""
         len_per_file = self.partitions_dict[0][1]
         partition_idx = index//len_per_file
@@ -460,19 +463,22 @@ class RFDh5(torchvision.datasets.VisionDataset):
 
     def open_partition(self, number):
         filename = f"RFD_{self.set_name}_{number}.h5"
-        with h5py.File(self.processed_folder + filename, 'r') as f:
-            images = f['images']
-            labels = f['labels']
+        f = h5py.File(self.processed_folder + filename, 'r')
+        images = f['images']
+        labels = f['labels']
         length = images.shape[0]
         return (images, labels), length
 
     def __getitem__(self, index: int) -> Any:
-        if self.real: imgs, lbls = self.real_set
+        if self.real:
+            imgs, lbls = self.real_set
+            rel_idx = index
         else:
             par_idx, rel_idx = self.get_relative_index(index)
             imgs, lbls = self.partitions_dict[par_idx][0]
-        img = torch.Tensor(imgs[index])
-        lbl = torch.Tensor(lbls[index])
+        img = torch.Tensor(imgs[rel_idx])
+        if self.real: img = img.permute(2,0,1)
+        lbl = torch.Tensor(lbls[rel_idx])
         # both the above are numpy arrays
         # so they need to be cast to torch tensors
         #Note: no rescaling needed as the imgs have already been
@@ -520,7 +526,7 @@ class RFDh5(torchvision.datasets.VisionDataset):
 
     @property
     def processed_folder(self) -> str:
-        return self.root + 'RFD/processed'
+        return self.root + 'RFD/processed/'
 
 
 
