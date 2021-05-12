@@ -417,7 +417,7 @@ class RFDh5(torchvision.datasets.VisionDataset):
     """ Implementing RA dataset for RFD based on .h5 storage"""
     shape = (3, 128,128)
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
-    raw_files = [8, 2, 2] #TODO: see here
+    raw_files = [8, 2, 1] #train, test, heldout_test files
 
     def __init__(self,
                  root: str,

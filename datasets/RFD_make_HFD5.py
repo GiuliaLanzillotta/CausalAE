@@ -13,4 +13,4 @@ if __name__ == '__main__':
     toHDF5_heldout = RFDtoHDF5(read_root='./robot_finger_datasets/',
                                save_root='./robot_finger_datasets/',
                                chunksize=32, heldout_colors=True)
-    toHDF5_heldout(overwrite=True, num_files=2)
+    toHDF5_heldout(overwrite=True, num_files=1)
