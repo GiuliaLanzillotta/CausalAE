@@ -143,6 +143,7 @@ class RFDIterable(IterableDataset):
                      images_path:str,
                      transform: Optional[Callable] = None,
                      target_transform: Optional[Callable] = None,
+                     shuffle:bool=True,
                      name:str="RFD_std"):
             super().__init__()
             self.path = images_path
@@ -150,6 +151,7 @@ class RFDIterable(IterableDataset):
             self.labels = labels
             self.transform = transform
             self.target_transform = target_transform
+            self.shuffle = shuffle
             self.name = name
 
         def __next__(self) -> Tuple:
@@ -158,7 +160,7 @@ class RFDIterable(IterableDataset):
                 # iterator is finished, starting again
                 print(self.name)
                 print("Reached the end of iterator: rolling it back to beginning.")
-                self.images_iterator = RFDIterable.initialise_web_dataset(self.path)
+                self.images_iterator = RFDIterable.initialise_web_dataset(self.path, self.shuffle)
                 next_item = next(self.images_iterator)
             next_idx, next_image = next_item
             next_label = torch.tensor(self.labels[int(next_idx)], requires_grad=False)
@@ -210,7 +212,8 @@ class RFDIterable(IterableDataset):
                  heldout_colors: bool =False,
                  real: bool=False,
                  transform: Optional[Callable] = None,
-                 target_transform: Optional[Callable] = None) -> None:
+                 target_transform: Optional[Callable] = None,
+                 shuffle: bool = True) -> None:
         """ Can load one of 3 datasets available:
         - the standard dataset
         - the heldout_colors test set
@@ -223,6 +226,7 @@ class RFDIterable(IterableDataset):
         self.heldout_test = heldout_colors
         self.real_test = real
         self.origin_folder = self.raw_subfolders[0]
+        self.shuffle = shuffle
         print("===== Reading files =====")
         images, labels = self.load_files() # this call will create the class variable 'tar_path'
 
@@ -230,15 +234,15 @@ class RFDIterable(IterableDataset):
                                                             target_transform, name="TEST RFD")
         else: self.iterator = self.RFD_standard_iterator(images, labels, self.tar_path,
                                                          transform, target_transform,
+                                                         shuffle=shuffle,
                                                          name="TRAIN RFD" if not self.heldout_test else "VALID RFD")
-
         print(self)
 
     @staticmethod
-    def initialise_web_dataset(path):
-        itr = iter((wds.Dataset(path).decode("pil")
-                    .map(lambda tup: (tup["__key__"].split("/")[-1], tup["png"]))  # e.g. (00012, PIL_IMAGE-png format)
-                    .shuffle(10000))) # shuffling blocks of 1k images and pre-batching
+    def initialise_web_dataset(path, shuffle):
+        dataset = wds.Dataset(path).decode("pil").map(lambda tup: (tup["__key__"].split("/")[-1], tup["png"])) # e.g. (00012, PIL_IMAGE-png format)
+        if shuffle: dataset = dataset.shuffle(10000) # shuffling blocks of 1k images and pre-batching
+        itr = iter(dataset)
         return itr
 
 
@@ -256,7 +260,7 @@ class RFDIterable(IterableDataset):
             images = np.load(path, allow_pickle=True)["images"]
         else:
             self.tar_path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_images.tar"
-            images = self.initialise_web_dataset(self.tar_path)
+            images = self.initialise_web_dataset(self.tar_path, self.shuffle)
         # loading labels
         path = self.raw_folder+"/"+raw_folder+"/"+raw_folder+"_labels.npz"
         labels = np.load(path, allow_pickle=True)["labels"]
@@ -326,7 +330,7 @@ class RFDtoHDF5(object):
         def PILtoNumpy(img):
             return np.asarray(img)
         transform = torchvision.transforms.Lambda(PILtoNumpy)
-        _set = RFDIterable(self.read_root, heldout_colors=self.heldout, transform=transform) #in torch tensor format
+        _set = RFDIterable(self.read_root, heldout_colors=self.heldout, transform=transform, shuffle=False) #in torch tensor format
         self.loader = DataLoader(_set, batch_size=self.chunksize, shuffle=False)
 
     @property
@@ -432,6 +436,7 @@ class RFDh5(torchvision.datasets.VisionDataset):
         self.real = real
         self.transform = transform
         self.target_transform = target_transform
+        self.labels = None # to use for interventions
         print("====== Opening RFD Dataset ======")
         self.info = self.read_info()
         if not self.real: self.partitions_dict = self.init_partitions() #open the partitions files
@@ -446,7 +451,20 @@ class RFDh5(torchvision.datasets.VisionDataset):
         """ Loading function only for real test dataset images"""
         images = np.load(self.raw_folder+"_images.npz", allow_pickle=True)["images"]
         labels = np.load(self.raw_folder+"_labels.npz", allow_pickle=True)["labels"]
+        self.labels = labels
         return (images, labels)
+
+    def get_labels(self):
+        """ merge all the labels in a single numpy array so as to
+        be able to uniquely identify the index of the item given the index of the label"""
+        if self.labels is not None: return self.labels
+        # not real set -> need to go through the partitions
+        _labels = []
+        for _, part in self.partitions_dict.items():
+            _labels.append(part[0][1])
+        self.labels = np.concatenate(_labels, axis=0)
+        return self.labels
+
 
     def init_partitions(self):
         """Initialising the .h5 files and their order.
@@ -487,8 +505,6 @@ class RFDh5(torchvision.datasets.VisionDataset):
         lbl = torch.from_numpy(lbls[rel_idx]) #labels are integers
         # both the above are numpy arrays
         # so they need to be cast to torch tensors
-        #Note: no rescaling needed as the imgs have already been
-        # processed by the ToTensor transformation.
         if self.transform is not None:
             img = self.transform(img)
         if self.target_transform is not None:
