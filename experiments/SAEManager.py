@@ -23,11 +23,8 @@ class SAEXperiment(BaseExperiment):
         dim_in =  loader.data_shape # C, H, W
         model = SAE(params["model_params"], dim_in)
         super(SAEXperiment, self).__init__(params, model, loader)
-        self.burn_in = params["opt_params"]["auto_steps"]
-        if self.burn_in<=self.global_step:self.model.mode="hybrid"
 
     def training_step(self, batch, batch_idx):
-        if self.global_step==self.burn_in: self.model.mode="hybrid"
         input_imgs, labels = batch
         X_hat = self.forward(input_imgs)
         BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging

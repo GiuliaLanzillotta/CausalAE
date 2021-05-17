@@ -20,22 +20,23 @@ class VAE(nn.Module, GenerativeAE):
             else DittadiConvNet(self.latent_size)
         self.conv_net = conv_net
         if not self.dittadi_v:
-            self.fc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
+            self.fc_enc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
+            self.fc_dec = FCBlock(self.latent_size, [64, 128, 256], act_switch(params["act"]))
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
-        self.upsmpld_conv_net = UpsampledConvNet((self.latent_size, 1, 1), self.dim_in,
-                                                 depth=params["dec_depth"], **params) if not self.dittadi_v \
-            else DittadiUpsampledConv(self.latent_size)
+        self.upsmpld_conv_net = UpsampledConvNet((64, 2, 2), self.dim_in, depth=params["dec_depth"], **params) \
+            if not self.dittadi_v else DittadiUpsampledConv(self.latent_size)
         self.act = nn.Sigmoid()
 
 
     def encode(self, inputs: Tensor):
         conv_result = self.conv_net(inputs)
-        if not self.dittadi_v: codes = self.fc(conv_result)
+        if not self.dittadi_v: codes = self.fc_enc(conv_result)
         else: codes = conv_result
         z, logvar, mu = self.gaussian_latent(codes)
         return [z, mu, logvar]
 
     def decode(self, noise: Tensor, activate:bool) -> Tensor:
+        if not self.dittadi_v: noise = self.fc_dec(noise)
         upsmpld_res = self.upsmpld_conv_net(noise)
         if activate: upsmpld_res = self.act(upsmpld_res)
         return upsmpld_res

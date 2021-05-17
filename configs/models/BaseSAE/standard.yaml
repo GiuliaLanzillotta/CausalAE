@@ -11,4 +11,3 @@ model_params:
   channels: 64
 
 opt_params:
-  auto_steps: 0

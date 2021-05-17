@@ -437,7 +437,8 @@ class RFDh5(torchvision.datasets.VisionDataset):
         self.transform = transform
         self.target_transform = target_transform
         self.labels = None # to use for interventions
-        print("====== Opening RFD Dataset ======")
+        self.size = None
+        print(f"====== Opening RFD Dataset - {self.set_name} ======")
         self.info = self.read_info()
         if not self.real: self.partitions_dict = self.init_partitions() #open the partitions files
         else: self.real_set = self.read_real_images_and_labels()

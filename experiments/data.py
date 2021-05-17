@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA, FashionMNIST
 import matplotlib.pyplot as plt
-from datasets import RFD, Shapes3d, RFDIterable, AdditiveNoise
+from datasets import RFD, Shapes3d, RFDIterable, AdditiveNoise, RFDh5
 import numpy as np
 import torch
 import os
@@ -181,35 +181,57 @@ class DatasetLoader:
                                                                            generator=torch.Generator().manual_seed(42))
             already_split = True
 
+        elif args["dataset_name"] == 'RFDh5': #new dataset: https://arxiv.org/pdf/2010.14407.pdf - h5 version
+            transform = None
+            if args["add_noise"]:
+                transform = AdditiveNoise()
+            data_folder = './datasets/robot_finger_datasets/'
+            train_set = RFDh5(data_folder, transform=transform)
+            test_set = RFDh5(data_folder, test=True, transform=transform)
+            heldout_set = RFDh5(data_folder, heldout_colors=True, transform=transform)
+            real_set = RFD(data_folder, real=True, transform=transform)
+            # Note that these two additional test sets are only available with the RFD dataset
+            self.heldout_set = DataLoader(heldout_set,
+                                          batch_size=args["test_batch_size"],
+                                          shuffle=False)
+            self.real_set = DataLoader(real_set,
+                                       batch_size=args["test_batch_size"],
+                                       shuffle=False)
+
         else:
             raise RuntimeError("Unrecognized data set '{}'".format(
                 args.dataset_name))
 
         if not already_split:
-            tot_train = train_set.data.shape[0]
+            try:
+                tot_train = train_set.data.shape[0]
+                tot_test = test_set.data.shape[0]
+            except AttributeError:
+                tot_train = len(train_set)
+                tot_test = len(test_set)
             train_num = int(0.7*tot_train)
             val_num = tot_train-train_num
             train_set, valid_set = torch.utils.data.random_split(train_set,
                                                                  lengths=[train_num, val_num],
                                                                  generator=torch.Generator().manual_seed(42))
-            self.num_samples = tot_train + test_set.data.shape[0]
+            self.num_samples = tot_train + tot_test
 
         self.train = DataLoader(train_set,
                                 batch_size=args["batch_size"],
-                                shuffle=False,
+                                shuffle=True,
                                 num_workers=args["num_workers"])
         self.val = DataLoader(valid_set,
                               batch_size=args["batch_size"],
-                              shuffle=False,
+                              shuffle=True,
                               num_workers=args["num_workers"])
         self.test = DataLoader(test_set,
                                batch_size=args["test_batch_size"],
-                               shuffle=False,
+                               shuffle=False, #it is best practice to turn shuffling off for validation and test dataloaders.
                                num_workers=args["num_workers"])
 
 
-        #TODO: this iter call affects the test iterator
-        self.data_shape = self.test.__iter__().__next__()[0].shape[1:]
+        #TODO: check this does not affect test set
+        self.data_shape = next(iter(self.test))[0].shape[1:]
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]
 

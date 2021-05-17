@@ -181,7 +181,7 @@ class ConvNet(nn.Module):
         assert all(v>0 for v in self.final_shape), "Input not big enough for the convolutions requested"
         flat_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
-        modules.append(nn.LayerNorm(flat_dim)) # idea taken by Dittadi et al. -should help in training
+        modules.append(nn.LayerNorm(flat_dim)) # idea taken by Dittadi et al. -should help in training with residual connections
         if flat_dim!=self.final_shape: # re-adjusting the shape
             modules.append(FCBlock(flat_dim, [final_dim], Mish))
         self.net = nn.Sequential(*modules)
@@ -360,7 +360,8 @@ class HybridLayer(nn.Module):
     def update_prior(self, latent_vectors):
         # TODO: make initialisation incremental (store an incremental pool
         #  over different batches and sample from that)
-        pass
+        if self.prior is None:
+            self.initialise_prior(latent_vectors)
 
     def sample_from_prior(self, input_shape):
         # splitting the prior latent vectors into chunks (one for each noise dimension)
@@ -570,20 +571,15 @@ class SCMDecoder(nn.Module):
         self.str_trf_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
         self.conv_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
-    def forward(self, x, z, mode="auto"):
+    def forward(self, x, z):
         """ Implements forward pass with 2 possible modes:
         - auto: no hybrid sampling (only the convolution)
         - hybrid: hybrid sampling included """
-        if mode=="auto":
-            for conv in self.conv_modules:
-                x = conv(x)
-        elif mode=="hybrid":
-            for l in range(self.depth):
-                if l<self.hierarchy_depth:
-                    z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
-                    x = self.str_trf_modules[l](x, z_i)
-                x = self.conv_modules[l](x)
-        else: raise NotImplementedError("Unknown specified forward mode for SCM")
+        for l in range(self.depth):
+            if l<self.hierarchy_depth:
+                z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
+                x = self.str_trf_modules[l](x, z_i)
+            x = self.conv_modules[l](x)
         outputs = self.shape_adjusting_block(x)
         return outputs
 

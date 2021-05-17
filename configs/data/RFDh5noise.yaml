@@ -1,0 +1,4 @@
+dataset_name: RFDh5
+num_workers: 0 # if try to multiprocess get error: .h5 objects cannot be pickled
+batch_size: 32
+add_noise: True

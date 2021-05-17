@@ -17,7 +17,7 @@ class ModelVisualiser(object):
         self.name = name+"_"+version
         self.save_path = str.join("/",[".", kwargs.get("save_dir"), name, version])
         os.makedirs(self.save_path, exist_ok=True)
-        self.test_input, _ = iter(test_dataloader).__next__()
+        self.test_input, _ = next(iter(test_dataloader))
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 

@@ -15,59 +15,61 @@ class SAE(nn.Module, GenerativeAE):
         self.unit_dim = params["unit_dim"]
         self.N = params["latent_vecs"] # number of latent vectors to store for hybrid sampling
         self.dim_in = dim_in # C, H, W
-        self.mode="auto"
         # Building encoder
 
-        conv_net = ConvNet(dim_in, self.latent_size, depth=params["enc_depth"], **params)
-        self.conv_net = conv_net # returns vector of latent_dim size
+        conv_net = ConvNet(dim_in, 512, depth=params["enc_depth"], **params)
+        fc_net = FCBlock(512, [512, 256, 128, self.latent_size], act_switch(params.get("act")))
+        self.encoder = nn.Sequential(conv_net, fc_net) # returns vector of latent_dim size
         # hybrid sampling to get the noise vector
         self.hybrid_layer = HybridLayer(self.latent_size, self.unit_dim, self.N)
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
-        self.decoder_initial_shape = (self.latent_size, 1, 1)
+        self.decoder_initial_shape = (128, 2, 2)
+        self.dec_init = FCBlock(self.latent_size, [128, 256, 512, 512], act_switch(params.get("act")))
         self.scm = SCMDecoder(self.decoder_initial_shape, dim_in, depth=params["dec_depth"],**params)
         self.act = nn.Sigmoid()
 
 
     def encode(self, inputs: Tensor):
-        codes = self.conv_net(inputs)
+        codes = self.encoder(inputs)
         return codes
-
-    def sample_noise(self, codes:Tensor):
-        noise = self.hybrid_layer(codes).to(codes.device)
-        return noise
 
     def sample_noise_from_prior(self, num_samples:int):
         return self.hybrid_layer.sample_from_prior((num_samples,))
 
     def sample_noise_from_posterior(self, inputs: Tensor):
         codes = self.encode(inputs)
-        return self.sample_noise(codes)
+        noise = self.hybrid_layer(codes).to(codes.device)
+        return noise
 
     def decode(self, noise:Tensor, activate:bool):
-        if self.mode=="auto": x = noise
-        else: x = torch.ones(size = (noise.shape[0],)+self.decoder_initial_shape).to(noise.device)
-        output = self.scm(x, noise, mode=self.mode)
+        # feeding a constant signal into the decoder
+        # the output will be built on top of this constant trough the StrTrf layers
+        x = torch.ones(size = noise.shape).to(noise.device) # batch x latent
+        # passing x through the linear layers does not make much sense:
+        # since x is a constant we're always going to get the same output
+        x = self.dec_init(x).view((-1, )+self.decoder_initial_shape) # batch x 512
+        output = self.scm(x, noise)
         if activate: output = self.act(output)
         return output
 
     def generate(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
-        return self.forward(x, activate)
+        return self.forward(x, activate, update_prior=True)
 
-    def forward(self, inputs: Tensor, activate:bool=False) -> Tensor:
-        inputs = inputs.view((-1, )+self.dim_in)
+    def forward(self, inputs: Tensor, activate:bool=False, update_prior:bool=False) -> Tensor:
+        inputs = inputs.view((-1, )+self.dim_in) # just making sure
         codes = self.encode(inputs)
-        # normal autoencoder mode (no noise)
-        if self.mode=="auto": noise = codes.view((-1,)+self.decoder_initial_shape) #TODO: not working: 2D instead of 3D output
-        elif self.mode=="hybrid": noise = self.sample_noise(codes)
-        else: raise NotImplementedError
-        output = self.decode(noise, activate)
+        if update_prior: self.hybrid_layer.update_prior(codes)
+        output = self.decode(codes, activate)
         return  output
 
     def loss_function(self, *args):
         X_hat = args[0]
         X = args[1]
-        MSE = F.mse_loss(self.act(X_hat), X, reduction="mean")
-        BCE = F.binary_cross_entropy_with_logits(X_hat, X, reduction="mean")
+        # mean over batch of the sum over all other dimensions
+        MSE = torch.sum(F.mse_loss(X_hat, X, reduction="none"),
+                        tuple(range(X_hat.dim()))[1:]).mean()
+        BCE = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
+                        tuple(range(X_hat.dim()))[1:]).mean()
         return BCE, MSE
