@@ -9,3 +9,4 @@ vis
 datasets/Shapes3d
 datasets/FashionMNIST
 datasets/celeba
+*/.ipynb_checkpoints/

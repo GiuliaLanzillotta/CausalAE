@@ -1,0 +1,26 @@
+model_params:
+  name: 'BaseSAE'
+  latent_vecs: 128 # for hybrid sampling
+  residual: True
+  latent_size: 6
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
+  pool_every: 2
+  unit_dim: 1
+  norm: 'batch'
+  channels: 32
+
+
+trainer_params:
+  val_check_interval: 2
+  #check validation every 2 steps
+  # the dummy model should be a test tool
+
+
+logging_params:
+  score_every: 1000
+
+
+vis_params:
+  plot_every: 1
+

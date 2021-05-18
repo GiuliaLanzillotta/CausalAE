@@ -20,8 +20,6 @@ class BaseExperiment(pl.LightningModule):
         self.loader = loader
         self.model = model
         self.visualiser = ModelVisualiser(self.model,
-                                          params["logging_params"]["name"],
-                                          params["logging_params"]["version"],
                                           self.loader.test,
                                           **params["vis_params"])
         self._fidscorer = FIDScorer()
@@ -36,13 +34,14 @@ class BaseExperiment(pl.LightningModule):
         return self.model(inputs, **kwargs)
 
     def validation_epoch_end(self, outputs):
+        # Logging hyperparameters
         # Visualisation
         if self.num_val_steps%self.plot_every==0 or \
                 self.global_step==self.params["trainer_params"]["max_steps"]:
-            self.visualiser.plot_reconstructions(self.global_step, device=self.device)
-            try: self.visualiser.plot_samples_from_prior(self.global_step, device=self.device)
+            self.visualiser.plot_reconstructions(self.logger.experiment[0], self.global_step, device=self.device)
+            try: self.visualiser.plot_samples_from_prior(self.logger.experiment[0], self.global_step, device=self.device)
             except ValueError:pass #no prior samples stored yet
-            self.visualiser.plot_latent_traversals(self.global_step, device=self.device)
+            self.visualiser.plot_latent_traversals(self.logger.experiment[0], self.global_step, device=self.device)
         # Scoring val performance
         if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
             # compute and store the fid scoring
@@ -52,10 +51,10 @@ class BaseExperiment(pl.LightningModule):
         self.num_val_steps+=1
 
     def test_step_end(self, outputs):
-        self.visualiser.plot_reconstructions(device=self.device)
-        try: self.visualiser.plot_samples_from_prior(device=self.device)
+        self.visualiser.plot_reconstructions(self.logger.experiment[0], device=self.device)
+        try: self.visualiser.plot_samples_from_prior(self.logger.experiment[0], device=self.device)
         except ValueError:pass #no prior samples stored yet
-        self.visualiser.plot_latent_traversals(device=self.device)
+        self.visualiser.plot_latent_traversals(self.logger.experiment[0], device=self.device)
         fid_score = self._fidscorer.calculate_fid()
         self.log("FID", fid_score, prog_bar=True)
 

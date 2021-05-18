@@ -6,58 +6,52 @@ from torchvision import utils as tvu
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 from models import GenerativeAE
+import torchvision
 import itertools
 
 class ModelVisualiser(object):
     """ Takes a trained model and an output directory and produces visualisations for
     the given model there. """
-    def __init__(self, model:GenerativeAE, name, version, test_dataloader, **kwargs):
+    def __init__(self, model:GenerativeAE,test_dataloader, **kwargs):
         super(ModelVisualiser, self).__init__()
         self.model = model
-        self.name = name+"_"+version
-        self.save_path = str.join("/",[".", kwargs.get("save_dir"), name, version])
-        os.makedirs(self.save_path, exist_ok=True)
         self.test_input, _ = next(iter(test_dataloader))
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
-    def plot_reconstructions(self, global_step:int=None, grid_size:int=12, device=None):
+    def plot_reconstructions(self, logger, global_step:int=None, grid_size:int=12, device=None, figsize=(12,12)):
         """ plots reconstructions from test set samples"""
         num_plots = grid_size**2
         test_sample = self.test_input[:num_plots]
         with torch.no_grad():
             recons = self.model.generate(test_sample.to(device), activate=True)
-        file_name = "reconstructions"
-        if global_step is not None: file_name+="_"+str(global_step)
-        tvu.save_image(recons.data,
-                       fp= f"{self.save_path}/{file_name}.png",
-                       normalize=True,
-                       nrow=grid_size) # plot a square grid
+        grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+        logger.add_figure("reconstructions", figure, global_step=global_step)
         if global_step is not None and global_step==0: # print the originals
-            tvu.save_image(test_sample,
-                           fp= f"{self.save_path}/originals.png",
-                           normalize=True,
-                           nrow=grid_size) # plot a square grid
+            grid_originals = torchvision.utils.make_grid(test_sample, nrow=grid_size)
+            figure = plt.figure(figsize=figsize)
+            plt.imshow(grid_originals.permute(1, 2, 0).cpu().numpy())
+            logger.add_figure("originals", figure)
         # clean
         del recons
 
-    def plot_samples_from_prior(self, global_step:int=None, grid_size:int=12, device=None):
+    def plot_samples_from_prior(self, logger, global_step:int=None, grid_size:int=12, device=None, figsize=(12,12)):
         """ samples from latent prior and plots reconstructions"""
         num_pics = grid_size**2 # square grid
         with torch.no_grad():
             random_codes = self.model.sample_noise_from_prior(num_pics) #sampling logic here
         recons = self.model.decode(random_codes.to(device), activate=True)
-        file_name = "prior_samples"
-        if global_step is not None: file_name+="_"+str(global_step)
-        tvu.save_image(recons.data,
-                       fp= f"{self.save_path}/{file_name}.png",
-                       normalize=True,
-                       nrow=grid_size) # plot a square grid
+        grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+        logger.add_figure("prior_samples", figure, global_step=global_step)
         # clean
         del random_codes, recons
 
-    def plot_latent_traversals(self, global_step:int=None, num_samples:int=1,
-                               steps:int=10, device=None):
+    def plot_latent_traversals(self, logger, global_step:int=None, num_samples:int=1,
+                               steps:int=10, device=None, figsize=(12,12)):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
@@ -75,13 +69,12 @@ class ModelVisualiser(object):
             random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
             with torch.no_grad():
                 recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device), activate=True) # (stepsxM) images
-            file_name = "traversals_{}_{}".format(global_step,idx) if global_step is not None else "traversals_{}"
-            tvu.save_image(recons.data,
-                           fp= f"{self.save_path}/{file_name}.png",
-                           normalize=True,
-                           nrow=steps) # steps x M grid
+            grid_recons = torchvision.utils.make_grid(recons, nrow=steps)
+            figure = plt.figure(figsize=figsize)
+            plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+            logger.add_figure("traversals", figure, global_step=global_step)
 
-    def plot_training_gradients(self, global_step:int=None):
+    def plot_training_gradients(self, logger, global_step:int=None, figsize=(12,12)):
         '''Plots the gradients flowing through different layers in the net during training.
         Can be used for checking for possible gradient vanishing / exploding problems.
 
@@ -99,6 +92,7 @@ class ModelVisualiser(object):
                 except AttributeError:
                     print(n+" has no gradient. Skipping")
                     continue
+        figure = plt.figure(figsize=figsize)
         plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
         plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
         plt.plot(ave_grads, alpha=0.3, color="b")
@@ -116,6 +110,4 @@ class ModelVisualiser(object):
         plt.legend([Line2D([0], [0], color="c", lw=4),
                     Line2D([0], [0], color="b", lw=4),
                     Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
-        pic_name = "gradient"
-        if global_step is not None: pic_name+="_"+str(global_step)
-        plt.savefig(f"{self.save_path}/{pic_name}.png", dpi=200)
+        logger.add_figure("gradient", figure, global_step=global_step)

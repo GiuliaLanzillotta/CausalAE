@@ -33,7 +33,7 @@ class SAEXperiment(BaseExperiment):
             self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
             self.log('step', self.global_step, prog_bar=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            self.visualiser.plot_training_gradients(self.global_step)
+            self.visualiser.plot_training_gradients(self.logger.experiment[0], self.global_step)
         return BCE
 
     def score_FID(self, batch_idx, inputs, results):
@@ -41,7 +41,9 @@ class SAEXperiment(BaseExperiment):
             self._fidscorer.start_new_scoring(self.params['data_params']['batch_size']*self.num_FID_steps,device=self.device)
         if  batch_idx<=self.num_FID_steps:#only one every 50 batches is included to avoid memory issues
             try: self._fidscorer.get_activations(inputs, self.model.act(results)) #store activations for current batch
-            except Exception as e: print("Reached the end of FID scorer buffer")
+            except Exception as e:
+                print(e)
+                print("Reached the end of FID scorer buffer")
 
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch

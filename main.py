@@ -134,12 +134,12 @@ if __name__ == '__main__':
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="RFDh5")
+                        default="MNIST")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="v12_auto")
+                        default="dummy")
     parser.add_argument('--test', '-e', #Note that when testing is switched on then training is switched off
                         dest="test",
                         metavar="TEST",
