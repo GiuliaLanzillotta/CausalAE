@@ -28,12 +28,10 @@ class SAEXperiment(BaseExperiment):
         input_imgs, labels = batch
         X_hat = self.forward(input_imgs)
         BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
-        if self.global_step%self.log_every==0:
-            self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
-            self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
-            self.log('step', self.global_step, prog_bar=True)
+        self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            self.visualiser.plot_training_gradients(self.logger.experiment[0], self.global_step)
+            self.visualiser.plot_training_gradients(self.logger.experiment, self.global_step)
         return BCE
 
     def score_FID(self, batch_idx, inputs, results):
@@ -49,10 +47,9 @@ class SAEXperiment(BaseExperiment):
         input_imgs, labels = batch
         X_hat = self.forward(input_imgs)
         BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
-        if self.global_step%self.log_every==0:
-            self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
-            self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
-            self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
             self.score_FID(batch_idx, input_imgs, X_hat)
         return BCE

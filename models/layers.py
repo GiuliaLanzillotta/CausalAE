@@ -108,7 +108,7 @@ class ResidualConvBlock(PoolingConvBlock):
         if self.scaling: self.scalar = nn.Parameter(torch.zeros(1), requires_grad = True)
 
 
-def forward(self, inputs:Tensor):
+    def forward(self, inputs:Tensor):
         for i, lyr in enumerate(self.block.modules()):
             if i<2: pass #skip first two modules, which are the "containers" of the layers
             elif i==2: # residual convolution block
@@ -171,7 +171,7 @@ class ConvNet(nn.Module):
             reduce=l%pool_every==0
             if l==1: k=3 # only first layer with kernel=5
             modules.append(PoolingConvBlock(C, c, h, k, 1, 8, pool=reduce, act=act, norm=norm) if (not residual) or (l in [0,depth-1]) # changing num channels here
-                           else ResidualConvBlock(C, h, k, 1, 8, pool=reduce, act=act, norm=norm))
+                           else ResidualConvBlock(C, h, k, 1, 8, pool=reduce, act=act, norm=norm, scaling=True))
             h = h//2 if reduce else h
             k = min(h,k)
             C = c

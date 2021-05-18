@@ -21,6 +21,7 @@ from ray.tune.integration.pytorch_lightning import TuneReportCallback
 from ray import tune
 import ray
 
+from pathlib import Path
 
 
 
@@ -31,33 +32,27 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
                                   name=config['logging_params']['name'],
                                   version=config['logging_params']['version'],
                                   log_graph=False)
-    csv_logger = CSVLogger(save_dir=config['logging_params']['save_dir'],
-                           name=config['logging_params']['name'],
-                           version=config['logging_params']['version'])
 
     # For reproducibility
     torch.manual_seed(config['logging_params']['manual_seed'])
     np.random.seed(config['logging_params']['manual_seed'])
     pytorch_lightning.utilities.seed.seed_everything(config['logging_params']['manual_seed'])
 
+    # resuming from checkpoint
+    base_path = Path('.') / config['logging_params']['save_dir'] / config['logging_params']['name'] / config['logging_params']['version']
+    checkpoint_path =  base_path / "checkpoints/"
+    try:
+        latest_checkpoint = max(glob.glob(str(checkpoint_path) + "*ckpt"), key=os.path.getctime)
+    except ValueError: latest_checkpoint = None # no checkpoints to restore available
+
     # callbacks
-    callbacks = [ModelCheckpoint(monitor='val_loss', mode="min")]
+    callbacks = [ModelCheckpoint(monitor='val_loss', mode="min", dirpath=checkpoint_path)]
     metrics = {"loss":"ptl/val_loss"}
     #after each validation epoch we report the above metric to Ray Tune
     if tuning: callbacks.append(TuneReportCallback(metrics, on="validation_end"))
 
-    # resuming from checkpoint
-    base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             config['logging_params']['save_dir'],
-                             config['logging_params']['name'],
-                             config['logging_params']['version'])
-    checkpoint_path = os.path.join(base_path, "checkpoints/")
-    try:
-        latest_checkpoint = max(glob.glob(checkpoint_path + "*ckpt"), key=os.path.getctime)
-    except ValueError: latest_checkpoint = None # no checkpoints to restore available
-
     #save hyperparameters
-    hparams_path = os.path.join(base_path, "configs.yaml")
+    hparams_path = base_path / "configs.yaml"
     os.makedirs(base_path, exist_ok=True)
     if not os.path.exists(hparams_path):
         with open(hparams_path, 'w') as out:
@@ -70,7 +65,7 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
                      accelerator=None,#todo: look into this
                      gpus = 1,
                      auto_select_gpus=True, #select all the gpus available
-                     logger=[tb_logger, csv_logger],
+                     logger=tb_logger,
                      log_every_n_steps=50,
                      callbacks=callbacks,
                      progress_bar_refresh_rate=50,
@@ -90,7 +85,7 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
         # saving results to .json
         # resuming from checkpoint
         print("Testing finished. Saving results.")
-        test_path = os.path.join(base_path, "test_res.json")
+        test_path = base_path /"test_res.json"
         with open(test_path, 'w') as outfile:
             json.dump(test_res, outfile)
 
@@ -103,8 +98,7 @@ def do_tuning(config:dict):
         grace_period=10, # wait at least 10 epochs
         reduction_factor=2)
     reporter = CLIReporter(metric_columns=["loss", "training_iteration"]) #todo: check what we want to save in final table
-    path = os.path.join(config['logging_params']['save_dir'],
-                        config['logging_params']['name'],"tuner")
+    path = Path('.') / config['logging_params']['save_dir'] / config['logging_params']['name'] / "tuner"
     analysis = tune.run(
         tune.with_parameters(train_model, tuning=True),
         metric="loss",
@@ -114,7 +108,7 @@ def do_tuning(config:dict):
         num_samples=config['tuner_params']['num_samples'],
         scheduler=scheduler,
         progress_reporter=reporter)
-    analysis.results_df.to_csv(os.path.join(path,"tune_results.csv"))
+    analysis.results_df.to_csv( path / "tune_results.csv")
 
 if __name__ == '__main__':
 

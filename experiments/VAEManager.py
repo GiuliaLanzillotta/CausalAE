@@ -52,13 +52,11 @@ class VAEXperiment(BaseExperiment):
                                               KL_weight =  KL_weight)
         # Logging
 
-        if self.global_step%self.log_every==0:
-            self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
-            self.log_dict({key: val.item() for key, val in train_loss.items()})
-            self.log('step', self.global_step, prog_bar=True)
-            self.log('beta', KL_weight*self.model.beta, prog_bar=True)
+        self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
+        self.log_dict({key: val.item() for key, val in train_loss.items()})
+        self.log('beta', KL_weight*self.model.beta, prog_bar=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            self.visualiser.plot_training_gradients(self.logger.experiment[0], self.global_step)
+            self.visualiser.plot_training_gradients(self.logger.experiment, self.global_step)
 
         return train_loss["loss"]
 
@@ -78,9 +76,7 @@ class VAEXperiment(BaseExperiment):
         KL_weight = self.beta_scheduler(self.KL_weight, self.global_step)# decaying the KL term
         val_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = KL_weight)
         # Calling self.log will surface up scalars for you in TensorBoard
-        if self.global_step%self.log_every==0:
-            self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
-
+        self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
         if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0:
             self.score_FID(batch_idx, input_imgs, results)
         return val_loss
