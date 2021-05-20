@@ -42,7 +42,7 @@ class ModelVisualiser(object):
         num_pics = grid_size**2 # square grid
         with torch.no_grad():
             random_codes = self.model.sample_noise_from_prior(num_pics) #sampling logic here
-        recons = self.model.decode(random_codes.to(device), activate=True)
+            recons = self.model.decode(random_codes.to(device), activate=True)
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())

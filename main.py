@@ -42,8 +42,11 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
     base_path = Path('.') / config['logging_params']['save_dir'] / config['logging_params']['name'] / config['logging_params']['version']
     checkpoint_path =  base_path / "checkpoints/"
     try:
-        latest_checkpoint = max(glob.glob(str(checkpoint_path) + "*ckpt"), key=os.path.getctime)
-    except ValueError: latest_checkpoint = None # no checkpoints to restore available
+        latest_checkpoint = max(glob.glob(str(checkpoint_path) + "*\ckpt"), key=os.path.getctime)
+        print("Loading latest checkpoint.")
+    except ValueError:
+        print(f"No checkpoint available at {checkpoint_path}. Training from scratch.")
+        latest_checkpoint = None # no checkpoints to restore available
 
     # callbacks
     callbacks = [ModelCheckpoint(monitor='val_loss', mode="min", dirpath=checkpoint_path)]
