@@ -19,6 +19,7 @@ trainer_params:
 
 logging_params:
   score_every: 1000
+  save_dir: "./logs/"
 
 
 vis_params:

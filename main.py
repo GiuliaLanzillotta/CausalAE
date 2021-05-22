@@ -39,7 +39,7 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
     pytorch_lightning.utilities.seed.seed_everything(config['logging_params']['manual_seed'])
 
     # resuming from checkpoint
-    base_path = Path('.') / config['logging_params']['save_dir'] / config['logging_params']['name'] / config['logging_params']['version']
+    base_path = Path(config['logging_params']['save_dir']) / config['logging_params']['name'] / config['logging_params']['version']
     checkpoint_path =  base_path / "checkpoints/"
     try:
         latest_checkpoint = max(glob.glob(str(checkpoint_path) + "/*ckpt"), key=os.path.getctime)
