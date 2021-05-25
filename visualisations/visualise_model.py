@@ -50,29 +50,56 @@ class ModelVisualiser(object):
         # clean
         del random_codes, recons
 
-    def plot_latent_traversals(self, logger, global_step:int=None, num_samples:int=1,
-                               steps:int=10, device=None, figsize=(12,12)):
+    def plot_latent_traversals(self, logger, global_step:int=None, steps:int=10, device=None, figsize=(12,12)):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
-        for idx in np.random.randint(0,self.test_input.shape[0],num_samples): # for each sample
-            test_sample= self.test_input[idx]
+        test_sample= self.test_input[11] #I like the number 11
+        with torch.no_grad():
+            code = self.model.encode(test_sample.unsqueeze(0).to(device))
+        try: code = code[1] # if the output is a list extract the second element (VAE case)
+        except: pass
+        latent_vector = code.data.cpu().numpy()
+        #TODO: more flexibility here (allow a selection of dimensions and a different values grid)
+        dimensions = np.arange(latent_vector.shape[1])
+        values = np.linspace(-1., 1., num=steps)
+        traversals = self.do_latent_traversals_multi_dim(latent_vector, dimensions, values, device=device)
+        grid_traversals = torchvision.utils.make_grid(traversals, nrow=steps)
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(grid_traversals.permute(1, 2, 0).cpu().numpy())
+        logger.add_figure("traversals", figure, global_step=global_step)
+
+    def do_latent_traversals_multi_dim(self, latent_vector, dimensions, values, device=None):
+        """ Creates a tensor where each element is obtained by passing a
+            modified version of latent_vector to the generato. For each
+            dimension of latent_vector the value is replaced by a range of
+            values, obtaining len(values) different elements.
+
+        latent_vector, dimensions, values are all numpy arrays
+        """
+
+        """
+        traversals = np.linspace(-3.0, 3.0, steps) #todo: make this grid more flexible
+        base = np.stack([latents]*steps).squeeze(1)
+        # for each latent dimension, change the code in that dimension while keeping the others fixed
+        vec_traversals = [list(np.hstack([base[:,:i], traversals.reshape(steps,1), base[:,i+1:]])) for i in range(latents.shape[1])]
+        random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
+        with torch.no_grad():
+            recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device), activate=True) # (stepsxM) images
+        """
+        num_values = len(values)
+        traversals = []
+        for dimension in dimensions:
+            # Creates num_values copy of the latent_vector along the first axis.
+            latent_traversal_vectors = np.tile(latent_vector, [num_values, 1])
+            # Intervenes in the latent space.
+            latent_traversal_vectors[:, dimension] = values
+            # Generate the batch of images
             with torch.no_grad():
-                codes = self.model.encode(test_sample.unsqueeze(0).to(device))
-            try: codes = codes[1] # if the output is a list extract the second element (VAE case)
-            except: pass
-            latents = codes.data.cpu().numpy()
-            traversals = np.linspace(-3.0, 3.0, steps) #todo: make this grid more flexible
-            base = np.stack([latents]*steps).squeeze(1)
-            # for each latent dimension, change the code in that dimension while keeping the others fixed
-            vec_traversals = [list(np.hstack([base[:,:i], traversals.reshape(steps,1), base[:,i+1:]])) for i in range(latents.shape[1])]
-            random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
-            with torch.no_grad():
-                recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device), activate=True) # (stepsxM) images
-            grid_recons = torchvision.utils.make_grid(recons, nrow=steps)
-            figure = plt.figure(figsize=figsize)
-            plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
-            logger.add_figure("traversals", figure, global_step=global_step)
+                images = self.model.decode(torch.tensor(latent_traversal_vectors, dtype=torch.float).to(device), activate=True)
+                # images has shape stepsx(image shape)
+            traversals.append(images)
+        return torch.vstack(traversals)
 
     def plot_training_gradients(self, logger, global_step:int=None, figsize=(12,12)):
         '''Plots the gradients flowing through different layers in the net during training.

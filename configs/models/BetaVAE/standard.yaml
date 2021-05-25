@@ -1,6 +1,6 @@
 model_params:
   name: 'BetaVAE'
-  beta: 6.0
+  beta: 4.0
   residual: True
   latent_size: 12
   enc_depth: 6 #number of convolutional layers in the encoder
