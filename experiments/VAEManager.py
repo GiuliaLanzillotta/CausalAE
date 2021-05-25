@@ -8,11 +8,9 @@ def cyclic_beta_schedule(initial_beta, iter_num):
     - iter_num: number of current iteration
     Idea taken from: https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/"""
     cycle_len = 10000 # 10k iterations to complete one cycle
-    increase_every = 100 #50 steps
-    slope = initial_beta/(cycle_len//(2*increase_every))
-    beta = slope*((iter_num%cycle_len)//increase_every)
-    beta = min(initial_beta, beta)
-    return beta
+    relative_iter = iter_num%cycle_len
+    weight = min(((2*relative_iter)/cycle_len),1.0) #half of the cycle constant at the maximum value
+    return initial_beta*weight
 
 def linear_determ_warmup(initial_beta, iter_num):
     """ Implements linear deterministich warm-up for beta to solve KL annealing problem
@@ -21,10 +19,8 @@ def linear_determ_warmup(initial_beta, iter_num):
     Taken from (Bowman et al.,2015; Sønderby et al., 2016)
     """
     warmup_time = 10000
-    increase_every = 100 #100 steps
-    slope = initial_beta/(warmup_time//increase_every)
-    beta = min(initial_beta, slope*(iter_num//increase_every))
-    return beta
+    weight = min((iter_num/warmup_time),1.0)
+    return weight*initial_beta
 
 scheduler_switch = {
     'cyclic':cyclic_beta_schedule,
