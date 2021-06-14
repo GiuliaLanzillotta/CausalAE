@@ -37,6 +37,7 @@ class Shapes3d(VisionDataset, DisentanglementDataset):
                          'orientation']
     _NUM_VALUES_PER_FACTOR = {'floor_hue': 10, 'wall_hue': 10, 'object_hue': 10,
                               'scale': 8, 'shape': 4, 'orientation': 15}
+    key_pad_len = 5
 
     def __init__(
             self,
@@ -95,7 +96,12 @@ class Shapes3d(VisionDataset, DisentanglementDataset):
             with open(fpath, 'rb') as f:
                 factors = pickle.load(f)
         else:
-            factors = {"".join(self.labels.astype(str)[i]):i for i in range(len(self))}
+            print("Creating factors dictionary.")
+            # 1. for each label
+            # 2. extract all the numbers
+            # 3. pad the numbers and convert to string
+            # 4. use result as dictionary key
+            factors = {self.convert_to_key(self.labels[i]): i for i in range(len(self))}
             with open(fpath, 'wb') as f:
                 pickle.dump(factors, f, pickle.HIGHEST_PROTOCOL)
 
@@ -163,20 +169,12 @@ class Shapes3d(VisionDataset, DisentanglementDataset):
         return len(self._FACTORS_IN_ORDER)
 
     @property
+    def factors_names(self):
+        return self._FACTORS_IN_ORDER
+
+    @property
     def factors_num_values(self):
         return self._NUM_VALUES_PER_FACTOR
-
-    def sample_observations_from_factors(self, factors):
-        """Factors : batch of labels - has to be numpy array.
-        Returns batch of corresponding images."""
-        n = factors.shape[0]
-        #For i in 1:n
-        # 1. transform factor to string to obtain dict key
-        # 2. get corresponding dict item = image index
-        # 3. get corresponding item from dataset
-        items = [self[self.factors["".join(factors.astype(str)[i])]] for i in range(n)]
-        #TODO: now we have a list of tensors: check the desired data type (probably tensor)
-        return items
 
 
     # methods for sampling unconditionally/conditionally on a given factor

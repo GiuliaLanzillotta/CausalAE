@@ -8,7 +8,7 @@ import torch
 import torchvision.datasets
 import webdataset as wds
 from PIL import Image
-import h5py
+import h5py, pickle
 import os
 from .utils import gen_bar_updater
 from torch.utils.data import IterableDataset, DataLoader
@@ -421,6 +421,9 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
     shape = (3, 128,128)
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
     raw_files = [8, 2, 1] #train, test, heldout_test files
+    factors_dict_file = 'factors.pkl'
+    key_pad_len = 5
+
 
     def __init__(self,
                  root: str,
@@ -441,11 +444,12 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
         self.info = self.read_info()
         if not self.real: self.partitions_dict = self.init_partitions() #open the partitions files
         else: self.real_set = self.read_real_images_and_labels()
+        # --------- load factors dictionary
+        self.factors = self.factorise()
 
     def close_all(self):
         #TODO: use this when finished to close all the hdf5 files opened
         pass
-
 
     def read_real_images_and_labels(self):
         """ Loading function only for real test dataset images"""
@@ -462,9 +466,40 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
         _labels = []
         for _, part in self.partitions_dict.items():
             _labels.append(part[0][1])
-        self.labels = np.concatenate(_labels, axis=0)
-        return self.labels
+        labels = np.concatenate(_labels, axis=0)
+        return labels
 
+    def factorise(self):
+        """ Creates the factors dictionary, i.e. a dictionary storing the index relative
+        to any factor combination. This is the core of sample_observations_from_factors."""
+        os.makedirs(self.processed_folder, exist_ok=True)
+        filename = self.factors_dict_file
+        fpath = str.join("/", [self.processed_folder, self.set_name+"_"+filename])
+        # --------- download source file
+        if self._check_factorised():
+            print("Factors dictionary already created. Proceed to reading.")
+            with open(fpath, 'rb') as f:
+                factors = pickle.load(f)
+        else:
+            print("Creating factors dictionary.")
+            all_labels = self.get_labels()
+            # 1. for each label
+            # 2. extract all the numbers
+            # 3. pad the numbers and convert to string
+            # 4. use result as dictionary key
+            factors = {"".join([format(number, self.key_pad) for number in self.labels[i]]):
+                           i for i in range(len(self))}
+            with open(fpath, 'wb') as f:
+                pickle.dump(factors, f, pickle.HIGHEST_PROTOCOL)
+
+        return factors
+
+
+    def _check_factorised(self):
+        """Checking the existence of the factors dictionary."""
+        filename = self.factors_dict_file
+        fpath = str.join("/", [self.processed_folder, self.set_name+"_"+filename])
+        return os.path.exists(fpath)
 
     def init_partitions(self):
         """Initialising the .h5 files and their order.
@@ -512,7 +547,6 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
         return img, lbl
 
     def __len__(self) -> int:
-        #TODO: see here too for the "batched" case
         if self.heldout or self.real: return self.size
         if not self.test: return int(self.size*0.8)
         # only test is remaining
@@ -523,19 +557,22 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
         # loading labels
         info = dict(np.load(self.raw_folder+"_info.npz", allow_pickle=True))
         self.size = info["dataset_size"].item()
-        #TODO: extract interesting properties from the info here
+        self.factor_order = list(info['factor_values'].item().keys())
+        self.factor_sizes = list(info['num_factor_values'])
+        self.factor_num_values = {k:v for k,v in zip(self.factor_order, self.factor_sizes)}
         return info
 
     @property
     def num_factors(self):
-        pass
+        return len(self.factor_sizes)
+
+    @property
+    def factors_names(self):
+        return self.factor_order
 
     @property
     def factors_num_values(self):
-        pass
-
-    def sample_observations_from_factors(self, factors):
-        pass
+        return self.factor_num_values
 
     @property
     def raw_folder(self) -> str:
@@ -552,6 +589,7 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
 
     @property
     def set_name(self) -> str:
+        if self.real: return "real"
         if self.test: return "test"
         if self.heldout: return "HC"
         return "train"
