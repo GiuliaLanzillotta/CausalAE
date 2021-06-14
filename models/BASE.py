@@ -28,5 +28,10 @@ class GenerativeAE(ABC):
         """ generates output from input"""
         raise NotImplementedError
 
+    @abstractmethod
+    def get_prior_range(self):
+        """ returns a range in format [(min, max)] for every dimension that should contain
+        most of the data density (905)"""
+
 
 

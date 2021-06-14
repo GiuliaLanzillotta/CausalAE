@@ -335,6 +335,13 @@ class GaussianLayer(nn.Module):
             torch.nn.init.constant_(self.logvar.bias, -1.0)
         else: raise NotImplementedError("Selected initialization type -"+init_type+"- not recognised.")
 
+    @property
+    def prior_range(self):
+        """ returns a range in format [(min, max)] for every dimension that should contain
+        most of the data density (905)"""
+        ranges = [(-2., 2.) for i in range(self.latent_size)]
+        return ranges
+
 
 
 class HybridLayer(nn.Module):
@@ -399,6 +406,18 @@ class HybridLayer(nn.Module):
         self.initialise_prior(inputs)
         output = self.sample_from_prior(inputs.shape)
         return output
+
+    @property
+    def prior_range(self):
+        """ returns a range in format [(min, max)] for every dimension that should contain
+        most of the data density (905)"""
+        if self.prior is None: raise ValueError("No samples from the prior have been obtained yet")
+        prior_min = torch.min(self.prior, dim=0).values
+        prior_max = torch.max(self.prior, dim=0).values
+        ranges = [(m.cpu().numpy(),M.cpu().numpy())
+                  for (m,M) in zip(prior_min,prior_max)]
+        return ranges
+
 
 class AdaIN(nn.Module):
     #TODO: implement AdaIN layer (to be used instead of StrTrf in baselines)

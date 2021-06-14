@@ -1,16 +1,17 @@
 """ Implementation of loading functions for 3dshpaes dataset """
 from typing import Any, Optional, Callable
-from matplotlib import pyplot as plt
+from . import DisentanglementDataset
 import numpy as np
 import h5py
 import torch
 import urllib
+import pickle
 import os
 from torchvision.datasets import VisionDataset
 from .utils import gen_bar_updater
 
 
-class Shapes3d(VisionDataset):
+class Shapes3d(VisionDataset, DisentanglementDataset):
     """ 3dShapes dataset: original paper http://proceedings.mlr.press/v80/kim18b.html
     Simulated dataset.
     Samples generated from 6 independently samples latent factors:
@@ -25,9 +26,12 @@ class Shapes3d(VisionDataset):
     images: (480000 x 64 x 64 x 3, uint8) RGB images.
     labels: (480000 x 6, float64) Values of the latent factors.
     """
+
+
     url = "https://storage.googleapis.com/3d-shapes/3dshapes.h5"
     images_file = 'images.pt'
     labels_file = 'labels.pt'
+    factors_dict_file = 'factors.pkl'
     shape = (3, 64, 64)
     _FACTORS_IN_ORDER = ['floor_hue', 'wall_hue', 'object_hue', 'scale', 'shape',
                          'orientation']
@@ -49,8 +53,12 @@ class Shapes3d(VisionDataset):
         if not self._check_downloaded():
             raise RuntimeError('Dataset not found.' +
                                ' You can use download=True to download it')
+
         # --------- load it
         self.images, self.labels = self.read_source_file()
+        # --------- load factors dictionary
+        self.factors = self.factorise()
+
         print("Dataset loaded.")
 
     def __repr__(self):
@@ -75,16 +83,33 @@ class Shapes3d(VisionDataset):
         labels = dataset['labels'][:]  # array shape [480000,6], float64
         return images, labels
 
+    def factorise(self):
+        """ Creates the factors dictionary, i.e. a dictionary storing the index relative
+        to any factor combination. This is the core of sample_observations_from_factors."""
+        os.makedirs(self.processed_folder, exist_ok=True)
+        filename = self.factors_dict_file
+        fpath = str.join("/", [self.processed_folder, filename])
+        # --------- download source file
+        if self._check_factorised():
+            print("Factors dictionary already created. Proceed to reading.")
+            with open(fpath, 'rb') as f:
+                factors = pickle.load(f)
+        else:
+            factors = {"".join(self.labels.astype(str)[i]):i for i in range(len(self))}
+            with open(fpath, 'wb') as f:
+                pickle.dump(factors, f, pickle.HIGHEST_PROTOCOL)
+
+        return factors
 
     def download(self):
         """ Downloading source files (.h5)"""
         os.makedirs(self.raw_folder, exist_ok=True)
-        filename = self.url.rpartition('/')[2] #3dshapes.h5
-        fpath = str.join("/", [self.raw_folder, filename])
         # --------- download source file
         if self._check_downloaded():
             print("Files already downloaded. Proceed to reading.")
         else:
+            filename = self.url.rpartition('/')[2] #3dshapes.h5
+            fpath = str.join("/", [self.raw_folder, filename])
             try:
                 print('Downloading ' + self.url + ' to ' + fpath)
                 urllib.request.urlretrieve(
@@ -100,6 +125,12 @@ class Shapes3d(VisionDataset):
     def _check_downloaded(self):
         filename = self.url.rpartition('/')[2] #3dshapes.h5
         fpath = str.join("/", [self.raw_folder, filename])
+        return os.path.exists(fpath)
+
+    def _check_factorised(self):
+        """Checking the existence of the factors dictionary."""
+        filename = self.factors_dict_file
+        fpath = str.join("/", [self.processed_folder, filename])
         return os.path.exists(fpath)
 
     def __getitem__(self, index: int) -> Any:
@@ -122,6 +153,30 @@ class Shapes3d(VisionDataset):
         # raw folder should be ("./datasets/Shapes3d/Shapes3d/raw
         return os.path.join(self.root, self.__class__.__name__, 'raw')
 
+    @property
+    def processed_folder(self) -> str:
+        # raw folder should be ("./datasets/Shapes3d/Shapes3d/raw
+        return os.path.join(self.root, self.__class__.__name__, 'processed')
+
+    @property
+    def num_factors(self):
+        return len(self._FACTORS_IN_ORDER)
+
+    @property
+    def factors_num_values(self):
+        return self._NUM_VALUES_PER_FACTOR
+
+    def sample_observations_from_factors(self, factors):
+        """Factors : batch of labels - has to be numpy array.
+        Returns batch of corresponding images."""
+        n = factors.shape[0]
+        #For i in 1:n
+        # 1. transform factor to string to obtain dict key
+        # 2. get corresponding dict item = image index
+        # 3. get corresponding item from dataset
+        items = [self[self.factors["".join(factors.astype(str)[i])]] for i in range(n)]
+        #TODO: now we have a list of tensors: check the desired data type (probably tensor)
+        return items
 
 
     # methods for sampling unconditionally/conditionally on a given factor

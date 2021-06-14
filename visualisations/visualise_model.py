@@ -10,8 +10,7 @@ import torchvision
 import itertools
 
 class ModelVisualiser(object):
-    """ Takes a trained model and an output directory and produces visualisations for
-    the given model there. """
+    """ Takes a trained model and a logger and produces visualisations, saving them to the logger."""
     def __init__(self, model:GenerativeAE,test_dataloader, **kwargs):
         super(ModelVisualiser, self).__init__()
         self.model = model
@@ -50,7 +49,8 @@ class ModelVisualiser(object):
         # clean
         del random_codes, recons
 
-    def plot_latent_traversals(self, logger, global_step:int=None, steps:int=10, device=None, figsize=(12,12)):
+    def plot_latent_traversals(self, logger, global_step:int=None, steps:int=10,
+                               device=None, figsize=(12,12), tailored=False):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
@@ -60,9 +60,13 @@ class ModelVisualiser(object):
         try: code = code[1] # if the output is a list extract the second element (VAE case)
         except: pass
         latent_vector = code.data.cpu().numpy()
-        #TODO: more flexibility here (allow a selection of dimensions and a different values grid)
         dimensions = np.arange(latent_vector.shape[1])
-        values = np.linspace(-1., 1., num=steps)
+        if not tailored: values = np.tile(np.linspace(-1., 1., num=steps), [dimensions, 1])
+        else:
+            #the values have to be tailored on the range of the specific dimensions
+            #by default the selected range includes >= 90% of the density (with some approximation for hybrid layer)
+            ranges = self.model.get_prior_range()
+            values = np.stack([np.linspace(m,M, steps) for (m,M) in ranges],0)
         traversals = self.do_latent_traversals_multi_dim(latent_vector, dimensions, values, device=device)
         grid_traversals = torchvision.utils.make_grid(traversals, nrow=steps)
         figure = plt.figure(figsize=figsize)
@@ -74,6 +78,8 @@ class ModelVisualiser(object):
             modified version of latent_vector to the generato. For each
             dimension of latent_vector the value is replaced by a range of
             values, obtaining len(values) different elements.
+
+            values is an array with shape [num_dimensionsXsteps]
 
         latent_vector, dimensions, values are all numpy arrays
         """
@@ -87,19 +93,19 @@ class ModelVisualiser(object):
         with torch.no_grad():
             recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device), activate=True) # (stepsxM) images
         """
-        num_values = len(values)
+        num_values = values.shape[1]
         traversals = []
-        for dimension in dimensions:
+        for dimension, _values in zip(dimensions, values):
             # Creates num_values copy of the latent_vector along the first axis.
             latent_traversal_vectors = np.tile(latent_vector, [num_values, 1])
             # Intervenes in the latent space.
-            latent_traversal_vectors[:, dimension] = values
+            latent_traversal_vectors[:, dimension] = _values
             # Generate the batch of images
             with torch.no_grad():
                 images = self.model.decode(torch.tensor(latent_traversal_vectors, dtype=torch.float).to(device), activate=True)
                 # images has shape stepsx(image shape)
             traversals.append(images)
-        return torch.vstack(traversals)
+        return torch.cat(traversals, dim=0)
 
     def plot_training_gradients(self, logger, global_step:int=None, figsize=(12,12)):
         '''Plots the gradients flowing through different layers in the net during training.

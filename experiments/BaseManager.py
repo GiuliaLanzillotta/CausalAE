@@ -41,7 +41,8 @@ class BaseExperiment(pl.LightningModule):
             self.visualiser.plot_reconstructions(self.logger.experiment, self.global_step, device=self.device)
             try: self.visualiser.plot_samples_from_prior(self.logger.experiment, self.global_step, device=self.device)
             except ValueError:pass #no prior samples stored yet
-            self.visualiser.plot_latent_traversals(self.logger.experiment, self.global_step, device=self.device)
+            self.visualiser.plot_latent_traversals(self.logger.experiment, self.global_step,
+                                                   device=self.device, tailored=True)
         # Scoring val performance
         if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
             # compute and store the fid scoring

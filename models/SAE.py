@@ -73,3 +73,8 @@ class SAE(nn.Module, GenerativeAE):
         BCE = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
                         tuple(range(X_hat.dim()))[1:]).mean()
         return BCE, MSE
+
+    def get_prior_range(self):
+        """ returns a range in format [(min, max)] for every dimension that should contain
+        most of the data density (905)"""
+        return self.hybrid_layer.prior_range

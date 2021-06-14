@@ -73,3 +73,8 @@ class VAE(nn.Module, GenerativeAE):
         KL_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), 1).mean()
         loss = recons_loss + self.beta * KL_weight * KL_loss
         return {'loss': loss, 'Reconstruction_loss':recons_loss, 'KL':KL_loss}
+
+    def get_prior_range(self):
+        """ returns a range in format [(min, max)] for every dimension that should contain
+        most of the data density (905)"""
+        return self.gaussian_latent.prior_range

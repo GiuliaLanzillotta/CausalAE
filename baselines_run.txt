@@ -1,5 +1,5 @@
-bsub -oo "out_BetaVAE_3DSnoise_v12.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name BetaVAE --data 3DSnoise --version v12
-bsub -oo "out_BetaVAE_3DS_v12.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name BetaVAE --data 3DS --version v12
+bsub -oo "out_BetaVAE_3DSnoise_v12_6.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name BetaVAE --data 3DSnoise --version v12_6
+bsub -oo "out_BetaVAE_3DS_v12_6.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name BetaVAE --data 3DS --version v12_6
 bsub -oo "out_BaseSAE_RFD_v16.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name BaseSAE --data RFDh5 --version v16
 bsub -oo "out_BaseSAE_3DSnoise_v121.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name BaseSAE --data 3DSnoise --version v12_1
 bsub -oo "out_BetaVAE_RFD_v16.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name BetaVAE --data RFDh5 --version v16

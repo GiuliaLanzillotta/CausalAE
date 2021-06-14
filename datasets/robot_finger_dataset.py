@@ -8,13 +8,12 @@ import torch
 import torchvision.datasets
 import webdataset as wds
 from PIL import Image
-import random
 import h5py
 import os
 from .utils import gen_bar_updater
-from torchvision import transforms
 from torch.utils.data import IterableDataset, DataLoader
 from itertools import islice
+from . import DisentanglementDataset
 
 class RFD(torchvision.datasets.VisionDataset):
     """  The Robot Finger Dataset - Vision dataset version """
@@ -417,7 +416,7 @@ class RFDtoHDF5(object):
 
 
 
-class RFDh5(torchvision.datasets.VisionDataset):
+class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
     """ Implementing RA dataset for RFD based on .h5 storage"""
     shape = (3, 128,128)
     raw_subfolders = ["finger","finger_heldout_colors","finger_real"]
@@ -526,6 +525,17 @@ class RFDh5(torchvision.datasets.VisionDataset):
         self.size = info["dataset_size"].item()
         #TODO: extract interesting properties from the info here
         return info
+
+    @property
+    def num_factors(self):
+        pass
+
+    @property
+    def factors_num_values(self):
+        pass
+
+    def sample_observations_from_factors(self, factors):
+        pass
 
     @property
     def raw_folder(self) -> str:
