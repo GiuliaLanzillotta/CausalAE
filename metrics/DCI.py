@@ -23,11 +23,73 @@ from __future__ import print_function
 
 import itertools
 
+from absl import logging
+from . import utils
 import numpy as np
 import scipy
 import scipy.stats
 from six.moves import range
 from sklearn.ensemble import GradientBoostingClassifier
+from torch.utils.data import DataLoader
+
+
+
+def compute_dci(dataloader:DataLoader,
+                representation_function,
+                num_train=10000,
+                num_test=5000,
+                batch_size=16):
+    """Computes the DCI scores according to Sec 2.
+
+    Args:
+      dataloader: data to be sampled from.
+      representation_function: Function that takes observations as input and
+        outputs a dim_representation sized representation for each observation.
+      num_train: Number of points used for training.
+      num_test: Number of points used for testing.
+      batch_size: Batch size for sampling.
+
+    Returns:
+      Dictionary with average disentanglement score, completeness and
+        informativeness (train and test).
+    """
+    logging.info("Generating training set.")
+    # mus_train are of shape [num_codes, num_train], while ys_train are of shape
+    # [num_factors, num_train].
+    mus_train, ys_train = utils.generate_batch_factor_code(dataloader, representation_function, num_train, batch_size)
+    assert mus_train.shape[1] == num_train
+    assert ys_train.shape[1] == num_train
+    mus_test, ys_test = utils.generate_batch_factor_code(dataloader, representation_function, num_test, batch_size) #TODO: maybe factorise this duplicated code
+
+    # Delete all factors that have only one class
+    all_labels = np.concatenate([ys_train, ys_test], axis=1)
+    indices = np.argwhere(np.max(all_labels, axis=1) > 0).flatten()
+    ys_train = ys_train[indices, :]
+    ys_test = ys_test[indices, :]
+
+    # Compute DCI metrics
+    scores, extras = _compute_dci(mus_train, ys_train, mus_test, ys_test)
+
+    # Return dictionary containing:
+    #   - 'informativeness_train'
+    #   - 'informativeness_test'
+    #   - 'disentanglement'
+    #   - 'completeness'
+    #   - 'extras': a dict containing:
+    #       - the same 4 keys as the upper level
+    #       - 'importance_matrix'
+    #       - 'informativeness_train_per_factor'
+    #       - 'informativeness_test_per_factor'
+    #       - 'disentanglement_loo_factor'
+    #       - 'disentanglement_loo_latent'
+    #       - 'disentanglement_loo_factor_latent'
+    #       - 'completeness_loo_factor'
+    #       - 'completeness_loo_latent'
+    #       - 'completeness_loo_factor_latent'
+
+    results_dict = scores
+    results_dict['extras'] = extras
+    return results_dict
 
 
 def _compute_dci(mus_train, ys_train, mus_test, ys_test):

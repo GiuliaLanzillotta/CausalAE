@@ -92,3 +92,11 @@ def discrete_entropy(ys):
     for j in range(num_factors):
         h[j] = sklearn.metrics.mutual_info_score(ys[j, :], ys[j, :])
     return h
+
+def normalize_data(data, mean=None, stddev=None):
+    if mean is None:
+        mean = np.mean(data, axis=1)
+    if stddev is None:
+        stddev = np.std(data, axis=1)
+    return (data - mean[:, np.newaxis]) / stddev[:, np.newaxis], mean, stddev
+

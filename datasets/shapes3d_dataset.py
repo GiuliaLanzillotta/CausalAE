@@ -1,6 +1,6 @@
 """ Implementation of loading functions for 3dshpaes dataset """
 from typing import Any, Optional, Callable
-from . import DisentanglementDataset
+from .disentanglement_datasets import DisentanglementDataset
 import numpy as np
 import h5py
 import torch

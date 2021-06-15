@@ -13,7 +13,7 @@ import os
 from .utils import gen_bar_updater
 from torch.utils.data import IterableDataset, DataLoader
 from itertools import islice
-from . import DisentanglementDataset
+from .disentanglement_datasets import DisentanglementDataset
 
 class RFD(torchvision.datasets.VisionDataset):
     """  The Robot Finger Dataset - Vision dataset version """

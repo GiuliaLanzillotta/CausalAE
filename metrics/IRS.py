@@ -111,20 +111,19 @@ def scalable_disentanglement_score(gen_factors, latents, diff_quantile=0.99):
         num_distinct_factors = unique_factors.shape[0] # number of categories
         for k in range(num_distinct_factors):
             # Compute E[Z | g_i].
-            match = gen_factors[:, i] == unique_factors[k] # selecting all the rows with that category
+            match = gen_factors[:, i] == unique_factors[k] # selecting all the samples with G_I = g_I
             e_loc = np.mean(latents[match, :], axis=0) # expected value of all latent features under intervention
 
             # Difference of each value within that group of constant g_i to its mean.
             # --- to be used to compute PIDA(L|empty, g_I)
             diffs = np.abs(latents[match, :] - e_loc)
-            max_diffs = np.percentile(diffs, q=diff_quantile * 100, axis=0)
-            #TODO
+            max_diffs = np.percentile(diffs, q=diff_quantile * 100, axis=0) #why not using a max?
             cum_deviations[:, i] += max_diffs
         cum_deviations[:, i] /= num_distinct_factors # expectation over intervention values
     # Normalize value of each latent dimension with its maximal deviation.
     normalized_deviations = cum_deviations / max_deviations[:, np.newaxis]
-    irs_matrix = 1.0 - normalized_deviations
-    disentanglement_scores = irs_matrix.max(axis=1)
+    irs_matrix = 1.0 - normalized_deviations # latent x factors
+    disentanglement_scores = irs_matrix.max(axis=1) # for each latent
     if np.sum(max_deviations) > 0.0:
         avg_score = np.average(disentanglement_scores, weights=max_deviations)
     else:
@@ -138,3 +137,8 @@ def scalable_disentanglement_score(gen_factors, latents, diff_quantile=0.99):
     score_dict["IRS_matrix"] = irs_matrix
     score_dict["max_deviations"] = max_deviations
     return score_dict
+
+
+def full_disentanglement_score(gen_factors, latents, diff_quantile=0.99):
+    #TODO: no independence assumption
+    pass

@@ -15,19 +15,15 @@ class DisentanglementDataset(ABC):
         self.factors = None
         self.key_pad_len = None
 
-    @abstractmethod
     @property
     def num_factors(self):
         raise NotImplementedError
 
-
-    @abstractmethod
     @property
     def factors_names(self):
         """List of strings with name of factors"""
         raise NotImplementedError
 
-    @abstractmethod
     @property
     def factors_num_values(self):
         """Dictionary: factor name -> factor size"""
