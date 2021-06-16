@@ -125,8 +125,8 @@ def _generate_training_sample(dataset:DisentanglementDataset,
     # convert to torch Tensor
     # Compute representations based on the observations.
     with torch.no_grad():
-        representation1 = representation_function(torch.stack(observations1))
-        representation2 = representation_function(torch.stack(observations2))
+        representation1 = representation_function(observations1)
+        representation2 = representation_function(observations2)
     # Compute the feature vector based on differences in representation.
     feature_vector = np.mean(np.abs(representation1 - representation2).cpu().numpy(), axis=0)
     return index, feature_vector

@@ -3,6 +3,7 @@ import random
 
 from . import DisentanglementDataset
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 class IdentityObservationsData(DisentanglementDataset, Dataset):
@@ -38,12 +39,12 @@ class IdentityObservationsData(DisentanglementDataset, Dataset):
 
     def sample_observations_from_factors(self, factors:np.ndarray):
         """Sample a batch of observations X given a batch of factors Y."""
-        return factors
+        return torch.Tensor(factors)
 
     def sample_pairs_observations(self, num):
-        first_factors = self.sample_factors(num, numeric_format=False)
-        second_factors = self.sample_factors(num, numeric_format=False)
-        index = random.randint(0,self.num_factors)
+        first_factors = torch.Tensor(self.sample_factors(num, numeric_format=False))
+        second_factors = torch.Tensor(self.sample_factors(num, numeric_format=False))
+        index = random.randint(0,self.num_factors-1)
         second_factors[:,index]=first_factors[:,index]
         return index, first_factors, second_factors
 
@@ -58,6 +59,10 @@ class DummyData(DisentanglementDataset, Dataset):
         y =  self.sample_factors(1)[0]
         x =  self.sample_observations_from_factors(y)[0]
         return x,y
+
+    @property
+    def factors_names(self):
+        return ["factor"+str(i) for i in range(10)]
 
     @property
     def num_factors(self):
@@ -78,12 +83,12 @@ class DummyData(DisentanglementDataset, Dataset):
 
     def sample_observations_from_factors(self, factors:np.ndarray):
         """Sample a batch of observations X given a batch of factors Y."""
-        return np.random.random_sample(size=(factors.shape[0], 64, 64, 1))
+        return torch.Tensor(np.random.random_sample(size=(factors.shape[0], 64, 64, 1)))
 
     def sample_pairs_observations(self, num):
         index = random.randint(0,self.num_factors)
-        obs1 = np.random.random_sample(size=(num, 64, 64, 1))
-        obs2 = np.random.random_sample(size=(num, 64, 64, 1))
+        obs1 = torch.Tensor(np.random.random_sample(size=(num, 64, 64, 1)))
+        obs2 = torch.Tensor(np.random.random_sample(size=(num, 64, 64, 1)))
         return index,obs1,obs2
 
 

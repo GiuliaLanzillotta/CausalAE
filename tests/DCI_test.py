@@ -1,4 +1,7 @@
 import unittest
+
+import torch
+
 from . import utils
 from . import DCI
 import numpy as np
@@ -18,14 +21,13 @@ from torch.utils.data import DataLoader
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for dci_test.py."""
-#TODO
 
 class DCITest(unittest.TestCase):
 
     def test_metric(self):
         dataset = utils.IdentityObservationsData()
         dataloader = DataLoader(dataset, batch_size=100, shuffle=False)
-        representation_function = lambda x: np.array(x, dtype=np.float64)
+        representation_function = lambda x: x
         scores = DCI.compute_dci(dataloader, representation_function, 1000, 1000, 100)
         self.assertTrue(0.9 <=scores["disentanglement"] <= 1.0)
         self.assertTrue(0.9 <= scores["completeness"] <= 1.0)
@@ -35,10 +37,10 @@ class DCITest(unittest.TestCase):
         dataloader = DataLoader(dataset, batch_size=100, shuffle=False)
         # The representation which randomly permutes the factors, should have equal
         # non-zero importance which should give a low modularity score.
-        def representation_function(x):
-            code = np.array(x, dtype=np.float64)
+        def representation_function(x:torch.TensorType):
+            code = x
             for i in range(code.shape[0]):
-                code[i, :] = np.random.permutation(code[i, :])
+                code[i, :] = torch.Tensor(np.random.permutation(code[i, :]))
             return code
 
         scores = DCI.compute_dci(dataloader, representation_function, 1000, 1000, 100)
@@ -49,9 +51,8 @@ class DCITest(unittest.TestCase):
         dataset = utils.IdentityObservationsData()
         dataloader = DataLoader(dataset, batch_size=100, shuffle=False)
 
-        def representation_function(x):
-            x = np.array(x, dtype=np.float64)
-            return np.hstack([x, x])
+        def representation_function(x:torch.TensorType):
+            return torch.hstack([x, x])
 
         scores = DCI.compute_dci(dataloader, representation_function, 1000, 1000, 100)
         self.assertTrue(0.9 <= scores["disentanglement"] <= 1.0)

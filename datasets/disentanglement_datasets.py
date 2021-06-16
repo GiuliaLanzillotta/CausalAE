@@ -6,6 +6,7 @@ import random
 from abc import ABCMeta, abstractmethod, ABC
 from collections import Iterable
 from typing import List
+import torch
 
 import numpy as np
 
@@ -68,8 +69,7 @@ class DisentanglementDataset(ABC):
                 labels.append([random.sample(similar_entries, num_samples)])
                 observations.append([self.factors[key] for key in labels[-1]])
         logging.info("Total number of missed duplicates = "+str(missed))
-        #TODO: now we have a list of tensors: check the desired data type (probably tensor)
-        return observations
+        return torch.stack(observations)
 
     def sample_observations_from_factors(self, factors:List[str]):
         """Sample a batch of observations X given a batch of factors Y.
@@ -81,8 +81,7 @@ class DisentanglementDataset(ABC):
         # 2. get corresponding dict item = image index
         # 3. get corresponding item from dataset
         items = [self[self.factors[factors[i]]] for i in range(n)]
-        #TODO: now we have a list of tensors: check the desired data type (probably tensor)
-        return items
+        return torch.stack(items)
 
     def sample_factors(self, num, numeric_format=False):
         """Sample a batch of the latent factors.
@@ -104,5 +103,5 @@ class DisentanglementDataset(ABC):
         for pair in observations:
             observations1.append(pair[0])
             observations2.append(pair[1])
-        return index, observations1, observations2
+        return index, torch.stack(observations1), torch.stack(observations2)
 
