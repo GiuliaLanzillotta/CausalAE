@@ -13,6 +13,7 @@ class ModelDisentanglementEvaluator(object):
         self.random_state = np.random.RandomState(0)
 
     def score_model(self):
+        print("Scoring model disentanglement.")
         complete_scores = {}
         disentanglement_scores = {}
         # DCI -----
@@ -40,3 +41,5 @@ class ModelDisentanglementEvaluator(object):
         sap_results = SAP.compute_sap(self.dataloader, self.model, batch_size=self.dataloader.batch_size)
         disentanglement_scores['SAP'] = sap_results['SAP_score']
         complete_scores['SAP'] = sap_results
+
+        return disentanglement_scores, complete_scores

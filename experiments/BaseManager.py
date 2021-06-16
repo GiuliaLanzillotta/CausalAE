@@ -7,7 +7,7 @@ from models import BASE
 from experiments.data import DatasetLoader
 from visualisations import ModelVisualiser
 import pytorch_lightning as pl
-from metrics import FIDScorer
+from metrics import FIDScorer, ModelDisentanglementEvaluator
 
 
 class BaseExperiment(pl.LightningModule):
@@ -52,12 +52,19 @@ class BaseExperiment(pl.LightningModule):
         self.num_val_steps+=1
 
     def test_step_end(self, outputs):
+        _disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.loader.train)
+        disentanglement_scores, complete_scores = _disentanglementScorer.score_model()
+        for k,v in disentanglement_scores.items():
+            self.log(k, v, prog_bar=False)
         self.visualiser.plot_reconstructions(self.logger.experiment, device=self.device)
         try: self.visualiser.plot_samples_from_prior(self.logger.experiment, device=self.device)
-        except ValueError:pass #no prior samples stored yet
+        except ValueError:pass #no prior sampls stored yet
         self.visualiser.plot_latent_traversals(self.logger.experiment, device=self.device)
         fid_score = self._fidscorer.calculate_fid()
-        self.log("FID", fid_score, prog_bar=True)
+        self.log("FID_test", fid_score, prog_bar=False)
+        _scores = disentanglement_scores
+        _scores['FID'] = fid_score
+        return _scores
 
 
 

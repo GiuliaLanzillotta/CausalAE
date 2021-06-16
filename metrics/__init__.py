@@ -1,1 +1,2 @@
 from .FID import FIDScorer
+from .score_disentanglement import ModelDisentanglementEvaluator
