@@ -31,8 +31,8 @@ from datasets import DisentanglementDataset
 def compute_beta_vae_sklearn(dataset:DisentanglementDataset,
                              representation_function,
                              batch_size,
-                             num_train,
-                             num_eval,
+                             num_train= 10000,
+                             num_eval= 5000,
                              random_state=11):
     """Computes the BetaVAE disentanglement metric using scikit-learn.
 

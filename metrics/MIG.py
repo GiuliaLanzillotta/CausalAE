@@ -24,7 +24,7 @@ from . import utils
 
 def compute_mig(dataloader:DataLoader,
                 representation_function,
-                num_train,
+                num_train=10000,
                 batch_size=16,
                 discretization_bins=20):
     """Computes the mutual information gap (MIG).
