@@ -3,9 +3,18 @@ import random
 
 from . import DisentanglementDataset
 import numpy as np
+from torch.utils.data import Dataset
 
-class IdentityObservationsData(DisentanglementDataset):
+class IdentityObservationsData(DisentanglementDataset, Dataset):
     """Data set where dummy factors """
+
+    def __len__(self):
+        return 100000
+
+    def __getitem__(self, item):
+        y =  self.sample_factors(1)[0]
+        x =  self.sample_observations_from_factors(y)
+        return x,y
 
     @property
     def factors_names(self):
@@ -39,8 +48,16 @@ class IdentityObservationsData(DisentanglementDataset):
         return index, first_factors, second_factors
 
 
-class DummyData(DisentanglementDataset):
+class DummyData(DisentanglementDataset, Dataset):
     """Dummy image data set of random noise used for testing."""
+
+    def __len__(self):
+        return 100000
+
+    def __getitem__(self, item):
+        y =  self.sample_factors(1)[0]
+        x =  self.sample_observations_from_factors(y)[0]
+        return x,y
 
     @property
     def num_factors(self):

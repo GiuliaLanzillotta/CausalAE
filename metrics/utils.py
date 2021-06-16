@@ -46,12 +46,17 @@ def generate_batch_factor_code(dataloader:DataLoader,
         if i == 0:
             factors = current_factors
             with torch.no_grad():
-                representations = representation_function(current_observations).cpu()
+                representations = representation_function(current_observations)
+                try: representations = representations.cpu()
+                except AttributeError: #testing: representation functions create numpy arrays (no attribute .cpu())
+                    pass
         else:
             factors = np.vstack((factors, current_factors))
-            representations = np.vstack(
-                (representations,
-                 representation_function(current_observations).cpu()))
+            new_rep = representation_function(current_observations)
+            try: new_rep = new_rep.cpu()
+            except AttributeError: #testing: representation functions create numpy arrays (no attribute .cpu())
+                pass
+            representations = np.vstack((representations, new_rep))
         i += num_points_iter
     return np.transpose(representations), np.transpose(factors)
 

@@ -43,7 +43,7 @@ class DCITest(unittest.TestCase):
 
         scores = DCI.compute_dci(dataloader, representation_function, 1000, 1000, 100)
         self.assertTrue(0.0 <= scores["disentanglement"] <= 0.2)
-        self.assertBetween(0.0 <= scores["completeness"] <= 0.2)
+        self.assertTrue(0.0 <= scores["completeness"] <= 0.2)
 
     def test_duplicated_latent_space(self):
         dataset = utils.IdentityObservationsData()
@@ -53,11 +53,10 @@ class DCITest(unittest.TestCase):
             x = np.array(x, dtype=np.float64)
             return np.hstack([x, x])
 
-        random_state = np.random.RandomState(0)
         scores = DCI.compute_dci(dataloader, representation_function, 1000, 1000, 100)
         self.assertTrue(0.9 <= scores["disentanglement"] <= 1.0)
         target = 1. - np.log(2) / np.log(10)
-        self.assertBetween(target - .1 <= scores["completeness"]<= target + .1)
+        self.assertTrue(target - .1 <= scores["completeness"]<= target + .1)
 
 
 if __name__ == '__main__':
