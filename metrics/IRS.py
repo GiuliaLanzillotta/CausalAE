@@ -20,6 +20,8 @@ Based on the paper https://arxiv.org/abs/1811.00007.
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+
+import torch
 from absl import logging
 from . import utils
 import numpy as np

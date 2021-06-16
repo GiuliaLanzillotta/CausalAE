@@ -21,8 +21,6 @@ from __future__ import print_function
 import unittest
 from . import utils
 from . import BetaVAE
-import numpy as np
-from torch.utils.data import DataLoader
 
 
 class BetaVaeTest(unittest.TestCase):
