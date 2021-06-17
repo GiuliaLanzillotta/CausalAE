@@ -189,7 +189,7 @@ class DatasetLoader:
             train_set = RFDh5(data_folder, transform=transform)
             test_set = RFDh5(data_folder, test=True, transform=transform)
             heldout_set = RFDh5(data_folder, heldout_colors=True, transform=transform)
-            real_set = RFD(data_folder, real=True, transform=transform)
+            real_set = RFDh5(data_folder, real=True, transform=transform)
             # Note that these two additional test sets are only available with the RFD dataset
             self.heldout_set = DataLoader(heldout_set,
                                           batch_size=args["test_batch_size"],

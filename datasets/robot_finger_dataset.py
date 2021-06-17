@@ -10,7 +10,7 @@ import webdataset as wds
 from PIL import Image
 import h5py, pickle
 import os
-from .utils import gen_bar_updater
+from .utils import gen_bar_updater, transform_discrete_labels
 from torch.utils.data import IterableDataset, DataLoader
 from itertools import islice
 from .disentanglement_datasets import DisentanglementDataset
@@ -455,8 +455,16 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
         """ Loading function only for real test dataset images"""
         images = np.load(self.raw_folder+"_images.npz", allow_pickle=True)["images"]
         labels = np.load(self.raw_folder+"_labels.npz", allow_pickle=True)["labels"]
+        labels = self.categorise_labels(labels)
         self.labels = labels
         return (images, labels)
+
+    def categorise_labels(self, labels:np.ndarray):
+        """Turn labels into categorical variables, and store them as integers.
+        labels: numpy array of shape (num_samples, num_factors) containing the labels."""
+        print("Categorising labels...")
+        categorised = labels.astype(int)
+        return categorised
 
     def get_labels(self):
         """ merge all the labels in a single numpy array so as to
@@ -467,6 +475,7 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
         for _, part in self.partitions_dict.items():
             _labels.append(part[0][1])
         labels = np.concatenate(_labels, axis=0)
+        labels = self.categorise_labels(labels)
         return labels
 
     def factorise(self):
@@ -487,8 +496,7 @@ class RFDh5(torchvision.datasets.VisionDataset, DisentanglementDataset):
             # 2. extract all the numbers
             # 3. pad the numbers and convert to string
             # 4. use result as dictionary key
-            factors = {"".join([format(number, self.key_pad) for number in self.labels[i]]):
-                           i for i in range(len(self))}
+            factors = {self.convert_to_key(all_labels[i]): i for i in range(len(self))}
             with open(fpath, 'wb') as f:
                 pickle.dump(factors, f, pickle.HIGHEST_PROTOCOL)
 

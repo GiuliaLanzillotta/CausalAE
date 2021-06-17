@@ -52,7 +52,7 @@ class BaseExperiment(pl.LightningModule):
         self.num_val_steps+=1
 
     def test_step_end(self, outputs):
-        _disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.loader.train)
+        _disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.val_dataloader())
         disentanglement_scores, complete_scores = _disentanglementScorer.score_model()
         for k,v in disentanglement_scores.items():
             self.log(k, v, prog_bar=False)

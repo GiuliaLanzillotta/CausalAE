@@ -3,6 +3,7 @@ from torch.utils.model_zoo import tqdm
 from typing import  Callable
 from torch import Tensor
 import torch
+import numpy as np
 
 def gen_bar_updater() -> Callable[[int, int, int], None]:
     pbar = tqdm(total=None)
@@ -47,3 +48,14 @@ class AdditiveNoise(object):
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
+
+def transform_discrete_labels(labels, range_per_factor):
+    """Performs transformation of discrete labels into numpy categoricals
+    Given a numpy array ov labels of any type returns an array of ints
+    Labels is of shape (num_samples, num_factors)
+    num_values_per_factor: array (num_factors,1) with number of categories per variable
+    range_per_factor: list of bins to use for each factor"""
+    discretized = np.zeros_like(labels, dtype=np.int)
+    for i in range(labels.shape[1]):
+        discretized[:, i] = np.digitize(labels[:, i], bins=range_per_factor[i])
+    return discretized

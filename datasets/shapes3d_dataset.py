@@ -8,7 +8,7 @@ import urllib
 import pickle
 import os
 from torchvision.datasets import VisionDataset
-from .utils import gen_bar_updater
+from .utils import gen_bar_updater, transform_discrete_labels
 
 
 class Shapes3d(VisionDataset, DisentanglementDataset):
@@ -62,6 +62,20 @@ class Shapes3d(VisionDataset, DisentanglementDataset):
 
         print("Dataset loaded.")
 
+
+    def categorise_labels(self, labels:np.ndarray):
+        """Turn labels into categorical variables, and store them as integers.
+        labels: numpy array of shape (num_samples, num_factors) containing the labels."""
+        print("Categorising labels...")
+        ranges = [np.linspace(0,1,10),
+                  np.linspace(0,1,10),
+                  np.linspace(0,1,10),
+                  np.linspace(0,1,8),
+                  range(4),
+                  np.linspace(-30,30,15)]
+        categorised = transform_discrete_labels(labels, ranges)
+        return categorised
+
     def __repr__(self):
         """ Str representation of the dataset """
         head = "Dataset {0} info".format(self.__class__.__name__)
@@ -82,6 +96,7 @@ class Shapes3d(VisionDataset, DisentanglementDataset):
         dataset = h5py.File(fpath, 'r')
         images = dataset['images'][:]  # array shape [480000,64,64,3], uint8 in range(256)
         labels = dataset['labels'][:]  # array shape [480000,6], float64
+        labels = self.categorise_labels(labels)
         return images, labels
 
     def factorise(self):

@@ -30,10 +30,15 @@ class DisentanglementDataset(ABC):
         """Dictionary: factor name -> factor size"""
         raise NotImplementedError()
 
+    @abstractmethod
+    def categorise_labels(self, labels):
+        """Turn labels into categorical variables, and store them as integers"""
+        pass
 
     def convert_to_key(self, factor:Iterable):
         """ Coverts factor (list of int) to key for Factors dictionary"""
         return "".join([format(number, '0'+str(self.key_pad_len)+'d') for number in factor])
+
 
     def revert_to_int(self, factor:str):
         """ Convert factor in key format back to integer."""
