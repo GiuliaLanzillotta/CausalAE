@@ -18,7 +18,15 @@ class ModelVisualiser(object):
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
-    def plot_reconstructions(self, logger, global_step:int=None, grid_size:int=12, device=None, figsize=(12,12)):
+    def plot_originals(self, grid_size:int=12, device=None, figsize=(12,12)):
+        num_plots = grid_size**2
+        test_sample = self.test_input[:num_plots]
+        grid_originals = torchvision.utils.make_grid(test_sample, nrow=grid_size)
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(grid_originals.permute(1, 2, 0).cpu().numpy())
+        return figure
+
+    def plot_reconstructions(self, grid_size:int=12, device=None, figsize=(12,12)):
         """ plots reconstructions from test set samples"""
         num_plots = grid_size**2
         test_sample = self.test_input[:num_plots]
@@ -27,16 +35,9 @@ class ModelVisualiser(object):
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
-        logger.add_figure("reconstructions", figure, global_step=global_step)
-        if global_step is not None and global_step==0: # print the originals
-            grid_originals = torchvision.utils.make_grid(test_sample, nrow=grid_size)
-            figure = plt.figure(figsize=figsize)
-            plt.imshow(grid_originals.permute(1, 2, 0).cpu().numpy())
-            logger.add_figure("originals", figure)
-        # clean
-        del recons
+        return figure
 
-    def plot_samples_from_prior(self, logger, global_step:int=None, grid_size:int=12, device=None, figsize=(12,12)):
+    def plot_samples_from_prior(self, grid_size:int=12, device=None, figsize=(12,12)):
         """ samples from latent prior and plots reconstructions"""
         num_pics = grid_size**2 # square grid
         with torch.no_grad():
@@ -45,12 +46,9 @@ class ModelVisualiser(object):
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
-        logger.add_figure("prior_samples", figure, global_step=global_step)
-        # clean
-        del random_codes, recons
+        return figure
 
-    def plot_latent_traversals(self, logger, global_step:int=None, steps:int=10,
-                               device=None, figsize=(12,12), tailored=False):
+    def plot_latent_traversals(self, steps:int=10, device=None, figsize=(12,12), tailored=False):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
@@ -71,7 +69,7 @@ class ModelVisualiser(object):
         grid_traversals = torchvision.utils.make_grid(traversals, nrow=steps)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_traversals.permute(1, 2, 0).cpu().numpy())
-        logger.add_figure("traversals", figure, global_step=global_step)
+        return figure
 
     def do_latent_traversals_multi_dim(self, latent_vector, dimensions, values, device=None):
         """ Creates a tensor where each element is obtained by passing a
@@ -82,16 +80,6 @@ class ModelVisualiser(object):
             values is an array with shape [num_dimensionsXsteps]
 
         latent_vector, dimensions, values are all numpy arrays
-        """
-
-        """
-        traversals = np.linspace(-3.0, 3.0, steps) #todo: make this grid more flexible
-        base = np.stack([latents]*steps).squeeze(1)
-        # for each latent dimension, change the code in that dimension while keeping the others fixed
-        vec_traversals = [list(np.hstack([base[:,:i], traversals.reshape(steps,1), base[:,i+1:]])) for i in range(latents.shape[1])]
-        random_codes = np.stack(list(itertools.chain(*vec_traversals))) # (stepsxM) M-dimensional vectors
-        with torch.no_grad():
-            recons = self.model.decode(torch.tensor(random_codes, dtype=torch.float).to(device), activate=True) # (stepsxM) images
         """
         num_values = values.shape[1]
         traversals = []
@@ -107,7 +95,7 @@ class ModelVisualiser(object):
             traversals.append(images)
         return torch.cat(traversals, dim=0)
 
-    def plot_training_gradients(self, logger, global_step:int=None, figsize=(12,12)):
+    def plot_training_gradients(self, figsize=(12,12)):
         '''Plots the gradients flowing through different layers in the net during training.
         Can be used for checking for possible gradient vanishing / exploding problems.
 
@@ -143,4 +131,4 @@ class ModelVisualiser(object):
         plt.legend([Line2D([0], [0], color="c", lw=4),
                     Line2D([0], [0], color="b", lw=4),
                     Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
-        logger.add_figure("gradient", figure, global_step=global_step)
+        return figure

@@ -33,16 +33,30 @@ class BaseExperiment(pl.LightningModule):
     def forward(self, inputs: Tensor, **kwargs) -> Tensor:
         return self.model(inputs, **kwargs)
 
+    def make_plots(self, originals=False):
+        """originals: bool = Whether to plot the originals samples from the test set"""
+        logger = self.logger.experiment
+        figure = self.visualiser.plot_reconstructions(device=self.device)
+        logger.add_figure("reconstructions", figure, global_step=self.global_step)
+
+        try:
+            figure = self.visualiser.plot_samples_from_prior(device=self.device)
+            logger.add_figure("prior_samples", figure, global_step=self.global_step)
+        except ValueError:pass #no prior samples stored yet
+
+        figure = self.visualiser.plot_latent_traversals(device=self.device, tailored=True)
+        logger.add_figure("traversals", figure, global_step=self.global_step)
+
+        if originals: # print the originals
+            figure = self.visualiser.plot_originals()
+            logger.add_figure("originals", figure)
+
     def validation_epoch_end(self, outputs):
         # Logging hyperparameters
         # Visualisation
         if self.num_val_steps%self.plot_every==0 or \
                 self.global_step==self.params["trainer_params"]["max_steps"]:
-            self.visualiser.plot_reconstructions(self.logger.experiment, self.global_step, device=self.device)
-            try: self.visualiser.plot_samples_from_prior(self.logger.experiment, self.global_step, device=self.device)
-            except ValueError:pass #no prior samples stored yet
-            self.visualiser.plot_latent_traversals(self.logger.experiment, self.global_step,
-                                                   device=self.device, tailored=True)
+            self.make_plots(originals=self.global_step==0)
         # Scoring val performance
         if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
             # compute and store the fid scoring
@@ -56,16 +70,12 @@ class BaseExperiment(pl.LightningModule):
         disentanglement_scores, complete_scores = _disentanglementScorer.score_model()
         for k,v in disentanglement_scores.items():
             self.log(k, v, prog_bar=False)
-        self.visualiser.plot_reconstructions(self.logger.experiment, device=self.device)
-        try: self.visualiser.plot_samples_from_prior(self.logger.experiment, device=self.device)
-        except ValueError:pass #no prior sampls stored yet
-        self.visualiser.plot_latent_traversals(self.logger.experiment, device=self.device)
+        self.make_plots(originals=self.global_step==0)
         fid_score = self._fidscorer.calculate_fid()
         self.log("FID_test", fid_score, prog_bar=False)
         _scores = disentanglement_scores
         _scores['FID'] = fid_score
         return _scores
-
 
 
     def configure_optimizers(self):

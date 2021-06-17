@@ -47,12 +47,12 @@ class VAEXperiment(BaseExperiment):
                                               X = input_imgs,
                                               KL_weight =  KL_weight)
         # Logging
-
         self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log_dict({key: val.item() for key, val in train_loss.items()})
         self.log('beta', KL_weight*self.model.beta, prog_bar=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            self.visualiser.plot_training_gradients(self.logger.experiment, self.global_step)
+            figure = self.visualiser.plot_training_gradients(self.global_step)
+            self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
 
         return train_loss["loss"]
 

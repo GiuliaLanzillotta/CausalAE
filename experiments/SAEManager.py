@@ -31,7 +31,8 @@ class SAEXperiment(BaseExperiment):
         self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            self.visualiser.plot_training_gradients(self.logger.experiment, self.global_step)
+            figure = self.visualiser.plot_training_gradients(self.global_step)
+            self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
         return BCE
 
     def score_FID(self, batch_idx, inputs, results):
