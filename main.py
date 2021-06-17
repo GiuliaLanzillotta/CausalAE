@@ -141,10 +141,10 @@ if __name__ == '__main__':
                         dest="test",
                         metavar="TEST",
                         help= "Whether to load the model for testing",
-                        default=False)
+                        default=True)
 
 
     args = parser.parse_args()
     config = get_config(args.tuning, args.name, args.data, args.version)
     if args.tuning: do_tuning(config)
-    else: train_model(config)
+    else: train_model(config, test=args.test)

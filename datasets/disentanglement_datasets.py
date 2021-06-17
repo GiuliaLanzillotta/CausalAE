@@ -42,12 +42,12 @@ class DisentanglementDataset(ABC):
 
     def _all_similar_to(self, factor, fixed_indices:List[int]):
         """Collects all the entries similar to the given one on the fixed_indices"""
-        def check_partial_factor(word, factor) -> bool:
-            """Checks equivalence between word and factor (both in str key format)
+        def check_partial_factor(first, second) -> bool:
+            """Checks equivalence between first and second factor (both in str key format)
             only on the fixed_indices"""
-            word_num = self.revert_to_int(word)
-            factor_num = self.revert_to_int(factor)
-            return all([word_num[i]==factor_num[i] for i in fixed_indices])
+            first_num = self.revert_to_int(first)
+            second_num = self.revert_to_int(second)
+            return all([first_num[i]==second_num[i] for i in fixed_indices])
         available_factors = self.factors.keys()
         similar_entries = list(filter(lambda key: check_partial_factor(key, factor), available_factors))
         return similar_entries
@@ -66,10 +66,10 @@ class DisentanglementDataset(ABC):
             similar_entries = self._all_similar_to(factor,indices)
             if len(similar_entries)<num_samples: missed+=1
             else:
-                labels.append([random.sample(similar_entries, num_samples)])
-                observations.append([self.factors[key] for key in labels[-1]])
+                labels.append(random.sample(similar_entries, num_samples))
+                observations.append([self[self.factors[key]] for key in labels[-1]])
         logging.info("Total number of missed duplicates = "+str(missed))
-        return torch.stack(observations)
+        return labels, observations
 
     def sample_observations_from_factors(self, factors:List[str]):
         """Sample a batch of observations X given a batch of factors Y.
@@ -95,8 +95,8 @@ class DisentanglementDataset(ABC):
         """ Samples a batch of pairs of observations as used in BetaVAE disentanglement metric.
         -> only one factor index fixed for every pair"""
         first_factors = self.sample_factors(num, numeric_format=False)
-        index = random.randint(0,self.num_factors)
-        fixed_indices = [index]*num # = [[index],[index], .... , [index]]
+        index = np.random.randint(0,self.num_factors)
+        fixed_indices = [[index]]*num # = [[index],[index], .... , [index]]
         _, observations = self.sample_observations_from_partial_factors(first_factors, fixed_indices, num_samples=2)
         observations1 = []
         observations2 = []
