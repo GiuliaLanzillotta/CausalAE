@@ -1,6 +1,6 @@
 """Script managing evaluation and exploration of models"""
 import torch
-
+from experiments import experiments_switch
 from experiments.data import DatasetLoader
 from models import VAE, SAE, models_switch
 from pathlib import Path
@@ -15,10 +15,11 @@ class ModelHandler(object):
     def __init__(self, model_name:str, model_version:str, data:str, **kwargs):
         self.config = get_config(tuning=False, model_name=model_name,
                             data=data, version=model_version)
-        self.dataloader = DatasetLoader(self.config["data_params"])
-        print(model_name+ " model loaded.")
-        self.model = models_switch[model_name](self.config["model_params"], self.dataloader.data_shape)
+        self.experiment = experiments_switch[model_name](self.config)
+        self.model = self.experiment.model
         self.model.eval()
+        self.dataloader = self.experiment.loader
+        print(model_name+ " model loaded.")
         self.visualiser = None
         self.fidscorer = None
         self.num_FID_steps = kwargs.get("num_FID_steps",10)
@@ -47,18 +48,20 @@ class ModelHandler(object):
                     self.config['logging_params']['name'] / \
                     self.config['logging_params']['version']
         checkpoint_path =  base_path / "checkpoints/"
+        hparams_path = str(base_path)+"/hparams.yaml"
         actual_checkpoint_path = ""
 
         try:
             if name is None:
                 actual_checkpoint_path = max(glob.glob(str(checkpoint_path) + "/*ckpt"), key=os.path.getctime)
-                print("Loading latest checkpoint.")
+                print("Loading latest checkpoint at "+actual_checkpoint_path+" .")
             else:
                 actual_checkpoint_path = str(checkpoint_path) +"/"+ name + ".ckpt"
                 print("Loading selected checkpoint at "+ actual_checkpoint_path)
-            checkpoint = torch.load(actual_checkpoint_path)
-            return checkpoint
-            self.model.load_state_dict(checkpoint['state_dict'])
+            self.experiment = self.experiment.load_from_checkpoint(actual_checkpoint_path,
+                                                                   hparams_file=hparams_path,
+                                                                   device=self.device)
+            self.model = self.experiment.model
             self.model.eval()
         except ValueError:
             print(f"No checkpoint available at {actual_checkpoint_path}. Cannot load trained weights.")
@@ -103,3 +106,8 @@ class ModelHandler(object):
         if do_originals: # print the originals
             plots["originals"] = self.visualiser.plot_originals()
         return plots
+
+
+if __name__ == '__main__':
+    handler = ModelHandler(model_name="BaseSAE", model_version="dummy", data="MNIST")
+    handler.load_checkpoint()
