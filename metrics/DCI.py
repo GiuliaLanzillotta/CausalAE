@@ -60,6 +60,8 @@ def compute_dci(dataloader:DataLoader,
     assert mus_train.shape[1] == num_train
     assert ys_train.shape[1] == num_train
     mus_test, ys_test = utils.generate_batch_factor_code(dataloader, representation_function, num_test, batch_size) #TODO: maybe factorise this duplicated code
+    assert mus_test.shape[1] == num_test
+    assert ys_test.shape[1] == num_test
 
     # Delete all factors that have only one class
     all_labels = np.concatenate([ys_train, ys_test], axis=1)
@@ -89,6 +91,7 @@ def compute_dci(dataloader:DataLoader,
 
     results_dict = scores
     results_dict['extras'] = extras
+    del mus_train, ys_train, mus_test, ys_test
     return results_dict
 
 

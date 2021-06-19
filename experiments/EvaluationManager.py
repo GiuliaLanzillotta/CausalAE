@@ -3,6 +3,7 @@ import torch
 from experiments import experiments_switch
 from experiments.data import DatasetLoader
 from models import VAE, SAE, models_switch
+from models.BASE import GenerativeAE
 from pathlib import Path
 from configs import get_config
 import os
@@ -17,6 +18,8 @@ class ModelHandler(object):
                             data=data, version=model_version)
         self.experiment = experiments_switch[model_name](self.config)
         self.model = self.experiment.model
+        assert issubclass(type(self.model), GenerativeAE), "Selected model is not an instance of GenerativeAE. " \
+                                                           "Can only score disentanglement against Generative AE networks."
         self.model.eval()
         self.dataloader = self.experiment.loader
         print(model_name+ " model loaded.")
@@ -58,9 +61,12 @@ class ModelHandler(object):
             else:
                 actual_checkpoint_path = str(checkpoint_path) +"/"+ name + ".ckpt"
                 print("Loading selected checkpoint at "+ actual_checkpoint_path)
+
             self.experiment = self.experiment.load_from_checkpoint(actual_checkpoint_path,
                                                                    hparams_file=hparams_path,
-                                                                   device=self.device)
+                                                                   device=self.device,
+                                                                   strict=False,
+                                                                   params=self.config)
             self.model = self.experiment.model
             self.model.eval()
         except ValueError:
@@ -111,3 +117,4 @@ class ModelHandler(object):
 if __name__ == '__main__':
     handler = ModelHandler(model_name="BaseSAE", model_version="dummy", data="MNIST")
     handler.load_checkpoint()
+    scores = handler.score_model(FID=False, disentanglement=True)

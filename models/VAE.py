@@ -35,6 +35,10 @@ class VAE(nn.Module, GenerativeAE):
         z, logvar, mu = self.gaussian_latent(codes)
         return [z, mu, logvar]
 
+    def encode_mu(self, inputs:Tensor) -> Tensor:
+        """ returns latent code (not noise) for given input"""
+        return self.encode(inputs)[0]
+
     def decode(self, noise: Tensor, activate:bool) -> Tensor:
         if not self.dittadi_v: noise = self.fc_dec(noise)
         upsmpld_res = self.upsmpld_conv_net(noise)

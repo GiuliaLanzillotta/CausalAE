@@ -60,7 +60,9 @@ def compute_sap(dataloader:DataLoader,
     ys_test = ys_test[indices, :]
 
     logging.info("Computing score matrix.")
-    return _compute_sap(mus_train, ys_train, mus_test, ys_test, continuous_factors)
+    SAP_score = _compute_sap(mus_train, ys_train, mus_test, ys_test, continuous_factors)
+    del mus_train, ys_train, mus_test, ys_test
+    return SAP_score
 
 
 def _compute_sap(mus, ys, mus_test, ys_test, continuous_factors):

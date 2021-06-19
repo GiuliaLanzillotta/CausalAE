@@ -33,6 +33,10 @@ class SAE(nn.Module, GenerativeAE):
         codes = self.encoder(inputs)
         return codes
 
+    def encode_mu(self, inputs:Tensor) -> Tensor:
+        """ returns latent code (not noise) for given input"""
+        return self.encode(inputs)
+
     def sample_noise_from_prior(self, num_samples:int):
         return self.hybrid_layer.sample_from_prior((num_samples,))
 

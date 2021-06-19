@@ -43,15 +43,20 @@ def generate_batch_factor_code(dataloader:DataLoader,
         # basically sampling num_points (observation, label) pairs in batches
         num_points_iter = min(num_points - i, batch_size)
         current_observations, current_factors = next(iter(dataloader))
+        if len(current_factors.shape)<2:
+            current_factors=np.expand_dims(current_factors,1)
         if i == 0:
             factors = current_factors
             with torch.no_grad():
                 representations = representation_function(current_observations).cpu()
         else:
             factors = np.vstack((factors, current_factors))
-            new_rep = representation_function(current_observations).cpu()
+            with torch.no_grad():
+                new_rep = representation_function(current_observations).cpu()
             representations = np.vstack((representations, new_rep))
         i += num_points_iter
+    representations = representations[:num_points]
+    factors = factors[:num_points]
     return np.transpose(representations), np.transpose(factors)
 
 def make_discretizer(target,

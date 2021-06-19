@@ -79,6 +79,7 @@ def compute_modularity_explicitness(dataloader:DataLoader,
                                     mus_test_norm, ys_test[i, :])
     scores["explicitness_score_train"] = np.mean(explicitness_score_train)
     scores["explicitness_score_test"] = np.mean(explicitness_score_test)
+    del mus_train, ys_train, mus_test, ys_test
     return scores
 
 

@@ -71,6 +71,7 @@ def compute_beta_vae_sklearn(dataset:DisentanglementDataset,
     scores_dict = {}
     scores_dict["train_accuracy"] = train_accuracy
     scores_dict["eval_accuracy"] = eval_accuracy
+    del train_points, train_labels
     return scores_dict
 
 

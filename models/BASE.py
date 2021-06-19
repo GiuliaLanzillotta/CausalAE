@@ -11,6 +11,11 @@ class GenerativeAE(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def encode_mu(self, inputs:Tensor) -> Tensor:
+        """ returns latent code (not noise) for given input"""
+        raise NotImplementedError
+
+    @abstractmethod
     def decode(self, noise:Tensor, activate:bool) -> Tensor:
         """ returns generated sample given noise"""
         raise NotImplementedError

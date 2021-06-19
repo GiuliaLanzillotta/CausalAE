@@ -2,10 +2,11 @@
 from . import DCI, BetaVAE, IRS, MIG, ModExp, SAP
 import numpy as np
 from torch.utils.data import DataLoader
+from models.BASE import GenerativeAE
 
 class ModelDisentanglementEvaluator(object):
     """ Takes a (trained) model and scores it against multiple disentanglement metrics. """
-    def __init__(self, model, test_dataloader:DataLoader):
+    def __init__(self, model:GenerativeAE, test_dataloader:DataLoader):
         self.model = model
         self.dataloader = test_dataloader
         self.test_input, _ = next(iter(test_dataloader))
@@ -16,29 +17,41 @@ class ModelDisentanglementEvaluator(object):
         print("Scoring model disentanglement.")
         complete_scores = {}
         disentanglement_scores = {}
+        TRAIN_NUM, TEST_NUM = 1000,500
         # DCI -----
-        dci_results = DCI.compute_dci(self.dataloader, self.model, batch_size=self.dataloader.batch_size)
+        print("DCI scoring")
+        dci_results = DCI.compute_dci(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,
+                                      batch_size=self.dataloader.batch_size)
         disentanglement_scores['DCI'] = dci_results['disentanglement']
         complete_scores['DCI'] = dci_results
         # BetaVAE ----
-        betaVAE_results = BetaVAE.compute_beta_vae_sklearn(self.dataloader.dataset, self.model,
-                                                           batch_size=self.dataloader.batch_size)
+        """
+        print("BetaVAE scoring")
+        betaVAE_results = BetaVAE.compute_beta_vae_sklearn(self.dataloader.dataset, self.model.encode_mu, num_train=TRAIN_NUM,
+                                                           num_eval=TEST_NUM, batch_size=self.dataloader.batch_size)
         disentanglement_scores['BVAE'] = betaVAE_results['eval_accuracy']
         complete_scores['BVAE'] = betaVAE_results
+        """
         # IRS -----
-        irs_results = IRS.compute_irs(self.dataloader, self.model, batch_size=self.dataloader.batch_size)
+        print("IRS scoring")
+        irs_results = IRS.compute_irs(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, batch_size=self.dataloader.batch_size)
         disentanglement_scores['IRS'] = irs_results['disentanglement_scores']
         complete_scores['IRS'] = irs_results
         # MIG -----
-        mig_results = MIG.compute_mig(self.dataloader, self.model, batch_size=self.dataloader.batch_size)
+        print("MIG scoring")
+        mig_results = MIG.compute_mig(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, batch_size=self.dataloader.batch_size)
         disentanglement_scores['MIG'] = mig_results['discrete_mig']
         complete_scores['MIG'] = mig_results
         # ModExp -----
-        modexp_results = ModExp.compute_modularity_explicitness(self.dataloader, self.model, batch_size=self.dataloader.batch_size)
+        print("Modularity explicitness scoring")
+        modexp_results = ModExp.compute_modularity_explicitness(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,
+                                                                batch_size=self.dataloader.batch_size)
         disentanglement_scores['ModExp'] = modexp_results['modularity_score']
         complete_scores['ModExp'] = modexp_results
         # SAP -----
-        sap_results = SAP.compute_sap(self.dataloader, self.model, batch_size=self.dataloader.batch_size)
+        print("SAP scoring")
+        sap_results = SAP.compute_sap(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,
+                                      batch_size=self.dataloader.batch_size)
         disentanglement_scores['SAP'] = sap_results['SAP_score']
         complete_scores['SAP'] = sap_results
 

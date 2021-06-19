@@ -69,6 +69,7 @@ def compute_irs(dataloader:DataLoader,
     score_dict = {}
     score_dict["IRS"] = irs_score
     score_dict["num_active_dims"] = np.sum(active_mus)
+    del mus, ys
     return score_dict
 
 

@@ -62,6 +62,7 @@ def compute_mig(dataloader:DataLoader,
 
     results_dict = scores
     results_dict['extras'] = extras
+    del mus_train, ys_train
     return results_dict
 
 
