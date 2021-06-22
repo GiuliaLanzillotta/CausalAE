@@ -17,7 +17,8 @@ class ModelDisentanglementEvaluator(object):
         print("Scoring model disentanglement.")
         complete_scores = {}
         disentanglement_scores = {}
-        TRAIN_NUM, TEST_NUM = 1000,500
+        TRAIN_NUM, TEST_NUM = 10000,5000
+        TRAIN_NUM, TEST_NUM = 10,5
         # DCI -----
         print("DCI scoring")
         dci_results = DCI.compute_dci(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,
@@ -25,17 +26,15 @@ class ModelDisentanglementEvaluator(object):
         disentanglement_scores['DCI'] = dci_results['disentanglement']
         complete_scores['DCI'] = dci_results
         # BetaVAE ----
-        """
         print("BetaVAE scoring")
         betaVAE_results = BetaVAE.compute_beta_vae_sklearn(self.dataloader.dataset, self.model.encode_mu, num_train=TRAIN_NUM,
                                                            num_eval=TEST_NUM, batch_size=self.dataloader.batch_size)
         disentanglement_scores['BVAE'] = betaVAE_results['eval_accuracy']
         complete_scores['BVAE'] = betaVAE_results
-        """
         # IRS -----
         print("IRS scoring")
         irs_results = IRS.compute_irs(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, batch_size=self.dataloader.batch_size)
-        disentanglement_scores['IRS'] = irs_results['disentanglement_scores']
+        disentanglement_scores['IRS'] = irs_results['IRS']
         complete_scores['IRS'] = irs_results
         # MIG -----
         print("MIG scoring")
@@ -44,7 +43,7 @@ class ModelDisentanglementEvaluator(object):
         complete_scores['MIG'] = mig_results
         # ModExp -----
         print("Modularity explicitness scoring")
-        modexp_results = ModExp.compute_modularity_explicitness(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,
+        modexp_results = ModExp.compute_modularity_explicitness(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TRAIN_NUM,
                                                                 batch_size=self.dataloader.batch_size)
         disentanglement_scores['ModExp'] = modexp_results['modularity_score']
         complete_scores['ModExp'] = modexp_results

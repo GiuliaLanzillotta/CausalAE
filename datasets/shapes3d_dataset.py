@@ -99,6 +99,12 @@ class Shapes3d(VisionDataset, DisentanglementDataset):
         labels = self.categorise_labels(labels)
         return images, labels
 
+    def check_and_substitute(self, factors:np.ndarray, other_factors:np.ndarray, index:int):
+        """Checks if all the factors in the factors array exists in the dataset
+        - overrides the implementation given in DisentanglementDataset superclass"""
+        return factors
+
+
     def factorise(self):
         """ Creates the factors dictionary, i.e. a dictionary storing the index relative
         to any factor combination. This is the core of sample_observations_from_factors."""

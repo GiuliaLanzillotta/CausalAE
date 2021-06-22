@@ -57,7 +57,7 @@ def generate_batch_factor_code(dataloader:DataLoader,
         i += num_points_iter
     representations = representations[:num_points]
     factors = factors[:num_points]
-    return np.transpose(representations), np.transpose(factors)
+    return np.transpose(representations.numpy()), np.transpose(factors.numpy())
 
 def make_discretizer(target,
                      num_bins,

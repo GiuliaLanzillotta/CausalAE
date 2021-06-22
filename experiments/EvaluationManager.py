@@ -8,6 +8,7 @@ from pathlib import Path
 from configs import get_config
 import os
 import glob
+import json
 from visualisations import ModelVisualiser
 from metrics import FIDScorer, ModelDisentanglementEvaluator
 
@@ -72,7 +73,7 @@ class ModelHandler(object):
         except ValueError:
             print(f"No checkpoint available at {actual_checkpoint_path}. Cannot load trained weights.")
 
-    def score_model(self, FID=False, disentanglement=False):
+    def score_model(self, FID=False, disentanglement=False, save_scores=False):
         """Scores the model on the test set in loss and other terms selected"""
         scores = {}
         loader = self.dataloader.test
@@ -93,6 +94,13 @@ class ModelHandler(object):
                     except Exception: print("Reached the end of FID scorer buffer")
                 FID_score = self.fidscorer.calculate_fid()
                 scores["FID"]=FID_score
+        if save_scores:
+            base_path = Path(self.config['logging_params']['save_dir']) / \
+                        self.config['logging_params']['name'] / \
+                        self.config['logging_params']['version'] / "scoring.json"
+            with open(base_path, 'w') as o:
+                json.dump(scores, o)
+
         return scores
 
 
@@ -115,6 +123,6 @@ class ModelHandler(object):
 
 
 if __name__ == '__main__':
-    handler = ModelHandler(model_name="BaseSAE", model_version="dummy", data="MNIST")
+    handler = ModelHandler(model_name="BaseSAE", model_version="v16", data="RFDh5")
     handler.load_checkpoint()
     scores = handler.score_model(FID=False, disentanglement=True)
