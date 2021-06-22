@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch import Tensor
 from torch import optim
-from models import SAE
+from models import ESAE
 from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseExperiment
 from visualisations import ModelVisualiser
@@ -21,17 +21,45 @@ class ESAEXperiment(BaseExperiment):
         # split in train/test, apply transformations, divide in batches, extract data dimension
         loader = DatasetLoader(params["data_params"])
         dim_in =  loader.data_shape # C, H, W
-        model = SAE(params["model_params"], dim_in)
+        model = ESAE(params["model_params"], dim_in)
         super(ESAEXperiment, self).__init__(params, model, loader)
 
     def training_step(self, batch, batch_idx):
-        #TODO
+        input_imgs, labels = batch
+        X_hat = self.forward(input_imgs)
+        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
+        self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
+        if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
+            figure = self.visualiser.plot_training_gradients(self.global_step)
+            self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
+        return BCE
 
     def score_FID(self, batch_idx, inputs, results):
-        #TODO
+        if batch_idx==0:
+            self._fidscorer.start_new_scoring(self.params['data_params']['batch_size']*self.num_FID_steps,device=self.device)
+        if  batch_idx<=self.num_FID_steps:#only one every 50 batches is included to avoid memory issues
+            try: self._fidscorer.get_activations(inputs, self.model.act(results)) #store activations for current batch
+            except Exception as e:
+                print(e)
+                print("Reached the end of FID scorer buffer")
 
     def validation_step(self, batch, batch_idx):
-        #TODO
+        input_imgs, labels = batch
+        X_hat = self.forward(input_imgs)
+        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
+        self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
+            self.score_FID(batch_idx, input_imgs, X_hat)
+        return BCE
 
     def test_step(self, batch, batch_idx):
-        #TODO
+        input_imgs, labels = batch
+        X_hat = self.forward(input_imgs)
+        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
+        self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)
+        self.score_FID(batch_idx, input_imgs, X_hat)
+

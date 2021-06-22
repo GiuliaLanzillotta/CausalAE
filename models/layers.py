@@ -345,7 +345,11 @@ class GaussianLayer(nn.Module):
 
 
 class HybridLayer(nn.Module):
-    """Stochastic layer based on Hybrid sampling"""
+    """Stochastic layer based on Hybrid sampling
+    Implements
+        - hierarchical sampling: higher features in the hierarchy get resampled less often
+        - hybridisation levels: higher level -> higher hybridisation
+    """
     def __init__(self, dim, unit_dim, N):
         super(HybridLayer, self).__init__()
         self.dim = dim
@@ -354,11 +358,13 @@ class HybridLayer(nn.Module):
         self.weights = torch.ones(self.N) # unnormalised probability weights for each sample (equivalent to uniform)
         self.weights.requires_grad = False
         self.prior = None
+        self.max_hybridisation_level = self.dim//self.unit_dim
+        self.hierarchical_weights = torch.Tensor(range(1,self.max_hybridisation_level+1))/sum(range(1,self.max_hybridisation_level+1))
 
     def initialise_prior(self, latent_vectors):
         # randomly selecting latent vectors for the prior
         input_size = latent_vectors.detach().shape[0]
-        idx = torch.randperm(input_size).to(latent_vectors.device)
+        idx = torch.randperm(input_size).to(latent_vectors.device) #shuffling indices
         if input_size<self.N:
             selected_idx = idx[:input_size]
         else: selected_idx = idx[:self.N]
@@ -382,6 +388,31 @@ class HybridLayer(nn.Module):
             idx = torch.multinomial(self.weights[:self.prior.shape[0]],
                                     num_samples, replacement=True).to(chunk.device)
             new_vectors.append(torch.index_select(chunk, 0, idx))
+        noise = torch.cat(new_vectors, dim=1)
+        return noise
+
+    def controlled_sampling(self, latent_vectors, hybridisation_level:int, use_prior=False):
+        """Generates hybrid samples at the desired level
+        Hybridisation level: int between 0 and self.max_hybridisation determining how many dimensions get resampled
+        use_prior: if True the sampling base is the prior set (which usually is a subset of the latent set)"""
+        if hybridisation_level==0: return latent_vectors
+        if use_prior and self.prior is None: raise ValueError("use_prior set to True and prior not initialised")
+        if hybridisation_level > self.max_hybridisation_level: raise ValueError("Hybridisation level too high")
+        num_samples = latent_vectors[0]
+        latent_chunks = torch.split(latent_vectors, self.unit_dim, dim=1)
+        if use_prior: prior_chunks = torch.split(self.prior, self.unit_dim, dim=1)
+        # obtain list of dimensions to resample
+        to_resample = torch.multinomial(self.hierarchical_weights, hybridisation_level, replacement=False) #list of indices
+        # randomising the order of each chunk
+        new_vectors = []
+        for i, latent_chunk in enumerate(latent_chunks):
+            if i in to_resample:
+                # num_samples x N one-hot matrix
+                if use_prior: chunk = prior_chunks[i]
+                else: chunk = latent_chunk
+                idx = torch.multinomial(self.weights[:self.prior.shape[0]], num_samples, replacement=True).to(chunk.device)
+                new_vectors.append(torch.index_select(chunk, 0, idx))
+            else: new_vectors.append(latent_chunk)
         noise = torch.cat(new_vectors, dim=1)
         return noise
 

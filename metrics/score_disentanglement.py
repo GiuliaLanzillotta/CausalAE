@@ -17,8 +17,7 @@ class ModelDisentanglementEvaluator(object):
         print("Scoring model disentanglement.")
         complete_scores = {}
         disentanglement_scores = {}
-        TRAIN_NUM, TEST_NUM = 10000,5000
-        TRAIN_NUM, TEST_NUM = 10,5
+        TRAIN_NUM, TEST_NUM = 1000,500
         # DCI -----
         print("DCI scoring")
         dci_results = DCI.compute_dci(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,
@@ -27,8 +26,8 @@ class ModelDisentanglementEvaluator(object):
         complete_scores['DCI'] = dci_results
         # BetaVAE ----
         print("BetaVAE scoring")
-        betaVAE_results = BetaVAE.compute_beta_vae_sklearn(self.dataloader.dataset, self.model.encode_mu, num_train=TRAIN_NUM,
-                                                           num_eval=TEST_NUM, batch_size=self.dataloader.batch_size)
+        betaVAE_results = BetaVAE.compute_beta_vae_sklearn(self.dataloader.dataset, self.model.encode_mu, num_train=TRAIN_NUM//10,
+                                                           num_eval=TEST_NUM//10, batch_size=self.dataloader.batch_size)
         disentanglement_scores['BVAE'] = betaVAE_results['eval_accuracy']
         complete_scores['BVAE'] = betaVAE_results
         # IRS -----

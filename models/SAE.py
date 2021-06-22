@@ -38,6 +38,7 @@ class SAE(nn.Module, GenerativeAE):
         return self.encode(inputs)
 
     def sample_noise_from_prior(self, num_samples:int):
+        """Equivalent to total hybridisation: every point is hybridised at the maximum level"""
         return self.hybrid_layer.sample_from_prior((num_samples,))
 
     def sample_noise_from_posterior(self, inputs: Tensor):
