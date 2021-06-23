@@ -8,6 +8,44 @@ from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock, Genera
 from torch.nn import functional as F
 from .utils import act_switch
 
+def RBF_kernel(X, Y):
+    """
+    Computes similarity between X and Y according to RBF kernel
+    """
+    #TODO
+    half_size = (n * n - n) / 2
+    norms_pz = tf.reduce_sum(tf.square(sample_pz), axis=1, keep_dims=True)
+    dotprods_pz = tf.matmul(sample_pz, sample_pz, transpose_b=True)
+    distances_pz = norms_pz + tf.transpose(norms_pz) - 2. * dotprods_pz
+
+    norms_qz = tf.reduce_sum(tf.square(sample_qz), axis=1, keep_dims=True)
+    dotprods_qz = tf.matmul(sample_qz, sample_qz, transpose_b=True)
+    distances_qz = norms_qz + tf.transpose(norms_qz) - 2. * dotprods_qz
+
+    dotprods = tf.matmul(sample_qz, sample_pz, transpose_b=True)
+    distances = norms_qz + tf.transpose(norms_pz) - 2. * dotprods
+
+    sigma2_k = tf.nn.top_k(tf.reshape(distances, [-1]), half_size).values[half_size - 1]
+    sigma2_k += tf.nn.top_k(tf.reshape(distances_qz, [-1]), half_size).values[half_size - 1]
+
+    res1 = tf.exp( - distances_qz / 2. / sigma2_k)
+    res1 += tf.exp( - distances_pz / 2. / sigma2_k)
+    res1 = tf.multiply(res1, 1. - tf.eye(n))
+    res1 = tf.reduce_sum(res1) / (nf * nf - nf)
+    res2 = tf.exp( - distances / 2. / sigma2_k)
+    res2 = tf.reduce_sum(res2) * 2. / (nf * nf)
+    stat = res1 - res2
+
+    return stat
+
+def Categorical_kernel(X,Y):
+    """
+    Computes similarity between X and Y according to a categorical kernel
+    See here for inspo: https://upcommons.upc.edu/bitstream/handle/2117/23347/KernelCATEG_CCIA2013.pdf?sequence=1
+    """
+    #TODO: take into account hierarchy
+    #basically the idea is to reformulate the Overlap kernel exploiting the structure
+
 class ESAE(SAE):
     """Equivariant version of the SAE"""
     def __init__(self, params:dict, dim_in) -> None:
@@ -60,7 +98,7 @@ class ESAE(SAE):
         #TODO: make fancier"""
         N = X_hat.shape[0]
         if level==0: factors= torch.ones(N)
-        else: factors = 1/(level*torch.norm(Z-Z_hybrid,1, dim=1))
+        else: factors = 1/(level*torch.norm(Z-Z_hybrid,1, dim=1)) #TODO: normalise dimension-wise to allow dimensions to change scale during training
         MSEs = torch.sum(F.mse_loss(X_hat, X, reduction="none"),
                          tuple(range(X_hat.dim()))[1:])
         total_cost = torch.matmul(MSEs, factors)/N
@@ -85,9 +123,6 @@ class ESAE(SAE):
         L_reg_max /= (P*(P-1))
 
         return L_reg_max+L_reg_mix+L_reg_all
-
-
-
 
     def loss_function(self, *args, **kwargs):
         X_hats = args[0] #(BxM)xD
