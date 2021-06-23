@@ -4,47 +4,9 @@ import numpy as np
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock, GenerativeAE, SAE
+from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock, GenerativeAE, SAE, utils
 from torch.nn import functional as F
 from .utils import act_switch
-
-def RBF_kernel(X, Y):
-    """
-    Computes similarity between X and Y according to RBF kernel
-    """
-    #TODO
-    half_size = (n * n - n) / 2
-    norms_pz = tf.reduce_sum(tf.square(sample_pz), axis=1, keep_dims=True)
-    dotprods_pz = tf.matmul(sample_pz, sample_pz, transpose_b=True)
-    distances_pz = norms_pz + tf.transpose(norms_pz) - 2. * dotprods_pz
-
-    norms_qz = tf.reduce_sum(tf.square(sample_qz), axis=1, keep_dims=True)
-    dotprods_qz = tf.matmul(sample_qz, sample_qz, transpose_b=True)
-    distances_qz = norms_qz + tf.transpose(norms_qz) - 2. * dotprods_qz
-
-    dotprods = tf.matmul(sample_qz, sample_pz, transpose_b=True)
-    distances = norms_qz + tf.transpose(norms_pz) - 2. * dotprods
-
-    sigma2_k = tf.nn.top_k(tf.reshape(distances, [-1]), half_size).values[half_size - 1]
-    sigma2_k += tf.nn.top_k(tf.reshape(distances_qz, [-1]), half_size).values[half_size - 1]
-
-    res1 = tf.exp( - distances_qz / 2. / sigma2_k)
-    res1 += tf.exp( - distances_pz / 2. / sigma2_k)
-    res1 = tf.multiply(res1, 1. - tf.eye(n))
-    res1 = tf.reduce_sum(res1) / (nf * nf - nf)
-    res2 = tf.exp( - distances / 2. / sigma2_k)
-    res2 = tf.reduce_sum(res2) * 2. / (nf * nf)
-    stat = res1 - res2
-
-    return stat
-
-def Categorical_kernel(X,Y):
-    """
-    Computes similarity between X and Y according to a categorical kernel
-    See here for inspo: https://upcommons.upc.edu/bitstream/handle/2117/23347/KernelCATEG_CCIA2013.pdf?sequence=1
-    """
-    #TODO: take into account hierarchy
-    #basically the idea is to reformulate the Overlap kernel exploiting the structure
 
 class ESAE(SAE):
     """Equivariant version of the SAE"""

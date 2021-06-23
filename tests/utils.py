@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+
 class IdentityObservationsData(DisentanglementDataset, Dataset):
     """Data set where dummy factors """
 
@@ -90,5 +91,3 @@ class DummyData(DisentanglementDataset, Dataset):
         obs1 = torch.Tensor(np.random.random_sample(size=(num, 64, 64, 1)))
         obs2 = torch.Tensor(np.random.random_sample(size=(num, 64, 64, 1)))
         return index,obs1,obs2
-
-
