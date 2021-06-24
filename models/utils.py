@@ -43,7 +43,7 @@ def standard_initialisation(m, non_linearity='leaky_relu'):
 
 def RBF_kernel(X:Tensor, Y:Tensor):
     """
-    Computes similarity between X and Y according to RBF kernel, using sigma equal to the median distance between
+    Computes similarity as MMD between X and Y according to RBF kernel, using sigma equal to the median distance between
     vectors computed wrt to both samples
     """
     N = X.shape[0]
@@ -65,17 +65,13 @@ def RBF_kernel(X:Tensor, Y:Tensor):
 
     res1 = torch.exp( - distances_qz / 2. / sigma2_k)
     res1 = torch.multiply(res1, 1. - torch.eye(N))
-    res1 = torch.sum(res1) / float(N * (N - 1))
 
     res2 = torch.exp( - distances_pz / 2. / sigma2_k)
     res2 = torch.multiply(res2, 1. - torch.eye(M))
-    res2 = torch.sum(res2) / float(M * (M - 1))
 
     res3 = torch.exp( - distances / 2. / sigma2_k)
-    res3 = torch.sum(res3) * 2. / float(N * M)
-    stat = res1 + res2 - res3
 
-    return stat
+    return res1,res2,res3
 
 def IMQ_kernel(X:Tensor, Y:Tensor):
     """Inverse multiquadratic kernels- less sensible to outliers
@@ -100,22 +96,21 @@ def IMQ_kernel(X:Tensor, Y:Tensor):
     # expected squared distance between two multivariate Gaussian vectors drawn from prior
     Cbase = 2.*float(X.shape[1])*torch.mean(distances_qz)
 
-    stat = 0.
-    for scale in [.1, .2, .5, 1., 2., 5., 10.]:
+    res1 = torch.zeros_like(distances_pz)
+    res2 = torch.zeros_like(distances_qz)
+    res3 = torch.zeros_like(distances)
+
+    for scale in [.1, .2, .5, 1., 2., 5., 10.]: #TODO: why this sum over different scales
         C = Cbase * scale
-        res1 = C / (C + distances_qz)
-        res1 = torch.multiply(res1, 1. - torch.eye(N))
-        res1 = torch.sum(res1) / float(N * (N - 1))
+        r = C / (C + distances_qz)
+        res1 += torch.multiply(r, 1. - torch.eye(N))
 
-        res2 = C / (C + distances_pz)
-        res2 = torch.multiply(res2, 1. - torch.eye(M))
-        res2 = torch.sum(res2) / float(M * (M - 1))
+        r = C / (C + distances_pz)
+        res2 += torch.multiply(r, 1. - torch.eye(M))
 
-        res3 = C / (C + distances)
-        res3 = torch.sum(res3) * 2. / float(N * M)
-        stat += res1 + res2 - res3
+        res3 += C / (C + distances)
 
-    return stat
+    return res1, res2, res3
 
 def Categorical_kernel(X,Y, strict=False, hierarchy=False):
     """
@@ -144,26 +139,41 @@ def Categorical_kernel(X,Y, strict=False, hierarchy=False):
     else:
         hierarchy_weights = torch.ones(Dz)
 
-    res1 = 0.
     if not strict:
         delta_X = torch.max(X,axis=0)[0] - torch.min(X,axis=0)[0]
         delta_Y = torch.max(Y,axis=0)[0] - torch.min(Y,axis=0)[0]
+
+    similarities1 = torch.zeros(N,N, dtype=torch.float)
     for i in range(N):
         similarities_i = delta_X - torch.abs(X-X[i]) if not strict else (X==X[i]).type(torch.float)
-        res1 += torch.sum(torch.matmul(similarities_i,hierarchy_weights))
-    res1 /= float(N*(N-1))
+        similarities1[:,i] = torch.matmul(similarities_i,hierarchy_weights)
 
-    res2 = 0.
-    res3 = 0.
+    similarities2 = torch.zeros(M,M, dtype=torch.float)
+    similarities3 = torch.zeros(N,M, dtype=torch.float)
     for i in range(M):
         similarities_i = delta_Y - torch.abs(Y-Y[i]) if not strict else (Y==Y[i]).type(torch.float)
-        res2 += torch.sum(torch.matmul(similarities_i,hierarchy_weights))
+        similarities2[:,i] = torch.matmul(similarities_i,hierarchy_weights)
         similarities_i = (delta_X + delta_Y) - torch.abs(X-Y[i]) if not strict else (X==Y[i]).type(torch.float)
-        res3 += torch.sum(torch.matmul(similarities_i,hierarchy_weights))
-    res2 /= float(M*(M-1))
-    res3 /= float(M*N)
+        similarities3[:,i] = torch.matmul(similarities_i,hierarchy_weights)
 
-    return res1+res2-2*res3
+    return similarities1,similarities2,similarities3
+
+def MMD(similaritiesPP, similaritiesQQ, similaritiesPQ):
+    """ Computes MMD given the three matrices of distances given as input
+    (obtained through one of the three above functions)"""
+    N = similaritiesPP.shape[0]
+    M = similaritiesQQ.shape[0]
+    res1 = torch.sum(similaritiesPP) / float(N * (N - 1))
+    res2 = torch.sum(similaritiesQQ) / float(M * (M - 1))
+    res3 = torch.sum(similaritiesPQ) * 2. / float(N * M)
+
+    return res1 + res2 - res3
+
+if __name__ == '__main__':
+    #TESTING
+    X = torch.randn(100,10)
+    Y = torch.randn(100,10)
+    res1,res2,res3 = RBF_kernel(X,Y)
 
 
 

@@ -67,24 +67,20 @@ class ESAE(SAE):
         return total_cost
 
     @staticmethod
-    def compute_MMD(Z_all_h:Tensor, Z_max_h:Tensor, kernel):
-        """Naive implementation of MMD in the latent space"""
-        MN = Z_all_h.shape[0]
-        P = Z_max_h.shape[0]
-        L_reg_all, L_reg_max, L_reg_mix = 0,0,0
-        for i in range(MN):
-            for j in range(MN):
-                L_reg_all+= kernel(Z_all_h[i],Z_all_h[j])
-            for p in range(P):
-                L_reg_mix+= kernel(Z_all_h[i],Z_max_h[p])
-        for i in range(P):
-            for j in range(P):
-                L_reg_max+= kernel(Z_max_h[i],Z_max_h[j])
-        L_reg_all /= (MN*(MN-1))
-        L_reg_mix /= (MN*P)
-        L_reg_max /= (P*(P-1))
-
-        return L_reg_max+L_reg_mix+L_reg_all
+    def compute_MMD(Z_all_h:Tensor, Z_max_h:Tensor, kernel="RBF", **kwargs):
+        """Naive implementation of MMD in the latent space
+        Available kernels: RBF, IMQ, cat (stands for categorical) -- se utils for more ingo
+        """
+        #TODO: normalise the two vectors per dimension
+        #TODO: add switch to subsample first Z (in order to have same dimensionality)
+        if kernel=="RBF":
+            MMD = utils.MMD(*utils.RBF_kernel(Z_all_h, Z_max_h))
+        elif kernel=="IMQ":
+            MMD = utils.MMD(*utils.IMQ_kernel(Z_all_h, Z_max_h))
+        elif kernel=="cat":
+            MMD = utils.MMD(*utils.Categorical_kernel(Z_all_h, Z_max_h, kwargs.get("strict",True), kwargs.get("hierarchy",True)))
+        else: raise NotImplementedError("Specified kernel for MMD '"+kernel+"' not implemented.")
+        return MMD
 
     def loss_function(self, *args, **kwargs):
         X_hats = args[0] #(BxM)xD
