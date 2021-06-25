@@ -27,7 +27,7 @@ class ESAEXperiment(BaseExperiment):
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        losses = self.model.loss_function(*results, X = input_imgs, lamda = self.params["lamda"])
+        losses = self.model.loss_function(*results, X = input_imgs, lamda = self.model.params["lamda"])
         # Logging
         self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log('REC_loss', losses["Reconstruction_loss"], on_epoch=True)
@@ -49,7 +49,7 @@ class ESAEXperiment(BaseExperiment):
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        val_losses = self.model.loss_function(*results, X = input_imgs, lamda = self.params["lamda"])
+        val_losses = self.model.loss_function(*results, X = input_imgs, lamda = self.model.params["lamda"])
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', val_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
         if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0:
@@ -59,7 +59,7 @@ class ESAEXperiment(BaseExperiment):
     def test_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        test_losses = self.model.loss_function(*results, X = input_imgs, lamda = self.params["lamda"])
+        test_losses = self.model.loss_function(*results, X = input_imgs, lamda = self.model.params["lamda"])
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.score_FID(batch_idx, input_imgs, results)

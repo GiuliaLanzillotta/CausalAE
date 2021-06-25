@@ -126,22 +126,22 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='BaseSAE')
+                        default='ESAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="RFDh5")
+                        default="MNIST")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="v16")
+                        default="dummy")
     parser.add_argument('--test', '-e', #Note that when testing is switched on then training is switched off
                         dest="test",
                         metavar="TEST",
                         help= "Whether to load the model for testing",
-                        default=True)
+                        default=False)
 
 
     args = parser.parse_args()

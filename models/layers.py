@@ -398,7 +398,7 @@ class HybridLayer(nn.Module):
         if hybridisation_level==0: return latent_vectors
         if use_prior and self.prior is None: raise ValueError("use_prior set to True and prior not initialised")
         if hybridisation_level > self.max_hybridisation_level: raise ValueError("Hybridisation level too high")
-        num_samples = latent_vectors[0]
+        num_samples = latent_vectors.shape[0]
         latent_chunks = torch.split(latent_vectors, self.unit_dim, dim=1)
         if use_prior: prior_chunks = torch.split(self.prior, self.unit_dim, dim=1)
         # obtain list of dimensions to resample

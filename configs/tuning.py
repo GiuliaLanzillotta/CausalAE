@@ -24,9 +24,17 @@ def get_BaseSAE_tuning_configs(config:dict):
     config["opt_params"]["auto_epochs"] = tune.grid_search([-1, 10])
     return config
 
+def get_ESAE_tuning_configs(config:dict):
+    #changing some of the keys
+    # standard tuning (regarding optimisation
+    config = standard_tuning(config)
+    config["model_params"]["unit_dim"] = tune.grid_search([1, 2, 4])
+    config["opt_params"]["auto_epochs"] = tune.grid_search([-1, 10])
+    return config
 
 config_switch = {'VAE':get_VAE_tuning_configs,
-                 'BaseSAE':get_BaseSAE_tuning_configs}
+                 'BaseSAE':get_BaseSAE_tuning_configs,
+                 'ESAE':get_ESAE_tuning_configs}
 
 
 def get_config(tuning:bool, model_name:str, data:str, version:str):

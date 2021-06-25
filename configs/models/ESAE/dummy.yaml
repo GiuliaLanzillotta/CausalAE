@@ -2,11 +2,11 @@ model_params:
   name: 'ESAE'
   latent_vecs: 128 # for hybrid sampling
   residual: True
-  latent_size: 12
-  enc_depth: 12 #number of convolutional layers in the encoder
-  dec_depth: 12
-  pool_every: 3
-  unit_dim: 1
+  latent_size: 10
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
+  pool_every: 2
+  unit_dim: 2
   norm: 'group'
   channels: 64
   # --------- parameters related to MMD kernel setting ----------

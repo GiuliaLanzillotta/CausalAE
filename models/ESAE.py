@@ -72,7 +72,7 @@ class ESAE(SAE):
             factors = 1/(level*torch.norm(ZN-ZHN,1, dim=1)) #TODO: normalise dimension-wise to allow dimensions to change scale during training
         MSEs = torch.sum(F.mse_loss(X_hat, X, reduction="none"),
                          tuple(range(X_hat.dim()))[1:])
-        total_cost = torch.matmul(MSEs, factors)/N
+        total_cost = torch.matmul(MSEs.to(factors.device), factors)/N
         return total_cost
 
     @staticmethod
@@ -107,7 +107,7 @@ class ESAE(SAE):
         for l,level in enumerate(H_levels):
             X_hat = X_hats[l*B:(l+1)*B]
             Z_h = Z_hybrid[l]
-            L_rec_tot += self.reconstruction_hybrid(X, X_hat, Z, Z_h, level)
+            L_rec_tot += self.reconstruction_hybrid(X, X_hat, Z, Z_h, level).to('cpu')
         l_max = np.argmax(H_levels)
         Z_max_h = Z_hybrid[l_max]
         Z_all = torch.vstack(Z_hybrid)
