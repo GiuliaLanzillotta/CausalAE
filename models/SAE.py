@@ -11,6 +11,7 @@ class SAE(nn.Module, GenerativeAE):
 
     def __init__(self, params:dict, dim_in) -> None:
         super(SAE, self).__init__()
+        self.params = params
         self.latent_size = params["latent_size"]
         self.unit_dim = params["unit_dim"]
         self.N = params["latent_vecs"] # number of latent vectors to store for hybrid sampling

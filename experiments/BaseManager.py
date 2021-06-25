@@ -54,6 +54,8 @@ class BaseExperiment(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         # Logging hyperparameters
         # Visualisation
+        #TODO: insert disentanglement scoring once in a while
+        #TODO: check plotting here
         if self.num_val_steps%self.plot_every==0 or \
                 self.global_step==self.params["trainer_params"]["max_steps"]:
             self.make_plots(originals=self.global_step==0)

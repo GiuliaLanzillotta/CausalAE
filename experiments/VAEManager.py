@@ -77,7 +77,6 @@ class VAEXperiment(BaseExperiment):
             self.score_FID(batch_idx, input_imgs, results)
         return val_loss
 
-
     def test_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)#

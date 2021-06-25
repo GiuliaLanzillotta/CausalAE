@@ -26,40 +26,41 @@ class ESAEXperiment(BaseExperiment):
 
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
-        X_hat = self.forward(input_imgs)
-        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
-        self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
-        self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
+        results = self.forward(input_imgs)
+        losses = self.model.loss_function(*results, X = input_imgs, lamda = self.params["lamda"])
+        # Logging
+        self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
+        self.log('REC_loss', losses["Reconstruction_loss"], on_epoch=True)
+        self.log('REG_loss', losses["Regularization_loss"], on_epoch=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
             figure = self.visualiser.plot_training_gradients(self.global_step)
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
-        return BCE
+        return losses
 
     def score_FID(self, batch_idx, inputs, results):
         if batch_idx==0:
             self._fidscorer.start_new_scoring(self.params['data_params']['batch_size']*self.num_FID_steps,device=self.device)
         if  batch_idx<=self.num_FID_steps:#only one every 50 batches is included to avoid memory issues
-            try: self._fidscorer.get_activations(inputs, self.model.act(results)) #store activations for current batch
+            try: self._fidscorer.get_activations(inputs, self.model.act(results[0])) #store activations for current batch
             except Exception as e:
                 print(e)
                 print("Reached the end of FID scorer buffer")
 
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
-        X_hat = self.forward(input_imgs)
-        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
-        self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
-        self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
-        self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
-            self.score_FID(batch_idx, input_imgs, X_hat)
-        return BCE
+        results = self.forward(input_imgs)
+        val_losses = self.model.loss_function(*results, X = input_imgs, lamda = self.params["lamda"])
+        # Calling self.log will surface up scalars for you in TensorBoard
+        self.log('val_loss', val_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0:
+            self.score_FID(batch_idx, input_imgs, results)
+        return val_losses
 
     def test_step(self, batch, batch_idx):
         input_imgs, labels = batch
-        X_hat = self.forward(input_imgs)
-        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
-        self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)
-        self.score_FID(batch_idx, input_imgs, X_hat)
+        results = self.forward(input_imgs)
+        test_losses = self.model.loss_function(*results, X = input_imgs, lamda = self.params["lamda"])
+        # Calling self.log will surface up scalars for you in TensorBoard
+        self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        self.score_FID(batch_idx, input_imgs, results)
 
