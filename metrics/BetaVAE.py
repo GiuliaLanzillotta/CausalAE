@@ -126,7 +126,7 @@ def _generate_training_sample(dataset:DisentanglementDataset,
     feature_vector: Feature vector of training sample.
   """
     # Select random coordinate to keep fixed.
-    index, observations1, observations2 = dataset.sample_pairs_observations_scnd(batch_size)
+    index, observations1, observations2 = dataset.sample_pairs_observations(batch_size)
     # convert to torch Tensor
     # Compute representations based on the observations.
     with torch.no_grad():

@@ -123,7 +123,7 @@ class DisentanglementDataset(ABC):
         print("Total of "+str(count)+" substitutions done.")
         return factors
 
-    def sample_pairs_observations_scnd(self, num):
+    def sample_pairs_observations(self, num):
         """ Samples a batch of pairs of observations as used in BetaVAE disentanglement metric.
         -> only one factor index fixed for every pair"""
         first_factors = self.sample_factors(num, numeric_format=True)
@@ -134,18 +134,3 @@ class DisentanglementDataset(ABC):
         obs1 = self.sample_observations_from_factors(first_factors, numeric_format=True)
         obs2 = self.sample_observations_from_factors(second_factors, numeric_format=True)
         return index, obs1, obs2
-
-    def sample_pairs_observations(self, num):
-        """ Samples a batch of pairs of observations as used in BetaVAE disentanglement metric.
-        -> only one factor index fixed for every pair"""
-        first_factors = self.sample_factors(num, numeric_format=False)
-        index = np.random.randint(0,self.num_factors)
-        fixed_indices = [[index]]*num # = [[index],[index], .... , [index]]
-        _, observations = self.sample_observations_from_partial_factors(first_factors, fixed_indices, num_samples=2)
-        observations1 = []
-        observations2 = []
-        for pair in observations:
-            observations1.append(pair[0])
-            observations2.append(pair[1])
-        return index, torch.stack(observations1), torch.stack(observations2)
-

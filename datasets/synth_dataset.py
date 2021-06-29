@@ -1,8 +1,7 @@
 """Script for the creation and maintanance of synthetic datasets """
 from pathlib import Path
-
-""" Implementation of loading functions for 3dshpaes dataset """
-from typing import Any, Optional, Callable, List
+import scipy.stats
+from typing import Any, Optional, Callable, List, Union
 from .disentanglement_datasets import DisentanglementDataset
 import numpy as np
 import networkx as nx
@@ -80,14 +79,37 @@ def get_samplers(num_variables:int, all_discrete:bool, all_continuous:bool):
     else: num_discrete = 0
     num_continuous = num_variables-num_discrete
     samplers = []
+    is_discrete = []
     for i in range(num_continuous):
         mu, std = sample_statistics()
         samplers.append(distributions.Normal(mu,std))
+        is_discrete.append(False)
     for i in range(num_discrete):
         weights = sample_weights()
         samplers.append(distributions.Categorical(weights))
-    return samplers
+        is_discrete.append(True)
+    return samplers, is_discrete
 
+def discretise_Normal(mu,std, num_bins=20):
+    """Transforming continuous variable drawn from normal distribution into a
+    discrete variable by exploiting its quantiles (in this way we can generalise
+    to unseen samples)
+    Returns a list of num_bins centers for the new categorical
+    """
+    centers = []
+    probs = np.linspace(0.,1., num_bins+1, endpoint=False)[1:]
+    for i in range(num_bins):
+     centers.append(scipy.stats.norm.ppf(probs[i], loc=mu, scale=std))
+    return centers
+
+def categorise_label(label:np.ndarray, discrete:bool, distrib, num_categories):
+    """Turn labels into categorical variables, and store them as integers.
+    labels: numpy array of shape (num_samples, num_factors) containing the labels."""
+    if len(label.shape)>1: label.squeeze(-1)
+    if discrete: return label
+    else:
+        centers = discretise_Normal(distrib.mean, distrib.stddev, num_bins=num_categories)
+        return np.digitize(label, centers)
 
 
 class SynthVec(DisentanglementDataset):
@@ -100,12 +122,12 @@ class SynthVec(DisentanglementDataset):
     """
 
     data_file = 'synth_vec.h5'
-    factors_dict_file = 'factors.pkl'
-    _FACTORS_IN_ORDER = None
-    _NUM_VALUES_PER_FACTOR = None #property of the dataset -not of the generation process itself (obtained in factorisation step)
+    _FACTORS_IN_ORDER = []
+    _NUM_VALUES_PER_FACTOR = {} #property of the dataset -not of the generation process itself (obtained in factorisation step)
     NUM_TRAIN = 100000
     NUM_TEST = 2000
     MAPPING_DEPTH = 5
+    NUM_CATEG_CONTINUOUS = 30
 
     def __init__(self,
                  root: str,
@@ -135,28 +157,43 @@ class SynthVec(DisentanglementDataset):
             # --------- load it
             X1,Y1,X2,Y2,metadata = self.read_source_files()
         if self.test:
-            self.data, self.labels = X2,Y2
-        else: self.data, self.labels = X1,Y1
+            self.data, self.original_labels = X2,Y2
+        else: self.data, self.original_labels = X1,Y1
+        self.labels = self.categorise_labels(self.original_labels) # used for disentanglement purposes
         self.metadata = metadata
-        # --------- load factors dictionary
-        self.factors = self.factorise()
+        self.elaborate_info() # extract relevant disentanglement-testing info from metadata
         print("Dataset loaded.")
         if verbose: print(self)
 
-
-    def categorise_labels(self, labels:np.ndarray):
-        """Turn labels into categorical variables, and store them as integers.
-        labels: numpy array of shape (num_samples, num_factors) containing the labels."""
-        raise NotImplementedError
-
     def __repr__(self):
         """ Str representation of the dataset """
-        raise NotImplementedError
+        head = "Dataset {0} info".format(self.__class__.__name__)
+        body = ["Size = {0}".format(len(self)), "Factors of variation : "]
+        for n,v_num in self._NUM_VALUES_PER_FACTOR.items():
+            line = n+" with "+str(v_num)+" values"
+            body.append(line)
+        lines = [head] + [" " * 2 + line for line in body]
+        return '\n'.join(lines)
 
     def elaborate_info(self):
-        """Extracts dataset information from the metadata"""
-        _FACTORS_IN_ORDER
-        _NUM_VALUES_PER_FACTOR
+        """Extracts dataset information from the metadata
+
+        metadata = {
+            "graph":graph,
+            "node_order":node_order,
+            "node_ancestors":node_ancestors,
+            "samplers":samplers,
+            "discrete":discrete,
+            "obs_mapping":obs_mapping
+        }"""
+        self._FACTORS_IN_ORDER = [""]*self.dim_in
+        for node in self.metadata["node_order"]:
+            distrib = self.metadata["samplers"][node]
+            discrete = self.metadata["discrete"][node]
+            name = f"factor{node}_discrete" if discrete else f"factor{node}_continuous"
+            self._FACTORS_IN_ORDER[node] = name
+            self._NUM_VALUES_PER_FACTOR = len(distrib.probs) if discrete else self.NUM_CATEG_CONTINUOUS
+        self.graph = self.metadata["graph"]
 
     def read_source_files(self):
         """ Reads the .h5 file into training and test arrays"""
@@ -172,32 +209,17 @@ class SynthVec(DisentanglementDataset):
 
         return X1,Y1,X2,Y2,metadata
 
+    def categorise_labels(self, labels):
+        discretized = np.zeros_like(labels, dtype=np.int)
+        for i in range(self.dim_in):
+            discretized[:, i] = categorise_label(labels[:,i], self.metadata["discrete"][i],
+                                                 self.metadata["distrib"][i],
+                                                 self._NUM_VALUES_PER_FACTOR[self._FACTORS_IN_ORDER[i]])
+        return discretized
+
     def check_and_substitute(self, factors:np.ndarray, other_factors:np.ndarray, index:int):
         """Checks if all the factors in the factors array exists in the dataset
         - overrides the implementation given in DisentanglementDataset superclass"""
-        raise NotImplementedError
-
-    def factorise(self):
-        """ Creates the factors dictionary, i.e. a dictionary storing the index relative
-        to any factor combination. This is the core of sample_observations_from_factors."""
-        os.makedirs(self.processed_folder, exist_ok=True)
-        filename = self.factors_dict_file
-        fpath =Path(self.processed_folder) / filename
-        # --------- download source file
-        if self._check_factorised():
-            print("Factors dictionary already created. Proceed to reading.")
-            with open(fpath, 'rb') as f:
-                factors = pickle.load(f)
-        else:
-            print("Creating factors dictionary.")
-            # 1. for each label
-            # 2. extract all the numbers
-            # 3. pad the numbers and convert to string
-            # 4. use result as dictionary key
-            factors = {self.convert_to_key(self.labels[i]): i for i in range(len(self))}
-            with open(fpath, 'wb') as f:
-                pickle.dump(factors, f, pickle.HIGHEST_PROTOCOL)
-
         return factors
 
     def sample(self, batch_size, node_order, node_ancestors, samplers, equations):
@@ -217,9 +239,22 @@ class SynthVec(DisentanglementDataset):
                 noise = torch.cat([noise, x[:,node_ancestors[node]]], -1)
             x[:,node] = equations[node](noise).squeeze(-1)
             updater(i, 1, self.dim_in) #visual feedback of the progress
-        if batch_size is None:
-            x = x.squeeze(0)
+        if batch_size==1: x = x.squeeze(0)
         return x,noises
+
+    def sample_observations_from_partial_factors(self, factors, fixed_indices:List[List[int]], num_samples=1):
+        #TODO
+        pass
+
+    def sample_observations_from_factors(self, factors:Union[List[str], np.ndarray], numeric_format=False):
+        #TODO
+        pass
+
+    def sample_factors(self, num, numeric_format=False):
+        #stack vertically
+        for distrib in self.metadata["samplers"]:
+            new_val = distrib.sample([num])
+
 
     def generate(self, store:bool=True):
         """ Downloading source files (.h5)"""
@@ -230,7 +265,7 @@ class SynthVec(DisentanglementDataset):
             return
         # first generate the generating structure
         graph, node_order, node_ancestors = generate_random_acyclic_graph(self.dim_in, seed=11)
-        samplers = get_samplers(self.dim_in, not self.allow_continuous, not self.allow_discrete)
+        samplers, discrete = get_samplers(self.dim_in, not self.allow_continuous, not self.allow_discrete)
         equations = nn.ModuleList(build_equations(node_order, node_ancestors))
         obs_mapping = get_random_MLP(num_layers=self.MAPPING_DEPTH, din=self.dim_in, dout=self.dim_out)
         #then generate causal variables and observations
@@ -246,6 +281,7 @@ class SynthVec(DisentanglementDataset):
             "node_order":node_order,
             "node_ancestors":node_ancestors,
             "samplers":samplers,
+            "discrete":discrete,
             "obs_mapping":obs_mapping
         }
 
@@ -270,10 +306,6 @@ class SynthVec(DisentanglementDataset):
     def _check_generated(self):
         return os.path.exists(Path(self.raw_folder)/self.data_file) and \
                os.path.exists(Path(self.raw_folder)/"metadata.pkl")
-
-    def _check_factorised(self):
-        """Checking the existence of the factors dictionary."""
-        return os.path.exists(Path(self.processed_folder)/self.factors_dict_file)
 
     def __getitem__(self, index: int) -> Any:
         x = self.data[index]
