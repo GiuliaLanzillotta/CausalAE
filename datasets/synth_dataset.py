@@ -113,7 +113,9 @@ class SynthVec(DisentanglementDataset):
                  dim_observations:int,
                  allow_continuous:bool=False, #whether to include continuous variables in the causal graph
                  allow_discrete:bool=True, #whether to include discrete variables   //          //
-                 generate: bool = False) -> None:
+                 generate: bool = False,
+                 test:bool = False,
+                 verbose:bool=False) -> None:
 
         super(SynthVec, self).__init__()
 
@@ -122,19 +124,24 @@ class SynthVec(DisentanglementDataset):
         self.dim_out = dim_observations
         self.allow_continuous = allow_continuous
         self.allow_discrete = allow_discrete
+        self.test = test
 
-        if generate: self.generate()
-
-        if not self._check_generated():
-            raise RuntimeError('Dataset not found.' +
-                               ' You can use generate=True to synthetise it')
-
-        # --------- load it
-        X,Y = self.read_source_file()
+        if generate:
+            X1,Y1,X2,Y2,metadata = self.generate(store=True)
+        else:
+            if not self._check_generated():
+                raise RuntimeError('Dataset not found.' +
+                                   ' You can use generate=True to synthetise it')
+            # --------- load it
+            X1,Y1,X2,Y2,metadata = self.read_source_files()
+        if self.test:
+            self.data, self.labels = X2,Y2
+        else: self.data, self.labels = X1,Y1
+        self.metadata = metadata
         # --------- load factors dictionary
         self.factors = self.factorise()
-
         print("Dataset loaded.")
+        if verbose: print(self)
 
 
     def categorise_labels(self, labels:np.ndarray):
@@ -146,9 +153,24 @@ class SynthVec(DisentanglementDataset):
         """ Str representation of the dataset """
         raise NotImplementedError
 
-    def read_source_file(self):
+    def elaborate_info(self):
+        """Extracts dataset information from the metadata"""
+        _FACTORS_IN_ORDER
+        _NUM_VALUES_PER_FACTOR
+
+    def read_source_files(self):
         """ Reads the .h5 file into training and test arrays"""
-        raise NotImplementedError
+        print("Loading generated data.")
+        with h5py.File(Path(self.raw_folder)/self.data_file, "r") as hf:
+            X1 = hf["x_train"]
+            Y1 = hf["y_train"]
+            X2 = hf["x_test"]
+            Y2 = hf["y_test"]
+        print("Loading metadata")
+        with open(Path(self.raw_folder)/"metadata.pkl","r") as mf:
+            metadata = pickle.load(mf)
+
+        return X1,Y1,X2,Y2,metadata
 
     def check_and_substitute(self, factors:np.ndarray, other_factors:np.ndarray, index:int):
         """Checks if all the factors in the factors array exists in the dataset
@@ -158,7 +180,25 @@ class SynthVec(DisentanglementDataset):
     def factorise(self):
         """ Creates the factors dictionary, i.e. a dictionary storing the index relative
         to any factor combination. This is the core of sample_observations_from_factors."""
-        raise NotImplementedError
+        os.makedirs(self.processed_folder, exist_ok=True)
+        filename = self.factors_dict_file
+        fpath =Path(self.processed_folder) / filename
+        # --------- download source file
+        if self._check_factorised():
+            print("Factors dictionary already created. Proceed to reading.")
+            with open(fpath, 'rb') as f:
+                factors = pickle.load(f)
+        else:
+            print("Creating factors dictionary.")
+            # 1. for each label
+            # 2. extract all the numbers
+            # 3. pad the numbers and convert to string
+            # 4. use result as dictionary key
+            factors = {self.convert_to_key(self.labels[i]): i for i in range(len(self))}
+            with open(fpath, 'wb') as f:
+                pickle.dump(factors, f, pickle.HIGHEST_PROTOCOL)
+
+        return factors
 
     def sample(self, batch_size, node_order, node_ancestors, samplers, equations):
         """
@@ -212,9 +252,13 @@ class SynthVec(DisentanglementDataset):
         if store:
             print("Storing generated data.")
             with h5py.File(Path(self.raw_folder)/self.data_file, "w") as hf:
+                #labels have to be numpy arrays
+                y_train = y_train.cpu().numpy()
+                y_test = y_test.cpu().numpy()
+                #TODO: maybe zip?
                 X1 = hf.create_dataset("x_train", data=x_train)
                 Y1 = hf.create_dataset("y_train", data=y_train)
-                X2 = hf.create_dataset("y_train", data=x_test)
+                X2 = hf.create_dataset("x_test", data=x_test)
                 Y2 = hf.create_dataset("y_test", data=y_test)
             print("Storing metadata")
             with open(Path(self.raw_folder)/"metadata.pkl","w") as mf:
@@ -224,17 +268,20 @@ class SynthVec(DisentanglementDataset):
         return X1,Y1,X2,Y2,metadata
 
     def _check_generated(self):
-        raise NotImplementedError
+        return os.path.exists(Path(self.raw_folder)/self.data_file) and \
+               os.path.exists(Path(self.raw_folder)/"metadata.pkl")
 
     def _check_factorised(self):
         """Checking the existence of the factors dictionary."""
-        raise NotImplementedError
+        return os.path.exists(Path(self.processed_folder)/self.factors_dict_file)
 
     def __getitem__(self, index: int) -> Any:
-        raise NotImplementedError
+        x = self.data[index]
+        y = torch.tensor(self.labels[index])
+        return x,y
 
     def __len__(self) -> int:
-        return self.images.shape[0]
+        return self.data.shape[0]
 
     @property
     def raw_folder(self) -> str:
