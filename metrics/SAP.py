@@ -29,6 +29,7 @@ from torch.utils.data import DataLoader
 
 def compute_sap(dataloader:DataLoader,
                 representation_function,
+                device:str,
                 num_train=10000,
                 num_test=5000,
                 batch_size=16,
@@ -48,10 +49,10 @@ def compute_sap(dataloader:DataLoader,
     Dictionary with SAP score.
   """
     logging.info("Generating training set.")
-    mus_train, ys_train = utils.generate_batch_factor_code(dataloader, representation_function, num_train, batch_size)
+    mus_train, ys_train = utils.generate_batch_factor_code(dataloader, representation_function, num_train, batch_size, device)
     # mus shape = (num_features, num_train)
     # ys shape = (num_factors, num_train)
-    mus_test, ys_test = utils.generate_batch_factor_code(dataloader, representation_function, num_test, batch_size)
+    mus_test, ys_test = utils.generate_batch_factor_code(dataloader, representation_function, num_test, batch_size, device)
 
     # Delete all factors that have only one class
     all_labels = np.concatenate([ys_train, ys_test], axis=1)

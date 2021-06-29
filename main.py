@@ -79,11 +79,13 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
                      gradient_clip_val = 1.0,
                      **config['trainer_params'])
 
-    print(f"======= Training {config['model_params']['name']} =======")
 
     experiment = experiments_switch[config['model_params']['name']](config)
-    if not test: runner.fit(experiment)
+    if not test:
+        print(f"======= Training {config['model_params']['name']} =======")
+        runner.fit(experiment)
     else:
+        print(f"======= Testing {config['model_params']['name']} =======")
         test_res = runner.test(experiment)
         # saving results to .json
         # resuming from checkpoint
@@ -97,7 +99,8 @@ def do_tuning(config:dict):
     # see here for details: https://docs.ray.io/en/master/tune/tutorials/tune-pytorch-lightning.html#using-population-based-training-to-find-the-best-parameters
     #todo: select a search algorithm
     scheduler = ASHAScheduler(
-        max_t=config['trainer_params']['max_epochs'],
+        time_attr = "training_step",
+        max_t=config['trainer_params']['max_steps'],
         grace_period=10, # wait at least 10 epochs
         reduction_factor=2)
     reporter = CLIReporter(metric_columns=["loss", "training_iteration"]) #todo: check what we want to save in final table
@@ -108,7 +111,7 @@ def do_tuning(config:dict):
         mode="min",
         config=config,
         local_dir=path,
-        num_samples=config['tuner_params']['num_samples'],
+        #num_samples=config['tuner_params']['num_samples'],
         scheduler=scheduler,
         progress_reporter=reporter)
     analysis.results_df.to_csv( path / "tune_results.csv")

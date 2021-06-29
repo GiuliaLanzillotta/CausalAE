@@ -24,6 +24,7 @@ from . import utils
 
 def compute_mig(dataloader:DataLoader,
                 representation_function,
+                device:str,
                 num_train=10000,
                 batch_size=16,
                 discretization_bins=20):
@@ -42,7 +43,7 @@ def compute_mig(dataloader:DataLoader,
     Dict with average mutual information gap.
     """
     logging.info("Generating training set.")
-    mus_train, ys_train = utils.generate_batch_factor_code(dataloader, representation_function, num_train, batch_size)
+    mus_train, ys_train = utils.generate_batch_factor_code(dataloader, representation_function, num_train, batch_size, device)
     assert mus_train.shape[1] == num_train
     # mus shape = (num_features, num_train)
     # ys shape = (num_factors, num_train)

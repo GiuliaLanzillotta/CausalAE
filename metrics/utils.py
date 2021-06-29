@@ -21,7 +21,8 @@ import numpy as np
 def generate_batch_factor_code(dataloader:DataLoader,
                                representation_function,
                                num_points,
-                               batch_size):
+                               batch_size,
+                               device:str):
     """
     Sample a single training sample based on a mini-batch of ground-truth data.
 
@@ -48,11 +49,11 @@ def generate_batch_factor_code(dataloader:DataLoader,
         if i == 0:
             factors = current_factors
             with torch.no_grad():
-                representations = representation_function(current_observations).cpu()
+                representations = representation_function(current_observations.to(device)).cpu()
         else:
             factors = np.vstack((factors, current_factors))
             with torch.no_grad():
-                new_rep = representation_function(current_observations).cpu()
+                new_rep = representation_function(current_observations.to(device)).cpu()
             representations = np.vstack((representations, new_rep))
         i += num_points_iter
     representations = representations[:num_points]

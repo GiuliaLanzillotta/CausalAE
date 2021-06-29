@@ -51,7 +51,7 @@ class SAEXperiment(BaseExperiment):
         self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
+        if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0 and self.FID_scoring:
             self.score_FID(batch_idx, input_imgs, X_hat)
         return BCE
 
@@ -61,4 +61,4 @@ class SAEXperiment(BaseExperiment):
         BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
         self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)
-        self.score_FID(batch_idx, input_imgs, X_hat)
+        if self.FID_scoring: self.score_FID(batch_idx, input_imgs, X_hat)

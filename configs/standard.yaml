@@ -14,6 +14,7 @@ data_params:
   test_batch_size: 128
   reload_dataloaders_every_epoch: False
   add_noise: False
+  FID_scoring: True
 
 trainer_params:
   val_check_interval: 200 #check validation every 200 steps
@@ -24,10 +25,10 @@ trainer_params:
   deterministic: True #might make the system slower
 
 logging_params:
-  save_dir: "./logs/"
+  save_dir: "/cluster/scratch/glanzillo/logs/"
   manual_seed: 1265
   version: 'null'
-  score_every: 20 # number of steps
+  score_every: 20 # number of validations
   log_every: 100
 
 

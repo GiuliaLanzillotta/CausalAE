@@ -182,7 +182,7 @@ class Shapes3d(VisionDataset, DisentanglementDataset):
 
     @property
     def processed_folder(self) -> str:
-        # raw folder should be ("./datasets/Shapes3d/Shapes3d/raw
+        # raw folder should be ("./datasets/Shapes3d/Shapes3d/processed
         return os.path.join(self.root, self.__class__.__name__, 'processed')
 
     @property

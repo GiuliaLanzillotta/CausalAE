@@ -14,3 +14,7 @@ model_params:
   #"strict": False
   #"hierarchy": False
   lamda: 2.0
+
+vis_params:
+  plot_every: 1
+

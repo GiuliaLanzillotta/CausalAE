@@ -41,7 +41,7 @@ def standard_initialisation(m, non_linearity='leaky_relu'):
         nn.init.constant_(m.bias, 0)
 
 
-def RBF_kernel(X:Tensor, Y:Tensor):
+def RBF_kernel(X:Tensor, Y:Tensor, device:str):
     """
     Computes similarity as MMD between X and Y according to RBF kernel, using sigma equal to the median distance between
     vectors computed wrt to both samples
@@ -58,22 +58,22 @@ def RBF_kernel(X:Tensor, Y:Tensor):
     distances_qz = norms_qz + norms_qz.T - 2. * dotprods_qz
 
     dotprods = torch.matmul(X, Y.T)
-    distances = norms_qz + norms_pz.T - 2. * dotprods
+    distances = norms_pz + norms_qz.T - 2. * dotprods
 
     sigma2_k = torch.quantile(distances_pz, q = 0.5)
     sigma2_k += torch.quantile(distances_qz, q = 0.5)
 
-    res1 = torch.exp( - distances_qz / 2. / sigma2_k)
-    res1 = torch.multiply(res1, 1. - torch.eye(N))
+    res1 = torch.exp( - distances_pz / 2. / sigma2_k)
+    res1 = torch.multiply(res1, 1. - torch.eye(N).to(device))
 
-    res2 = torch.exp( - distances_pz / 2. / sigma2_k)
-    res2 = torch.multiply(res2, 1. - torch.eye(M))
+    res2 = torch.exp( - distances_qz / 2. / sigma2_k)
+    res2 = torch.multiply(res2, 1. - torch.eye(M).to(device))
 
     res3 = torch.exp( - distances / 2. / sigma2_k)
 
     return res1,res2,res3
 
-def IMQ_kernel(X:Tensor, Y:Tensor):
+def IMQ_kernel(X:Tensor, Y:Tensor, device:str):
     """Inverse multiquadratic kernels- less sensible to outliers
     Formula: k(x, y) = C / (C + ||x - y||^2)
     credits: @https://github.com/tolstikhin/wae/blob/master/wae.py
@@ -96,23 +96,23 @@ def IMQ_kernel(X:Tensor, Y:Tensor):
     # expected squared distance between two multivariate Gaussian vectors drawn from prior
     Cbase = 2.*float(X.shape[1])*torch.mean(distances_qz)
 
-    res1 = torch.zeros_like(distances_pz)
-    res2 = torch.zeros_like(distances_qz)
-    res3 = torch.zeros_like(distances)
+    res1 = torch.zeros_like(distances_pz).to(device)
+    res2 = torch.zeros_like(distances_qz).to(device)
+    res3 = torch.zeros_like(distances).to(device)
 
     for scale in [.1, .2, .5, 1., 2., 5., 10.]: #TODO: why this sum over different scales
         C = Cbase * scale
         r = C / (C + distances_qz)
-        res1 += torch.multiply(r, 1. - torch.eye(N))
+        res1 += torch.multiply(r, 1. - torch.eye(N).to(device))
 
         r = C / (C + distances_pz)
-        res2 += torch.multiply(r, 1. - torch.eye(M))
+        res2 += torch.multiply(r, 1. - torch.eye(M).to(device))
 
         res3 += C / (C + distances)
 
     return res1, res2, res3
 
-def Categorical_kernel(X,Y, strict=False, hierarchy=False):
+def Categorical_kernel(X,Y, device, strict=False, hierarchy=False):
     """
     Computes similarity between X and Y according to a categorical kernel
     See here for inspo: https://upcommons.upc.edu/bitstream/handle/2117/23347/KernelCATEG_CCIA2013.pdf?sequence=1
@@ -134,22 +134,22 @@ def Categorical_kernel(X,Y, strict=False, hierarchy=False):
     #between the two distributions when there is more coherence in-distribution
     #than between-distribution among the higher level features
     if hierarchy:
-        hierarchy_weights = torch.linspace(0,1,Dz+2)[1:-1]
+        hierarchy_weights = torch.linspace(0,1,Dz+2)[1:-1].to(device)
         hierarchy_weights = inverting_fun(hierarchy_weights)
     else:
-        hierarchy_weights = torch.ones(Dz)
+        hierarchy_weights = torch.ones(Dz).to(device)
 
     if not strict:
         delta_X = torch.max(X,axis=0)[0] - torch.min(X,axis=0)[0]
         delta_Y = torch.max(Y,axis=0)[0] - torch.min(Y,axis=0)[0]
 
-    similarities1 = torch.zeros(N,N, dtype=torch.float)
+    similarities1 = torch.zeros(N,N, dtype=torch.float).to(device)
     for i in range(N):
         similarities_i = delta_X - torch.abs(X-X[i]) if not strict else (X==X[i]).type(torch.float)
         similarities1[:,i] = torch.matmul(similarities_i,hierarchy_weights)
 
-    similarities2 = torch.zeros(M,M, dtype=torch.float)
-    similarities3 = torch.zeros(N,M, dtype=torch.float)
+    similarities2 = torch.zeros(M,M, dtype=torch.float).to(device)
+    similarities3 = torch.zeros(N,M, dtype=torch.float).to(device)
     for i in range(M):
         similarities_i = delta_Y - torch.abs(Y-Y[i]) if not strict else (Y==Y[i]).type(torch.float)
         similarities2[:,i] = torch.matmul(similarities_i,hierarchy_weights)

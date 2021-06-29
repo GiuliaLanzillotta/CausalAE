@@ -29,7 +29,6 @@ def get_ESAE_tuning_configs(config:dict):
     # standard tuning (regarding optimisation
     config = standard_tuning(config)
     config["model_params"]["unit_dim"] = tune.grid_search([1, 2, 4])
-    config["opt_params"]["auto_epochs"] = tune.grid_search([-1, 10])
     return config
 
 config_switch = {'VAE':get_VAE_tuning_configs,

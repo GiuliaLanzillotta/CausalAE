@@ -36,6 +36,7 @@ from torch.utils.data import DataLoader
 
 def compute_dci(dataloader:DataLoader,
                 representation_function,
+                device:str,
                 num_train=10000,
                 num_test=5000,
                 batch_size=16):
@@ -56,10 +57,10 @@ def compute_dci(dataloader:DataLoader,
     logging.info("Generating training set.")
     # mus_train are of shape [num_codes, num_train], while ys_train are of shape
     # [num_factors, num_train].
-    mus_train, ys_train = utils.generate_batch_factor_code(dataloader, representation_function, num_train, batch_size)
+    mus_train, ys_train = utils.generate_batch_factor_code(dataloader, representation_function, num_train, batch_size, device=device)
     assert mus_train.shape[1] == num_train
     assert ys_train.shape[1] == num_train
-    mus_test, ys_test = utils.generate_batch_factor_code(dataloader, representation_function, num_test, batch_size) #TODO: maybe factorise this duplicated code
+    mus_test, ys_test = utils.generate_batch_factor_code(dataloader, representation_function, num_test, batch_size, device=device) #TODO: maybe factorise this duplicated code
     assert mus_test.shape[1] == num_test
     assert ys_test.shape[1] == num_test
 

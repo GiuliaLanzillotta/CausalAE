@@ -73,7 +73,7 @@ class VAEXperiment(BaseExperiment):
         val_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = KL_weight)
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0:
+        if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0 and self.FID_scoring:
             self.score_FID(batch_idx, input_imgs, results)
         return val_loss
 
@@ -83,5 +83,5 @@ class VAEXperiment(BaseExperiment):
         test_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = self.KL_weight)# no decay in KL weight
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('test_loss', test_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        self.score_FID(batch_idx, input_imgs, results)
+        if self.FID_scoring: self.score_FID(batch_idx, input_imgs, results)
 

@@ -13,7 +13,7 @@ class ModelDisentanglementEvaluator(object):
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
-    def score_model(self):
+    def score_model(self, betaVAE=False, device:str='cpu'):
         print("Scoring model disentanglement.")
         complete_scores = {}
         disentanglement_scores = {}
@@ -21,35 +21,36 @@ class ModelDisentanglementEvaluator(object):
         # DCI -----
         print("DCI scoring")
         dci_results = DCI.compute_dci(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,
-                                      batch_size=self.dataloader.batch_size)
+                                      batch_size=self.dataloader.batch_size, device=device)
         disentanglement_scores['DCI'] = dci_results['disentanglement']
         complete_scores['DCI'] = dci_results
-        # BetaVAE ----
-        print("BetaVAE scoring")
-        betaVAE_results = BetaVAE.compute_beta_vae_sklearn(self.dataloader.dataset, self.model.encode_mu, num_train=TRAIN_NUM//10,
-                                                           num_eval=TEST_NUM//10, batch_size=self.dataloader.batch_size)
-        disentanglement_scores['BVAE'] = betaVAE_results['eval_accuracy']
-        complete_scores['BVAE'] = betaVAE_results
+        if betaVAE:
+            # BetaVAE ----
+            print("BetaVAE scoring")
+            betaVAE_results = BetaVAE.compute_beta_vae_sklearn(self.dataloader.dataset, self.model.encode_mu, num_train=TRAIN_NUM//10,
+                                                               num_eval=TEST_NUM//10, batch_size=self.dataloader.batch_size, device=device)
+            disentanglement_scores['BVAE'] = betaVAE_results['eval_accuracy']
+            complete_scores['BVAE'] = betaVAE_results
         # IRS -----
         print("IRS scoring")
-        irs_results = IRS.compute_irs(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, batch_size=self.dataloader.batch_size)
+        irs_results = IRS.compute_irs(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, batch_size=self.dataloader.batch_size, device=device)
         disentanglement_scores['IRS'] = irs_results['IRS']
         complete_scores['IRS'] = irs_results
         # MIG -----
         print("MIG scoring")
-        mig_results = MIG.compute_mig(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, batch_size=self.dataloader.batch_size)
+        mig_results = MIG.compute_mig(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, batch_size=self.dataloader.batch_size, device=device)
         disentanglement_scores['MIG'] = mig_results['discrete_mig']
         complete_scores['MIG'] = mig_results
         # ModExp -----
         print("Modularity explicitness scoring")
         modexp_results = ModExp.compute_modularity_explicitness(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TRAIN_NUM,
-                                                                batch_size=self.dataloader.batch_size)
+                                                                batch_size=self.dataloader.batch_size, device=device)
         disentanglement_scores['ModExp'] = modexp_results['modularity_score']
         complete_scores['ModExp'] = modexp_results
         # SAP -----
         print("SAP scoring")
         sap_results = SAP.compute_sap(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,
-                                      batch_size=self.dataloader.batch_size)
+                                      batch_size=self.dataloader.batch_size, device=device)
         disentanglement_scores['SAP'] = sap_results['SAP_score']
         complete_scores['SAP'] = sap_results
 

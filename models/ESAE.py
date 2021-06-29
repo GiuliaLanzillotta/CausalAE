@@ -25,6 +25,14 @@ class ESAE(SAE):
         noise = self.hybrid_layer.controlled_sampling(latent_vecs, level, use_prior=False)
         return noise
 
+    def controlled_sample_noise_from_prior(self, device:str, num_samples:int):
+        dummy_latents = torch.zeros(11,11,11).to(device)
+        samples = []
+        for level in range(self.max_hybridisation_level+1):
+            noise = self.hybrid_layer.controlled_sampling(dummy_latents, level, num_samples, use_prior=True)
+            samples.append(noise)
+        return samples
+
     def sample_noise_from_posterior(self, inputs: Tensor):
         """Equivalent to performing full hybridisation"""
         codes = self.encode(inputs)
@@ -57,11 +65,11 @@ class ESAE(SAE):
         return  [output, codes, noises, hybridisation_levels]
 
     @staticmethod
-    def reconstruction_hybrid(X, X_hat, Z, Z_hybrid, level:int):
+    def reconstruction_hybrid(X, X_hat, Z, Z_hybrid, level:int, device:str):
         """Computes reconstruction loss for hybridised samples
         #TODO: make fancier"""
         N = X_hat.shape[0]
-        if level==0: factors= torch.ones(N)
+        if level==0: factors= torch.ones(N).to(device)
         else:
             means = Z.mean(dim=0, keepdim=True)
             stds = Z.std(dim=0, keepdim=True)
@@ -69,10 +77,10 @@ class ESAE(SAE):
             ZHN = (Z_hybrid -means) / stds  #standardise both samples with respect to the input distribution
             # in this way the changes to the distribution brought by hybridisation will be more evident
             # (ideally these two distributions should be the same)
-            factors = 1/(level*torch.norm(ZN-ZHN,1, dim=1)) #TODO: normalise dimension-wise to allow dimensions to change scale during training
+            factors = (1/((level*torch.norm(ZN-ZHN,1, dim=1))+10e-5)).to(device)
         MSEs = torch.sum(F.mse_loss(X_hat, X, reduction="none"),
-                         tuple(range(X_hat.dim()))[1:])
-        total_cost = torch.matmul(MSEs.to(factors.device), factors)/N
+                         tuple(range(X_hat.dim()))[1:]).to(device)
+        total_cost = torch.matmul(MSEs.to(device), factors)/N
         return total_cost
 
     @staticmethod
@@ -83,14 +91,15 @@ class ESAE(SAE):
         normls = Normalize(0,1)
         ZHN = normls(Z_all_h.permute(1,0).unsqueeze(2)).squeeze(2).T
         ZMN = normls(Z_max_h.permute(1,0).unsqueeze(2)).squeeze(2).T
+        device = kwargs.get('device')
         #TODO: add switch to subsample first Z (in order to have same dimensionality)
         #TODO: insert hierarchy RBF
         if kernel=="RBF":
-            MMD = utils.MMD(*utils.RBF_kernel(ZHN, ZMN))
+            MMD = utils.MMD(*utils.RBF_kernel(ZHN, ZMN, device))
         elif kernel=="IMQ":
-            MMD = utils.MMD(*utils.IMQ_kernel(ZHN, ZMN))
+            MMD = utils.MMD(*utils.IMQ_kernel(ZHN, ZMN, device))
         elif kernel=="cat":
-            MMD = utils.MMD(*utils.Categorical_kernel(ZHN, ZMN, kwargs.get("strict",True), kwargs.get("hierarchy",True)))
+            MMD = utils.MMD(*utils.Categorical_kernel(ZHN, ZMN, device, kwargs.get("strict",True), kwargs.get("hierarchy",True)))
         else: raise NotImplementedError("Specified kernel for MMD '"+kernel+"' not implemented.")
         return MMD
 
@@ -102,16 +111,17 @@ class ESAE(SAE):
         H_levels = args[3] #list of hybridisation level used to produce H_hats and Z_hybrid
         X = kwargs["X"]
         lamda = kwargs.get('lamda')
+        device = kwargs.get('device','cpu')
         B = X.shape[0] #batch size
         L_rec_tot = 0
         for l,level in enumerate(H_levels):
             X_hat = X_hats[l*B:(l+1)*B]
             Z_h = Z_hybrid[l]
-            L_rec_tot += self.reconstruction_hybrid(X, X_hat, Z, Z_h, level).to('cpu')
+            L_rec_tot += self.reconstruction_hybrid(X, X_hat, Z, Z_h, level, device=device)
         l_max = np.argmax(H_levels)
         Z_max_h = Z_hybrid[l_max]
         Z_all = torch.vstack(Z_hybrid)
-        L_reg = self.compute_MMD(Z_all,Z_max_h, kernel=self.kernel_type, **self.params)
+        L_reg = self.compute_MMD(Z_all,Z_max_h, kernel=self.kernel_type, **self.params, device=device)
         L_rec_tot /= len(H_levels)
         loss = L_rec_tot + lamda*L_reg
         return{'loss': loss, 'Reconstruction_loss':L_rec_tot, 'Regularization_loss':L_reg}

@@ -5,7 +5,7 @@ import torch
 from torchvision import utils as tvu
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
-from models import GenerativeAE
+from models import GenerativeAE, ESAE
 import torchvision
 import itertools
 
@@ -47,6 +47,21 @@ class ModelVisualiser(object):
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
         return figure
+
+    def plot_samples_controlled_hybridisation(self, grid_size:int=12, device=None, figsize=(12,12)):
+        """ specific to ESAE model - to be used in ESAEmanager"""
+        num_pics = grid_size**2 # square grid
+        figures = []
+        assert isinstance(self.model, ESAE), "The controlled hybridisation is only supported in ESAE models for now"
+        with torch.no_grad():
+            noises = self.model.controlled_sample_noise_from_prior(device=device, num_samples=num_pics) #sampling logic here
+            for l,v in enumerate(noises):
+                recons = self.model.decode(v.to(device), activate=True)
+                grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
+                figure = plt.figure(figsize=figsize)
+                plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+                figures.append(figure)
+        return figures
 
     def plot_latent_traversals(self, steps:int=10, device=None, figsize=(12,12), tailored=False):
         """ traverses the latent space in different axis-aligned directions and plots
@@ -107,8 +122,8 @@ class ModelVisualiser(object):
         for n, p in self.model.named_parameters():
             if(p.requires_grad) and ("bias" not in n):
                 try:
-                    ave_grads.append(p.grad.abs().mean())
-                    max_grads.append(p.grad.abs().max())
+                    ave_grads.append(p.grad.cpu().abs().mean())
+                    max_grads.append(p.grad.cpu().abs().max())
                     layers.append(n)
                 except AttributeError:
                     print(n+" has no gradient. Skipping")

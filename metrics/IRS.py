@@ -29,6 +29,7 @@ from torch.utils.data import DataLoader
 
 def compute_irs(dataloader:DataLoader,
                 representation_function,
+                device:str,
                 diff_quantile=0.99,
                 num_train=100,
                 batch_size=16,
@@ -51,7 +52,8 @@ def compute_irs(dataloader:DataLoader,
     mus, ys = utils.generate_batch_factor_code(dataloader,
                                                representation_function,
                                                num_train,
-                                               batch_size)
+                                               batch_size,
+                                               device)
     assert mus.shape[1] == num_train
     # mus shape = (num_features, num_train)
     # ys shape = (num_factors, num_train)

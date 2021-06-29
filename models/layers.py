@@ -343,7 +343,6 @@ class GaussianLayer(nn.Module):
         return ranges
 
 
-
 class HybridLayer(nn.Module):
     """Stochastic layer based on Hybrid sampling
     Implements
@@ -363,12 +362,16 @@ class HybridLayer(nn.Module):
 
     def initialise_prior(self, latent_vectors):
         # randomly selecting latent vectors for the prior
+        self.prior = latent_vectors[:self.N]
+        return
+        """
         input_size = latent_vectors.detach().shape[0]
         idx = torch.randperm(input_size).to(latent_vectors.device) #shuffling indices
         if input_size<self.N:
             selected_idx = idx[:input_size]
         else: selected_idx = idx[:self.N]
         self.prior = torch.index_select(latent_vectors, 0, selected_idx)
+        """
 
     def update_prior(self, latent_vectors):
         # TODO: make initialisation incremental (store an incremental pool
@@ -391,28 +394,33 @@ class HybridLayer(nn.Module):
         noise = torch.cat(new_vectors, dim=1)
         return noise
 
-    def controlled_sampling(self, latent_vectors, hybridisation_level:int, use_prior=False):
+    def controlled_sampling(self, latent_vectors, hybridisation_level:int, num_samples:int=None, use_prior=False):
         """Generates hybrid samples at the desired level
         Hybridisation level: int between 0 and self.max_hybridisation determining how many dimensions get resampled
         use_prior: if True the sampling base is the prior set (which usually is a subset of the latent set)"""
-        if hybridisation_level==0: return latent_vectors
+        if hybridisation_level==0:
+            if not use_prior: return latent_vectors
+            return self.prior
         if use_prior and self.prior is None: raise ValueError("use_prior set to True and prior not initialised")
         if hybridisation_level > self.max_hybridisation_level: raise ValueError("Hybridisation level too high")
-        num_samples = latent_vectors.shape[0]
-        latent_chunks = torch.split(latent_vectors, self.unit_dim, dim=1)
-        if use_prior: prior_chunks = torch.split(self.prior, self.unit_dim, dim=1)
+        if not use_prior:
+            available_samples = latent_vectors.shape[0]
+            chunks = torch.split(latent_vectors, self.unit_dim, dim=1)
+        if use_prior:
+            available_samples = self.prior.shape[0]
+            chunks = torch.split(self.prior, self.unit_dim, dim=1)
+        if num_samples is None: num_samples=available_samples
+        else: num_samples=min(num_samples,available_samples)
         # obtain list of dimensions to resample
         to_resample = torch.multinomial(self.hierarchical_weights, hybridisation_level, replacement=False) #list of indices
         # randomising the order of each chunk
         new_vectors = []
-        for i, latent_chunk in enumerate(latent_chunks):
+        for i, chunk in enumerate(chunks):
             if i in to_resample:
                 # num_samples x N one-hot matrix
-                if use_prior: chunk = prior_chunks[i]
-                else: chunk = latent_chunk
-                idx = torch.multinomial(self.weights[:self.prior.shape[0]], num_samples, replacement=True).to(chunk.device)
+                idx = torch.multinomial(torch.ones(available_samples), num_samples, replacement=True).to(chunk.device)
                 new_vectors.append(torch.index_select(chunk, 0, idx))
-            else: new_vectors.append(latent_chunk)
+            else: new_vectors.append(chunk)
         noise = torch.cat(new_vectors, dim=1)
         return noise
 
@@ -442,6 +450,7 @@ class HybridLayer(nn.Module):
     def prior_range(self):
         """ returns a range in format [(min, max)] for every dimension that should contain
         most of the data density (905)"""
+        #TODO: make this completely discrete
         if self.prior is None: raise ValueError("No samples from the prior have been obtained yet")
         prior_min = torch.min(self.prior, dim=0).values
         prior_max = torch.max(self.prior, dim=0).values

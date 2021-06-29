@@ -27,13 +27,15 @@ class ESAEXperiment(BaseExperiment):
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        losses = self.model.loss_function(*results, X = input_imgs, lamda = self.model.params["lamda"])
+        losses = self.model.loss_function(*results, X = input_imgs,
+                                          lamda = self.model.params["lamda"],
+                                          device=self.device)
         # Logging
         self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log('REC_loss', losses["Reconstruction_loss"], on_epoch=True)
         self.log('REG_loss', losses["Regularization_loss"], on_epoch=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            figure = self.visualiser.plot_training_gradients(self.global_step)
+            figure = self.visualiser.plot_training_gradients()
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
         return losses
 
@@ -49,18 +51,22 @@ class ESAEXperiment(BaseExperiment):
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        val_losses = self.model.loss_function(*results, X = input_imgs, lamda = self.model.params["lamda"])
+        val_losses = self.model.loss_function(*results, X = input_imgs,
+                                              lamda = self.model.params["lamda"],
+                                              device=self.device)
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', val_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0:
+        if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0 and self.FID_scoring:
             self.score_FID(batch_idx, input_imgs, results)
         return val_losses
 
     def test_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
-        test_losses = self.model.loss_function(*results, X = input_imgs, lamda = self.model.params["lamda"])
+        test_losses = self.model.loss_function(*results, X = input_imgs,
+                                               lamda = self.model.params["lamda"],
+                                               device=self.device)
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        self.score_FID(batch_idx, input_imgs, results)
+        if self.FID_scoring: self.score_FID(batch_idx, input_imgs, results)
 
