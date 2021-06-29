@@ -26,7 +26,8 @@ def expm_np(A, m):
     return h_A
 
 def generate_random_acyclic_graph(num_nodes, seed:int):
-    exp_edges = .4
+    print("Generating graph...")
+    exp_edges = .65
     p = exp_edges / (num_nodes - 1) #probabilityte edge from i
     acyclic = False
     while not acyclic:
@@ -65,7 +66,7 @@ def sample_statistics():
     return mu,std
 
 def sample_weights():
-    num_values = torch.randint(2, 21, (1,1))[0][0]
+    num_values = torch.randint(2, 16, (1,1))[0][0] # max 15 dimensional categorical variables
     weights = torch.rand(num_values)
     return weights
 
@@ -137,6 +138,7 @@ class SynthVec(DisentanglementDataset):
                  allow_continuous:bool=False, #whether to include continuous variables in the causal graph
                  allow_discrete:bool=True, #whether to include discrete variables   //          //
                  generate: bool = False,
+                 overwrite:bool = False,
                  test:bool = False,
                  noise:bool=False, #whether to use noises as labels or the causal variables (for disentanglement scoring)
                  verbose:bool=False) -> None:
@@ -152,7 +154,7 @@ class SynthVec(DisentanglementDataset):
         self.noise = noise
 
         if generate:
-            X1,Y1,N1,X2,Y2,N2,metadata = self.generate(store=True)
+            X1,Y1,N1,X2,Y2,N2,metadata = self.generate(store=True, overwrite=overwrite)
         else:
             if not self._check_generated():
                 raise RuntimeError('Dataset not found.' +
@@ -165,12 +167,15 @@ class SynthVec(DisentanglementDataset):
         else:
             self.data = X1
             self.original_labels = N1 if noise else Y1
-        self.labels = self.categorise_labels(self.original_labels) # used for disentanglement purposes
+        self.labels = self.categorise_labels(self.original_labels[()]) # used for disentanglement purposes
         self.metadata = metadata
         self.elaborate_info() # extract relevant disentanglement-testing info from metadata
         print("Dataset loaded.")
 
         if verbose: print(self)
+
+    def get_graph_matrix(self):
+        return nx.to_numpy_matrix(self.metadata["graph"])
 
     def __repr__(self):
         """ Str representation of the dataset """
@@ -203,21 +208,21 @@ class SynthVec(DisentanglementDataset):
             discrete = self.metadata["discrete"][node]
             name = f"factor{node}_discrete" if discrete else f"factor{node}_continuous"
             self._FACTORS_IN_ORDER[node] = name
-            self._NUM_VALUES_PER_FACTOR = len(distrib.probs) if discrete else self.NUM_CATEG_CONTINUOUS
+            self._NUM_VALUES_PER_FACTOR[name] = len(distrib.probs) if discrete else self.NUM_CATEG_CONTINUOUS
         self.graph = self.metadata["graph"]
 
     def read_source_files(self):
         """ Reads the .h5 file into training and test arrays"""
         print("Loading generated data.")
         with h5py.File(Path(self.raw_folder)/self.data_file, "r") as hf:
-            X1 = hf["x_train"]
-            Y1 = hf["y_train"]
-            N1 = hf["noises_train"]
-            X2 = hf["x_test"]
-            Y2 = hf["y_test"]
-            N2 = hf["noises_test"]
+            X1 = hf["x_train"][()]
+            Y1 = hf["y_train"][()]
+            N1 = hf["noises_train"][()]
+            X2 = hf["x_test"][()]
+            Y2 = hf["y_test"][()]
+            N2 = hf["noises_test"][()]
         print("Loading metadata")
-        with open(Path(self.raw_folder)/"metadata.pkl","r") as mf:
+        with open(Path(self.raw_folder)/"metadata.pkl","rb") as mf:
             metadata = pickle.load(mf)
 
         return X1,Y1,N1,X2,Y2,N2,metadata
@@ -245,14 +250,10 @@ class SynthVec(DisentanglementDataset):
             else: noise= noises[:,node]
             if len(node_ancestors[node]):
                 noise = torch.cat([noise, x[:,node_ancestors[node]]], -1)
-            x[:,node] = equations[node](noise).squeeze(-1)
-            updater(i, 1, self.dim_in) #visual feedback of the progress
+            x[:,node] = equations[node](noise.float()).squeeze(-1)
+            updater(i+1, 1, self.dim_in) #visual feedback of the progress
         if batch_size==1: x = x.squeeze(0)
         return x, torch.stack(noises, axis=1) #batch size x dim_in
-
-    def sample_observations_from_partial_factors(self, factors, fixed_indices:List[List[int]], num_samples=1):
-        #TODO
-        pass
 
     def sample_observations_from_causes(self, X):
         observations = self.metadata["obs_mapping"](X)
@@ -284,13 +285,13 @@ class SynthVec(DisentanglementDataset):
         obs2 = self.sample_observations_from_causes(X2)
         return index, obs1, obs2
 
-    def generate(self, store:bool=True):
+    def generate(self, store:bool=True, overwrite:bool=False):
         """ Downloading source files (.h5)"""
         os.makedirs(self.raw_folder, exist_ok=True)
         # --------- download source file
-        if self._check_generated():
+        if self._check_generated() and not overwrite:
             print("Files already there. Proceed to reading.")
-            return
+            return self.read_source_files()
         # first generate the generating structure
         graph, node_order, node_ancestors = generate_random_acyclic_graph(self.dim_in, seed=11)
         samplers, discrete = get_samplers(self.dim_in, not self.allow_continuous, not self.allow_discrete)
@@ -299,10 +300,10 @@ class SynthVec(DisentanglementDataset):
         #then generate causal variables and observations
         print("Generate training samples")
         y_train, noises_train = self.sample(self.NUM_TRAIN, node_order, node_ancestors, samplers, equations)
-        x_train = obs_mapping(y_train)
+        x_train = obs_mapping(y_train.float())
         print("Generate testing samples")
         y_test, noises_test = self.sample(self.NUM_TEST, node_order, node_ancestors, samplers, equations)
-        x_test = obs_mapping(y_test)
+        x_test = obs_mapping(y_test.float())
         # grouping all generative information
         metadata = {
             "graph":graph,
@@ -322,15 +323,15 @@ class SynthVec(DisentanglementDataset):
                 y_test = y_test.cpu().numpy()
                 noises_test = noises_test.cpu().numpy()
                 #TODO: maybe zip?
-                X1 = hf.create_dataset("x_train", data=x_train)
-                Y1 = hf.create_dataset("y_train", data=y_train)
-                N1 = hf.create_dataset("noises_train", data=noises_train)
-                X2 = hf.create_dataset("x_test", data=x_test)
-                Y2 = hf.create_dataset("y_test", data=y_test)
-                N2 = hf.create_dataset("noises_test", data=noises_test)
+                X1 = hf.create_dataset("x_train", data=x_train)[()]
+                Y1 = hf.create_dataset("y_train", data=y_train)[()]
+                N1 = hf.create_dataset("noises_train", data=noises_train)[()]
+                X2 = hf.create_dataset("x_test", data=x_test)[()]
+                Y2 = hf.create_dataset("y_test", data=y_test)[()]
+                N2 = hf.create_dataset("noises_test", data=noises_test)[()]
 
             print("Storing metadata")
-            with open(Path(self.raw_folder)/"metadata.pkl","w") as mf:
+            with open(Path(self.raw_folder)/"metadata.pkl","wb") as mf:
                 pickle.dump(metadata, mf)
         print("Done!")
         return X1,Y1,N1,X2,Y2,N2,metadata
