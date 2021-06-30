@@ -39,4 +39,3 @@ class GenerativeAE(ABC):
         most of the data density (905)"""
 
 
-

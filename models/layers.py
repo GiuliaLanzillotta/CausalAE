@@ -1,4 +1,6 @@
 # Implementation of useful layers
+from typing import List
+
 import torch
 from torch import nn
 from torch import Tensor
@@ -642,9 +644,81 @@ class SCMDecoder(nn.Module):
         outputs = self.shape_adjusting_block(x)
         return outputs
 
+class VecSCMDecoder(nn.Module):
+    """FC version of SCMDecoder class - works with vectors.
+    Differently from VecSCM this class does not separate out the mechanisms in the SCM."""
+    def __init__(self, latent_size, unit_dim, layers, **kwargs):
+        """
+        @latent_size:int = size of the noise vector in input (obtained by hybrid/parametric sampling)
+        @unit_dim:int = dimension of one "noise unit"- not necessarily 1
+        @layers: list of Affine layers dimensions in the decoder (must contain output dimension)
+        # the noise will be processed one unit at a time -> the noise vector is
+        # split in units during the forward pass
+
+        """
+        super().__init__()
+        assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
+        self.depth = latent_size//unit_dim
+        self.latent_size = latent_size
+        self.unit_dim = unit_dim
+        self.forward_modules = nn.ModuleList([]) # FC battery taking convolutions' place
+        self.str_trf_modules = nn.ModuleList([])
+        act = act_switch(kwargs.get("act"))
+
+        dim_in = self.latent_size
+        for l in range(self.depth):
+            self.forward_modules.append(FCBlock(dim_in, [layers[l]], act))
+            self.str_trf_modules.append(StrTrf(self.unit_dim, layers[l], act=act))
+        self.str_trf_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
+        self.forward_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
+
+    def forward(self, x, z):
+        """ x is a constant, z is the noise """
+        for l in range(self.depth):
+            z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
+            x = self.str_trf_modules[l](x, z_i)
+            x = self.forward_modules[l](x)
+        return x
 
 
 
+class VecSCM(nn.Module):
+    """ Implements SCM layer only with fully connected layers, thus not moving to
+    the image space. Given input U of size (N) returns output X of same size."""
+    def __init__(self, dim_in, unit_dim, **kwargs):
+        """
+        @latent_size:int = size of the noise vector in input (obtained by hybrid/parametric sampling)
+        @unit_dim:int = dimension of one "noise unit"- not necessarily 1
+        # the noise will be processed one unit at a time -> the noise vector is
+        # split in units during the forward pass
+
+        """
+        super().__init__()
+        assert dim_in%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
+        self.depth = dim_in//unit_dim
+        self.dim_in = dim_in
+        self.unit_dim = unit_dim
+
+        self.str_assignments = nn.ModuleList([])
+        act = act_switch(kwargs.get("act"))
+
+        for l in range(self.depth):
+            dim_in = (l+1)*self.unit_dim
+            self.str_assignments.append(FCBlock(dim_in, [10,10,self.unit_dim], act=act)) #mapping noise + parents to one causal variable
+
+        self.str_assignments.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
+
+    def forward(self, z):
+        """ Implements through the scm.
+        The input consists in only a noise vector (z), which is passed through the structural assignments layers.
+         """
+        x = torch.zeros_like(z) # causal variables
+        for l in range(self.depth):
+            #extract noise
+            z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
+            inputs = torch.hstack([z_i, x[:,:l*self.unit_dim]])
+            x[:,l*self.unit_dim:(l+1)*self.unit_dim] = self.str_assignments[l](inputs)
+        return x
 
 
 
