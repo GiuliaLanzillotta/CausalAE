@@ -129,7 +129,7 @@ class ESAE(SAE):
 
 class VecESAE(ESAE):
     """Version of ESAE model for vector based (not image based) data"""
-    def __init__(self, params:dict, dim_in, full:bool) -> None:
+    def __init__(self, params:dict, dim_in:int, full:bool) -> None:
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
         super(VecESAE, self).__init__(params, dim_in)
         # dim_in is a single number (since the input is a vector)
@@ -147,7 +147,7 @@ class VecESAE(ESAE):
         if not self.full:
             output = self.decoder(noise)
         else:
-            x = torch.ones_like(noise)
+            x = torch.ones_like(noise).to(noise.device)
             output = self.decoder(x, noise)
         if activate: output = self.act(output)
         return output

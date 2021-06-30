@@ -3,7 +3,7 @@
 from torch import nn
 from torch import Tensor
 import torch
-from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv
+from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv, VecSCM, VecSCMDecoder
 from torch.nn import functional as F
 from .utils import act_switch
 
@@ -82,3 +82,35 @@ class VAE(nn.Module, GenerativeAE):
         """ returns a range in format [(min, max)] for every dimension that should contain
         most of the data density (905)"""
         return self.gaussian_latent.prior_range
+
+
+class VecVAE(VAE):
+    """Version of VAE model for vector based (not image based) data"""
+    def __init__(self, params:dict, dim_in:int, full:bool) -> None:
+        """ full: whether to use the VecSCMDecoder layer as a decoder"""
+        super(VecVAE, self).__init__(params, dim_in)
+        # dim_in is a single number (since the input is a vector)
+        layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["enc_depth"]).int().numpy())
+        self.encoder = FCBlock(self.dim_in, layers, act_switch(params.get("act")))
+        self.full = full
+        if not full:
+            scm = VecSCM(self.latent_size, self.unit_dim, act=params.get("act"))
+            reverse_encoder = FCBlock(self.latent_size, reversed(layers), act_switch(params.get("act")))
+            self.decoder = nn.Sequential(scm, reverse_encoder)
+        else: self.decoder = VecSCMDecoder(self.latent_size, self.unit_dim, reversed(layers), act=params.get("act"))
+
+    def encode(self, inputs: Tensor):
+        codes = self.encoder(inputs)
+        z, logvar, mu = self.gaussian_latent(codes)
+        return [z, mu, logvar]
+
+
+    def decode(self, noise:Tensor, activate:bool):
+        # since x is a constant we're always going to get the same output
+        if not self.full:
+            output = self.decoder(noise)
+        else:
+            x = torch.ones_like(noise).to(noise.device)
+            output = self.decoder(x, noise)
+        if activate: output = self.act(output)
+        return output

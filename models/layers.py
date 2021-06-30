@@ -658,7 +658,9 @@ class VecSCMDecoder(nn.Module):
         """
         super().__init__()
         assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
-        self.depth = latent_size//unit_dim
+        self.depth = len(layers)
+        self.hierarchy_depth = latent_size//unit_dim
+        assert self.depth>=self.hierarchy_depth, "Too few layers provided to process the noise"
         self.latent_size = latent_size
         self.unit_dim = unit_dim
         self.forward_modules = nn.ModuleList([]) # FC battery taking convolutions' place
@@ -667,17 +669,22 @@ class VecSCMDecoder(nn.Module):
 
         dim_in = self.latent_size
         for l in range(self.depth):
-            self.forward_modules.append(FCBlock(dim_in, [layers[l]], act))
-            self.str_trf_modules.append(StrTrf(self.unit_dim, layers[l], act=act))
+            if l<self.hierarchy_depth:
+                self.forward_modules.append(FCBlock(dim_in, [layers[l]], act))
+                self.str_trf_modules.append(StrTrf(self.unit_dim, layers[l], act=act))
+            else: self.forward_modules.append(FCBlock(dim_in, [layers[l]], act))
+            dim_in = layers[l]
         self.str_trf_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
         self.forward_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
     def forward(self, x, z):
         """ x is a constant, z is the noise """
         for l in range(self.depth):
-            z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
-            x = self.str_trf_modules[l](x, z_i)
-            x = self.forward_modules[l](x)
+            if l < self.hierarchy_depth:
+                z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
+                x = self.str_trf_modules[l](x, z_i)
+                x = self.forward_modules[l](x)
+            else: x = self.forward_modules[l](x)
         return x
 
 
