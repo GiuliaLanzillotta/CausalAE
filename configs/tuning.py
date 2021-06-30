@@ -41,7 +41,8 @@ def get_config(tuning:bool, model_name:str, data:str, version:str):
     A unique config file will be assembled from the multiple config files"""
     model_path = str.join("/",["configs","models",model_name,version+".yaml"])
     standard_model_path = str.join("/",["configs","models",model_name,"standard.yaml"])
-    data_path = str.join("/", ["configs", "data", data+".yaml"])
+    data_path = str.join("/", ["configs", "data", data+".yaml"]) if data != "SynthVec" else \
+        str.join("/", ["configs", "data", data, version+".yaml"]) #remember: using same version for model and data in case of vectorised dataset
 
     # loading the base config file: this will be updated
     with open('configs/standard.yaml', 'r') as file:

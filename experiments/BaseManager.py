@@ -3,17 +3,17 @@ import numpy as np
 import torch
 from torch import Tensor
 from torch import optim
-from models import BASE, ESAE
+from models import BASE, ESAE, models_switch
 from experiments.data import DatasetLoader
 from visualisations import ModelVisualiser
 import pytorch_lightning as pl
 from metrics import FIDScorer, ModelDisentanglementEvaluator
 
 
-class BaseExperiment(pl.LightningModule):
+class BaseVisualExperiment(pl.LightningModule):
 
     def __init__(self, params: dict, model:BASE, loader:DatasetLoader) -> None:
-        super(BaseExperiment, self).__init__()
+        super(BaseVisualExperiment, self).__init__()
         self.params = params
         # When initialised the dataset loader will download or load the data from the folder
         # split in train/test, apply transformations, divide in batches, extract data dimension
@@ -62,8 +62,6 @@ class BaseExperiment(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         # Logging hyperparameters
         # Visualisation
-        #TODO: insert disentanglement scoring once in a while
-        #TODO: check plotting here
         if self.num_val_steps%self.plot_every==0 or \
                 self.global_step==self.params["trainer_params"]["max_steps"]:
             self.make_plots(originals=self.global_step==0)
@@ -114,3 +112,57 @@ class BaseExperiment(pl.LightningModule):
 
     def test_dataloader(self):
         return self.loader.test
+
+
+class BaseVecExperiment(pl.LightningModule):
+
+    def __init__(self, params: dict) -> None:
+        # When initialised the dataset loader will download or load the data from the folder
+        # split in train/test, apply transformations, divide in batches, extract data dimension
+        super(BaseVecExperiment, self).__init__()
+        self.params = params
+        self.loader = DatasetLoader(params["data_params"])
+        self.dim_in = self.loader.data_shape # C, H, W
+        self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in)
+        self._disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.val_dataloader())
+        self.val_every = self.params["trainer_params"]["val_check_interval"]
+        self.score_every = self.params['logging_params']['score_every']
+        self.num_val_steps = 0 #counts number of validation steps done
+        self.log_every = self.params['logging_params']['log_every']
+
+
+    def forward(self, inputs: Tensor, **kwargs) -> Tensor:
+        return self.model(inputs, **kwargs)
+
+    def validation_epoch_end(self, outputs):
+        # Scoring val performance
+        if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
+            # compute and store the fid scoring
+            disentanglement_scores, complete_scores = self._disentanglementScorer.score_model(device=self.device)
+            for k,v in disentanglement_scores.items():
+                self.log(k, v, prog_bar=False)
+        self.num_val_steps+=1
+
+    def test_epoch_end(self, outputs):
+        disentanglement_scores, complete_scores = self._disentanglementScorer.score_model(betaVAE=False,device=self.device)
+        for k,v in disentanglement_scores.items():
+            self.log(k, v, prog_bar=False)
+        _scores = disentanglement_scores
+        return _scores
+
+    def configure_optimizers(self):
+        opt_params = self.params["opt_params"]
+        optimizer = optim.Adam(self.model.parameters(),
+                               lr=opt_params['LR'],
+                               weight_decay=opt_params['weight_decay'])
+        return optimizer
+
+    def train_dataloader(self):
+        return self.loader.train
+
+    def val_dataloader(self):
+        return self.loader.val
+
+    def test_dataloader(self):
+        return self.loader.test
+

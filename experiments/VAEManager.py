@@ -1,5 +1,5 @@
 from experiments.data import DatasetLoader
-from experiments.BaseManager import BaseExperiment
+from experiments.BaseManager import BaseVisualExperiment
 from models import VAE
 
 def cyclic_beta_schedule(initial_beta, iter_num):
@@ -27,7 +27,7 @@ scheduler_switch = {
     'linear':linear_determ_warmup
 }
 
-class VAEXperiment(BaseExperiment):
+class VAEXperiment(BaseVisualExperiment):
 
     def __init__(self, params: dict) -> None:
         loader = DatasetLoader(params["data_params"])

@@ -5,7 +5,7 @@ from torch import Tensor
 from torch import optim
 from models import ESAE
 from experiments.data import DatasetLoader
-from experiments.BaseManager import BaseExperiment
+from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
 from visualisations import ModelVisualiser
 import pytorch_lightning as pl
 from metrics import FIDScorer
@@ -14,7 +14,7 @@ from metrics import FIDScorer
 
 
 
-class ESAEXperiment(BaseExperiment):
+class ESAEXperiment(BaseVisualExperiment):
 
     def __init__(self, params: dict) -> None:
         # When initialised the dataset loader will download or load the data from the folder
@@ -69,4 +69,44 @@ class ESAEXperiment(BaseExperiment):
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
         if self.FID_scoring: self.score_FID(batch_idx, input_imgs, results)
+
+
+class ESAEVecExperiment(BaseVecExperiment):
+
+    def __init__(self, params: dict) -> None:
+        super(ESAEVecExperiment, self).__init__(params)
+
+    def training_step(self, batch, batch_idx):
+        inputs, labels = batch
+        results = self.forward(inputs)
+        losses = self.model.loss_function(*results, X = inputs,
+                                          lamda = self.model.params["lamda"],
+                                          device=self.device)
+        # Logging
+        self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
+        self.log('REC_loss', losses["Reconstruction_loss"], on_epoch=True)
+        self.log('REG_loss', losses["Regularization_loss"], on_epoch=True)
+        if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
+            figure = self.visualiser.plot_training_gradients()
+            self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
+        return losses
+
+    def validation_step(self, batch, batch_idx):
+        inputs, labels = batch
+        results = self.forward(inputs)
+        val_losses = self.model.loss_function(*results, X = inputs,
+                                              lamda = self.model.params["lamda"],
+                                              device=self.device)
+        # Calling self.log will surface up scalars for you in TensorBoard
+        self.log('val_loss', val_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        return val_losses
+
+    def test_step(self, batch, batch_idx):
+        inputs, labels = batch
+        results = self.forward(inputs)
+        test_losses = self.model.loss_function(*results, X = inputs,
+                                               lamda = self.model.params["lamda"],
+                                               device=self.device)
+        # Calling self.log will surface up scalars for you in TensorBoard
+        self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
 

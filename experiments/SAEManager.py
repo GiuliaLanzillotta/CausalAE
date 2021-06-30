@@ -5,7 +5,7 @@ from torch import Tensor
 from torch import optim
 from models import SAE
 from experiments.data import DatasetLoader
-from experiments.BaseManager import BaseExperiment
+from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
 from visualisations import ModelVisualiser
 import pytorch_lightning as pl
 from metrics import FIDScorer
@@ -14,7 +14,7 @@ from metrics import FIDScorer
 
 
 
-class SAEXperiment(BaseExperiment):
+class SAEXperiment(BaseVisualExperiment):
 
     def __init__(self, params: dict) -> None:
         # When initialised the dataset loader will download or load the data from the folder
@@ -62,3 +62,37 @@ class SAEXperiment(BaseExperiment):
         self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)
         if self.FID_scoring: self.score_FID(batch_idx, input_imgs, X_hat)
+
+
+
+class SAEVecExperiment(BaseVecExperiment):
+
+    def __init__(self, params: dict) -> None:
+        super(SAEVecExperiment, self).__init__(params)
+
+    def training_step(self, batch, batch_idx):
+        inputs, labels = batch
+        X_hat = self.forward(inputs)
+        BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
+        self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
+        if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
+            figure = self.visualiser.plot_training_gradients(self.global_step)
+            self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
+        return BCE
+
+    def validation_step(self, batch, batch_idx):
+        inputs, labels = batch
+        X_hat = self.forward(inputs)
+        BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
+        self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
+        self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        return BCE
+
+    def test_step(self, batch, batch_idx):
+        inputs, labels = batch
+        X_hat = self.forward(inputs)
+        BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
+        self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)

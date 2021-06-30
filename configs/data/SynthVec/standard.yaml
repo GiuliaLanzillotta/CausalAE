@@ -1,0 +1,9 @@
+dataset_name: SynthVec
+experiment_name: standard
+num_workers: 80
+batch_size: 128
+num_factors: 10
+dim_observations: 100
+allow_continuous: True
+allow_discrete: True
+noise: False

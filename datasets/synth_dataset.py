@@ -133,6 +133,7 @@ class SynthVec(DisentanglementDataset):
 
     def __init__(self,
                  root: str,
+                 name: str,
                  num_factors:int,
                  dim_observations:int,
                  allow_continuous:bool=False, #whether to include continuous variables in the causal graph
@@ -145,6 +146,7 @@ class SynthVec(DisentanglementDataset):
 
         super(SynthVec, self).__init__()
 
+        self.name = name
         self.root = root
         self.dim_in = num_factors
         self.dim_out = dim_observations
@@ -351,12 +353,12 @@ class SynthVec(DisentanglementDataset):
     @property
     def raw_folder(self) -> str:
         # raw folder should be ("./datasets/SynthVec/SynthVec/raw
-        return os.path.join(self.root, self.__class__.__name__, 'raw')
+        return os.path.join(self.root, self.__class__.__name__, 'raw' , self.name)
 
     @property
     def processed_folder(self) -> str:
         # raw folder should be ("./datasets/SynthVec/SynthVec/processed
-        return os.path.join(self.root, self.__class__.__name__, 'processed')
+        return os.path.join(self.root, self.__class__.__name__, 'processed', self.name)
 
     @property
     def num_factors(self):

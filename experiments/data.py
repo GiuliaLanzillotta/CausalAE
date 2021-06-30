@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA, FashionMNIST
 import matplotlib.pyplot as plt
-from datasets import RFD, Shapes3d, RFDIterable, AdditiveNoise, RFDh5
+from datasets import RFD, Shapes3d, RFDIterable, AdditiveNoise, RFDh5, SynthVec
 import numpy as np
 import torch
 import os
@@ -198,11 +198,37 @@ class DatasetLoader:
                                        batch_size=args["test_batch_size"],
                                        shuffle=False)
 
+        elif args["dataset_name"] == 'SynthVec': #new dataset: https://arxiv.org/pdf/2010.14407.pdf - h5 version
+
+            data_folder = './datasets/SynthVec/'
+            train_set =SynthVec(data_folder,
+                                name=args["experiment_name"],
+                                num_factors = args["num_factors"],
+                                dim_observations= args["dim_observations"],
+                                allow_continuous=args["allow_continuous"],
+                                allow_discrete=args["allow_discrete"],
+                                generate = True,
+                                overwrite = False,
+                                test = False,
+                                noise=args["noise"],
+                                verbose=False)
+            test_set =SynthVec(data_folder,
+                               name=args["experiment_name"],
+                               num_factors = args["num_factors"],
+                               dim_observations= args["dim_observations"],
+                               allow_continuous=args["allow_continuous"],
+                               allow_discrete=args["allow_discrete"],
+                               generate = True,
+                               overwrite = False,
+                               test = True,
+                               noise=args["noise"],
+                               verbose=False)
+
         else:
             raise RuntimeError("Unrecognized data set '{}'".format(
                 args.dataset_name))
 
-        if not already_split:
+        if not already_split: # split train set in validation and train
             try:
                 tot_train = train_set.data.shape[0]
                 tot_test = test_set.data.shape[0]
@@ -231,6 +257,7 @@ class DatasetLoader:
 
 
         #TODO: check this does not affect test set
+        #FIXME
         self.data_shape = next(iter(self.test))[0].shape[1:]
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]
