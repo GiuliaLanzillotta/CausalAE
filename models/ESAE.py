@@ -65,8 +65,7 @@ class ESAE(SAE):
         output = self.decode(torch.vstack(noises), activate)
         return  [output, codes, noises, hybridisation_levels]
 
-    @staticmethod
-    def reconstruction_hybrid(X, X_hat, Z, Z_hybrid, level:int, device:str):
+    def reconstruction_hybrid(self, X, X_hat, Z, Z_hybrid, level:int, device:str):
         """Computes reconstruction loss for hybridised samples
         #TODO: make fancier"""
         N = X_hat.shape[0]
@@ -79,7 +78,7 @@ class ESAE(SAE):
             # in this way the changes to the distribution brought by hybridisation will be more evident
             # (ideally these two distributions should be the same)
             factors = (1/((level*torch.norm(ZN-ZHN,1, dim=1))+10e-5)).to(device)
-        MSEs = torch.sum(F.mse_loss(X_hat, X, reduction="none"),
+        MSEs = torch.sum(F.mse_loss(self.act(X_hat), X, reduction="none"),
                          tuple(range(X_hat.dim()))[1:]).to(device)
         total_cost = torch.matmul(MSEs.to(device), factors)/N
         return total_cost
@@ -133,7 +132,7 @@ class VecESAE(ESAE):
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
         super(VecESAE, self).__init__(params, dim_in)
         # dim_in is a single number (since the input is a vector)
-        layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["enc_depth"]).int().numpy())
+        layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["depth"]).int().numpy())
         self.encoder = FCBlock(self.dim_in, layers, act_switch(params.get("act")))
         self.full = full
         if not full:

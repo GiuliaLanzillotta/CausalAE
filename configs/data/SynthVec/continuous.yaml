@@ -5,5 +5,5 @@ batch_size: 128
 num_factors: 10
 dim_observations: 100
 allow_continuous: True
-allow_discrete: True
+allow_discrete: False
 noise: False

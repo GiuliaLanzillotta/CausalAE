@@ -73,7 +73,7 @@ class SAE(nn.Module, GenerativeAE):
         X_hat = args[0]
         X = args[1]
         # mean over batch of the sum over all other dimensions
-        MSE = torch.sum(F.mse_loss(X_hat, X, reduction="none"),
+        MSE = torch.sum(F.mse_loss(self.act(X_hat), X, reduction="none"),
                         tuple(range(X_hat.dim()))[1:]).mean()
         BCE = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
                         tuple(range(X_hat.dim()))[1:]).mean()

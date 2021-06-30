@@ -378,8 +378,7 @@ class HybridLayer(nn.Module):
     def update_prior(self, latent_vectors):
         # TODO: make initialisation incremental (store an incremental pool
         #  over different batches and sample from that)
-        if self.prior is None:
-            self.initialise_prior(latent_vectors)
+        self.initialise_prior(latent_vectors)
 
     def sample_from_prior(self, input_shape):
         # splitting the prior latent vectors into chunks (one for each noise dimension)

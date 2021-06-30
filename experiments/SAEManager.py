@@ -23,6 +23,8 @@ class SAEXperiment(BaseVisualExperiment):
         dim_in =  loader.data_shape # C, H, W
         model = SAE(params["model_params"], dim_in)
         super(SAEXperiment, self).__init__(params, model, loader)
+        self.loss_type = params["model_params"]["loss_type"]
+        assert self.loss_type in ["MSE","BCE"], "Requested loss type not available"
 
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
@@ -31,8 +33,9 @@ class SAEXperiment(BaseVisualExperiment):
         self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            figure = self.visualiser.plot_training_gradients(self.global_step)
+            figure = self.visualiser.plot_training_gradients()
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
+        if self.loss_type=="MSE":return MSE
         return BCE
 
     def score_FID(self, batch_idx, inputs, results):
@@ -53,6 +56,7 @@ class SAEXperiment(BaseVisualExperiment):
         self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0 and self.FID_scoring:
             self.score_FID(batch_idx, input_imgs, X_hat)
+        if self.loss_type=="MSE":return MSE
         return BCE
 
     def test_step(self, batch, batch_idx):
@@ -62,6 +66,8 @@ class SAEXperiment(BaseVisualExperiment):
         self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)
         if self.FID_scoring: self.score_FID(batch_idx, input_imgs, X_hat)
+        if self.loss_type=="MSE":return MSE
+        return BCE
 
 
 
@@ -74,12 +80,11 @@ class SAEVecExperiment(BaseVecExperiment):
         inputs, labels = batch
         X_hat = self.forward(inputs)
         BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
-        self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            figure = self.visualiser.plot_training_gradients(self.global_step)
+            figure = self.visualiser.plot_training_gradients()
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
-        return BCE
+        return MSE
 
     def validation_step(self, batch, batch_idx):
         inputs, labels = batch
@@ -88,7 +93,7 @@ class SAEVecExperiment(BaseVecExperiment):
         self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        return BCE
+        return MSE
 
     def test_step(self, batch, batch_idx):
         inputs, labels = batch
@@ -96,3 +101,4 @@ class SAEVecExperiment(BaseVecExperiment):
         BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
         self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)
+        return MSE

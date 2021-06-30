@@ -127,6 +127,7 @@ class BaseVecExperiment(pl.LightningModule):
         self._disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.val_dataloader())
         self.val_every = self.params["trainer_params"]["val_check_interval"]
         self.score_every = self.params['logging_params']['score_every']
+        self.plot_every = self.params['vis_params']['plot_every']
         self.num_val_steps = 0 #counts number of validation steps done
         self.log_every = self.params['logging_params']['log_every']
 

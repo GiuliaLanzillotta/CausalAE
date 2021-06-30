@@ -9,3 +9,4 @@ model_params:
   unit_dim: 1
   norm: 'group'
   channels: 64
+  loss_type: "MSE"

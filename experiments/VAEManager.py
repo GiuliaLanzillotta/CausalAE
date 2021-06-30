@@ -1,5 +1,5 @@
 from experiments.data import DatasetLoader
-from experiments.BaseManager import BaseVisualExperiment
+from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
 from models import VAE
 
 def cyclic_beta_schedule(initial_beta, iter_num):
@@ -37,6 +37,8 @@ class VAEXperiment(BaseVisualExperiment):
         # Additional initialisations (used in training and validation steps)
         self.KL_weight = max(1.0, self.params["model_params"]["latent_size"]/self.params['data_params']['batch_size']) #this might be too high for the big datasets
         self.beta_scheduler = scheduler_switch[self.params["opt_params"]["beta_schedule"]]
+        self.loss_type = params["model_params"]["loss_type"]
+        assert self.loss_type in ["MSE","BCE"], "Requested loss type not available"
 
 
     def training_step(self, batch, batch_idx):
@@ -45,13 +47,14 @@ class VAEXperiment(BaseVisualExperiment):
         KL_weight = self.beta_scheduler(self.KL_weight, self.global_step) # decaying the KL term
         train_loss = self.model.loss_function(*results,
                                               X = input_imgs,
-                                              KL_weight =  KL_weight)
+                                              KL_weight =  KL_weight,
+                                              use_MSE=self.loss_type=="MSE")
         # Logging
         self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log_dict({key: val.item() for key, val in train_loss.items()})
         self.log('beta', KL_weight*self.model.beta, prog_bar=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            figure = self.visualiser.plot_training_gradients(self.global_step)
+            figure = self.visualiser.plot_training_gradients()
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
 
         return train_loss["loss"]
@@ -70,7 +73,8 @@ class VAEXperiment(BaseVisualExperiment):
         input_imgs, labels = batch
         results = self.forward(input_imgs)
         KL_weight = self.beta_scheduler(self.KL_weight, self.global_step)# decaying the KL term
-        val_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = KL_weight)
+        val_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = KL_weight,
+                                            use_MSE=self.loss_type=="MSE")
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
         if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0 and self.FID_scoring:
@@ -80,8 +84,54 @@ class VAEXperiment(BaseVisualExperiment):
     def test_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs)#
-        test_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = self.KL_weight)# no decay in KL weight
+        test_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = self.KL_weight,
+                                             use_MSE=self.loss_type=="MSE")# no decay in KL weight
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('test_loss', test_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
         if self.FID_scoring: self.score_FID(batch_idx, input_imgs, results)
+
+
+class VAEVecEXperiment(BaseVecExperiment):
+
+    def __init__(self, params: dict) -> None:
+        super(VAEVecEXperiment, self).__init__(params)
+        # Additional initialisations (used in training and validation steps)
+        self.KL_weight = max(1.0, self.params["model_params"]["latent_size"]/self.params['data_params']['batch_size']) #this might be too high for the big datasets
+        self.beta_scheduler = scheduler_switch[self.params["opt_params"]["beta_schedule"]]
+
+
+    def training_step(self, batch, batch_idx):
+        inputs, labels = batch
+        results = self.forward(inputs)
+        KL_weight = self.beta_scheduler(self.KL_weight, self.global_step) # decaying the KL term
+        train_loss = self.model.loss_function(*results,
+                                              X = inputs,
+                                              KL_weight =  KL_weight,
+                                              use_MSE=True)
+        # Logging
+        self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
+        self.log_dict({key: val.item() for key, val in train_loss.items()})
+        self.log('beta', KL_weight*self.model.beta, prog_bar=True)
+        if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
+            figure = self.visualiser.plot_training_gradients()
+            self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
+
+        return train_loss["loss"]
+
+    def validation_step(self, batch, batch_idx):
+        inputs, labels = batch
+        results = self.forward(inputs)
+        KL_weight = self.beta_scheduler(self.KL_weight, self.global_step)# decaying the KL term
+        val_loss = self.model.loss_function(*results, X = inputs, KL_weight = KL_weight,use_MSE=True)
+        # Calling self.log will surface up scalars for you in TensorBoard
+        self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        return val_loss
+
+    def test_step(self, batch, batch_idx):
+        inputs, labels = batch
+        results = self.forward(inputs)#
+        test_loss = self.model.loss_function(*results, X = inputs, KL_weight = self.KL_weight,
+                                             use_MSE=self.loss_type=="MSE")# no decay in KL weight
+        # Calling self.log will surface up scalars for you in TensorBoard
+        self.log('test_loss', test_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
 

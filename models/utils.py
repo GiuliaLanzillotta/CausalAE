@@ -173,7 +173,7 @@ if __name__ == '__main__':
     #TESTING
     X = torch.randn(100,10)
     Y = torch.randn(100,10)
-    res1,res2,res3 = RBF_kernel(X,Y)
+    res1,res2,res3 = RBF_kernel(X,Y, device=X.device)
 
 
 

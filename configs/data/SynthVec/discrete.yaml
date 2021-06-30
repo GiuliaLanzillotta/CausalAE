@@ -4,6 +4,6 @@ num_workers: 1
 batch_size: 128
 num_factors: 10
 dim_observations: 100
-allow_continuous: True
+allow_continuous: False
 allow_discrete: True
 noise: False

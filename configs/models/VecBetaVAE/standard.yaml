@@ -1,0 +1,12 @@
+model_params:
+  name: 'VecBetaVAE'
+  beta: 4.0
+  latent_size: 10
+  depth: 8 #number of linear layers in the encoder and decoder
+  dittadi: False
+  gaussian_init: 'xavier' #other option: 'normal'
+  loss_type: "MSE"
+
+opt_params:
+  KL_decay: 2.0
+  beta_schedule: 'cyclic'

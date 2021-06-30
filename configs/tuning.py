@@ -36,13 +36,16 @@ config_switch = {'VAE':get_VAE_tuning_configs,
                  'ESAE':get_ESAE_tuning_configs}
 
 
-def get_config(tuning:bool, model_name:str, data:str, version:str):
+def get_config(tuning:bool, model_name:str, data:str, version:str, data_version:str=None):
     """ Preparing the config file that will be used during training.
     A unique config file will be assembled from the multiple config files"""
-    model_path = str.join("/",["configs","models",model_name,version+".yaml"])
     standard_model_path = str.join("/",["configs","models",model_name,"standard.yaml"])
-    data_path = str.join("/", ["configs", "data", data+".yaml"]) if data != "SynthVec" else \
-        str.join("/", ["configs", "data", data, version+".yaml"]) #remember: using same version for model and data in case of vectorised dataset
+    model_path = str.join("/",["configs","models",model_name,version+".yaml"])
+    if data != "SynthVec":
+        data_path = str.join("/", ["configs", "data", data+".yaml"])
+    else:
+        data_path = str.join("/", ["configs", "data", data, data_version+".yaml"])
+
 
     # loading the base config file: this will be updated
     with open('configs/standard.yaml', 'r') as file:

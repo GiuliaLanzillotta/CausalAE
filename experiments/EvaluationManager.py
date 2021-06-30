@@ -103,6 +103,10 @@ class ModelHandler(object):
 
         return scores
 
+class VisualModelHandler(ModelHandler):
+    """Offers a series of tools to inspect a given model."""
+    def __init__(self, model_name: str, model_version: str, data: str, **kwargs):
+        super().__init__(model_name, model_version, data, **kwargs)
 
     def plot_model(self, do_originals=False, do_reconstructions=False,
                    do_random_samples=False, do_traversals=False):
@@ -120,6 +124,16 @@ class ModelHandler(object):
         if do_originals: # print the originals
             plots["originals"] = self.visualiser.plot_originals()
         return plots
+
+
+class VectorModelHandler(ModelHandler):
+    """Offers a series of tools to inspect a given model."""
+    def __init__(self, model_name: str, model_version: str, data: str, **kwargs):
+        super().__init__(model_name, model_version, data, **kwargs)
+
+    def plot_model(self):
+        #TODO
+        pass
 
 
 if __name__ == '__main__':

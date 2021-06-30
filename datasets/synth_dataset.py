@@ -176,6 +176,17 @@ class SynthVec(DisentanglementDataset):
 
         if verbose: print(self)
 
+    def switch_to_noises(self):
+        """Function has an effect ONLY IF self.noise is False.
+        It recovers the noises from file and sets them as new labels.
+        Useful for evaluation purposes."""
+        X1,Y1,N1,X2,Y2,N2,metadata = self.read_source_files()
+        if self.test:
+            self.original_labels = N2
+        else:
+            self.original_labels = N1
+        self.labels = self.categorise_labels(self.original_labels[()])
+
     def get_graph_matrix(self):
         return nx.to_numpy_matrix(self.metadata["graph"])
 

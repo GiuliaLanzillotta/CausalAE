@@ -70,13 +70,17 @@ class VAE(nn.Module, GenerativeAE):
         # m and input x size n in order to compare its different values
         # across different latent layer sizes and different datasets
         KL_weight = kwargs["KL_weight"] # usually weight = M/N
+        use_MSE = kwargs.get("use_MSE",True)
         # ELBO = reconstruction term + prior-matching term
         # Note: for both losses we take the average over the batch and sum over the other dimensions
-        recons_loss = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
+        BCE = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
                                tuple(range(X_hat.dim()))[1:]).mean() #sum over all dimensions except the first one (batch)
+        MSE = torch.sum(F.mse_loss(self.act(X_hat), X, reduction="none"),
+                        tuple(range(X_hat.dim()))[1:]).mean()
+        recons_loss = MSE if use_MSE else BCE
         KL_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), 1).mean()
         loss = recons_loss + self.beta * KL_weight * KL_loss
-        return {'loss': loss, 'Reconstruction_loss':recons_loss, 'KL':KL_loss}
+        return {'loss': loss, 'Reconstruction_loss':recons_loss, 'KL':KL_loss, 'MSE':MSE, 'BCE':BCE}
 
     def get_prior_range(self):
         """ returns a range in format [(min, max)] for every dimension that should contain
@@ -90,7 +94,7 @@ class VecVAE(VAE):
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
         super(VecVAE, self).__init__(params, dim_in)
         # dim_in is a single number (since the input is a vector)
-        layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["enc_depth"]).int().numpy())
+        layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["depth"]).int().numpy())
         self.encoder = FCBlock(self.dim_in, layers, act_switch(params.get("act")))
         self.full = full
         if not full:

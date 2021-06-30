@@ -134,12 +134,17 @@ if __name__ == '__main__':
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="MNIST")
+                        default="SynthVec")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="dummy")
+                        default="standard")
+    parser.add_argument('--data_version', '-dv',
+                        dest="data_version",
+                        metavar="DATA_VERSION",
+                        help= "Name of data version to use (available only for synthetic datasets for now)",
+                        default="standard")
     parser.add_argument('--test', '-e', #Note that when testing is switched on then training is switched off
                         dest="test",
                         metavar="TEST",
@@ -148,6 +153,6 @@ if __name__ == '__main__':
 
 
     args = parser.parse_args()
-    config = get_config(args.tuning, args.name, args.data, args.version)
+    config = get_config(args.tuning, args.name, args.data, args.version, args.data_version)
     if args.tuning: do_tuning(config)
     else: train_model(config, test=args.test)

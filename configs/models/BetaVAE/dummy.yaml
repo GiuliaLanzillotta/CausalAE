@@ -2,15 +2,19 @@ model_params:
   name: 'BetaVAE'
   beta: 4.0
   residual: True
-  latent_size: 12
+  latent_size: 10
   enc_depth: 6 #number of convolutional layers in the encoder
   dec_depth: 6
   pool_every: 2
   channels: 64
   dittadi: False
   gaussian_init: 'xavier' #other option: 'normal'
-  loss_type: "MSE"
 
 opt_params:
-  KL_decay: 1.0
+  KL_decay: 3.0
   beta_schedule: 'cyclic'
+
+
+
+vis_params:
+  plot_every: 1
