@@ -7,7 +7,7 @@ class GenerativeAE(ABC):
 
     @abstractmethod
     def encode(self, inputs:Tensor) -> Tensor:
-        """ returns latent code (not noise) for given input"""
+        """ returns all the encoder's output (noise and code included) for given input"""
         raise NotImplementedError
 
     @abstractmethod

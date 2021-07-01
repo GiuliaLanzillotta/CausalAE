@@ -1,7 +1,7 @@
 from .layers import *
 from .BASE import GenerativeAE
 from .VAE import VAE, VecVAE
-from .SAE import SAE, VecSAE
+from .SAE import SAE, VecSAE,HybridAE
 from .ESAE import ESAE, VecESAE
 
 models_switch = {"BetaVAE":VAE,

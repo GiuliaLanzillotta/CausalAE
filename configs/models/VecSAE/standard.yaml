@@ -2,6 +2,11 @@ model_params:
   name: 'BaseSAE'
   latent_vecs: 128 # for hybrid sampling
   latent_size: 10
-  depth: 8 #number of linear layers in the encoder and decoder
+  depth: 5 #number of linear layers in the encoder and decoder
   unit_dim: 1
   loss_type: "MSE"
+  full: False
+  act: 'leaky_relu'
+
+logging_params:
+  save_dir: "./logs/"

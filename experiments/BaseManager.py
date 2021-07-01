@@ -122,8 +122,11 @@ class BaseVecExperiment(pl.LightningModule):
         super(BaseVecExperiment, self).__init__()
         self.params = params
         self.loader = DatasetLoader(params["data_params"])
+        self.visualiser = ModelVisualiser(self.model,
+                                          self.loader.test,
+                                          **params["vis_params"])
         self.dim_in = self.loader.data_shape # C, H, W
-        self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in)
+        self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in, full=params["model_params"]["full"])
         self._disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.val_dataloader())
         self.val_every = self.params["trainer_params"]["val_check_interval"]
         self.score_every = self.params['logging_params']['score_every']

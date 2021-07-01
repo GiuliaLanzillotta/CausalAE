@@ -6,32 +6,19 @@ import torch
 from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv, VecSCM, VecSCMDecoder
 from torch.nn import functional as F
 from .utils import act_switch
+from abc import ABCMeta, abstractmethod, ABC
 
-class VAE(nn.Module, GenerativeAE):
 
-    def __init__(self, params:dict, dim_in) -> None:
-        super(VAE, self).__init__()
-        self.beta = params["beta"]
+class VAEBase(nn.Module, GenerativeAE, ABC):
+
+    def __int__(self, params):
+        self.params = params
         self.latent_size = params["latent_size"]
-        self.dittadi_v = params["dittadi"] # boolean flag determining whether or not to use Dittadi convolutional structure
-        self.dim_in = dim_in # C, H, W
-        # Building encoder
-        conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params) if not self.dittadi_v \
-            else DittadiConvNet(self.latent_size)
-        self.conv_net = conv_net
-        if not self.dittadi_v:
-            self.fc_enc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
-            self.fc_dec = FCBlock(self.latent_size, [64, 128, 256], act_switch(params["act"]))
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
-        self.upsmpld_conv_net = UpsampledConvNet((64, 2, 2), self.dim_in, depth=params["dec_depth"], **params) \
-            if not self.dittadi_v else DittadiUpsampledConv(self.latent_size)
         self.act = nn.Sigmoid()
 
-
     def encode(self, inputs: Tensor):
-        conv_result = self.conv_net(inputs)
-        if not self.dittadi_v: codes = self.fc_enc(conv_result)
-        else: codes = conv_result
+        codes = self.encoder(inputs)
         z, logvar, mu = self.gaussian_latent(codes)
         return [z, mu, logvar]
 
@@ -40,10 +27,9 @@ class VAE(nn.Module, GenerativeAE):
         return self.encode(inputs)[0]
 
     def decode(self, noise: Tensor, activate:bool) -> Tensor:
-        if not self.dittadi_v: noise = self.fc_dec(noise)
-        upsmpld_res = self.upsmpld_conv_net(noise)
-        if activate: upsmpld_res = self.act(upsmpld_res)
-        return upsmpld_res
+        out = self.decoder(noise)
+        if activate: out = self.act(out)
+        return out
 
     def sample_noise_from_prior(self, num_samples:int):
         return self.gaussian_latent.sample_standard(num_samples)
@@ -74,7 +60,7 @@ class VAE(nn.Module, GenerativeAE):
         # ELBO = reconstruction term + prior-matching term
         # Note: for both losses we take the average over the batch and sum over the other dimensions
         BCE = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
-                               tuple(range(X_hat.dim()))[1:]).mean() #sum over all dimensions except the first one (batch)
+                        tuple(range(X_hat.dim()))[1:]).mean() #sum over all dimensions except the first one (batch)
         MSE = torch.sum(F.mse_loss(self.act(X_hat), X, reduction="none"),
                         tuple(range(X_hat.dim()))[1:]).mean()
         recons_loss = MSE if use_MSE else BCE
@@ -88,26 +74,41 @@ class VAE(nn.Module, GenerativeAE):
         return self.gaussian_latent.prior_range
 
 
-class VecVAE(VAE):
+class VAE(VAEBase):
+
+    def __init__(self, params: dict, dim_in) -> None:
+        super().__init__(params)
+        self.beta = params["beta"]
+        self.dittadi_v = params["dittadi"] # boolean flag determining whether or not to use Dittadi convolutional structure
+        self.dim_in = dim_in # C, H, W
+        # Building encoder
+        conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params) if not self.dittadi_v \
+            else DittadiConvNet(self.latent_size)
+        if not self.dittadi_v:
+            fc_enc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
+            fc_dec = FCBlock(self.latent_size, [64, 128, 256], act_switch(params["act"]))
+
+        self.encoder = conv_net if self.dittadi_v else nn.Sequential(conv_net, fc_enc)
+        deconv_net = UpsampledConvNet((64, 2, 2), self.dim_in, depth=params["dec_depth"], **params) \
+            if not self.dittadi_v else DittadiUpsampledConv(self.latent_size)
+        self.decoder = deconv_net if self.dittadi_v else nn.Sequential(fc_dec, deconv_net)
+
+class VecVAE(VAEBase):
     """Version of VAE model for vector based (not image based) data"""
-    def __init__(self, params:dict, dim_in:int, full:bool) -> None:
+    def __init__(self, params: dict, dim_in: int, full: bool) -> None:
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
-        super(VecVAE, self).__init__(params, dim_in)
+        super().__init__(params)
+        self.dim_in = dim_in
+        self.beta = params["beta"]
+        self.full = full
         # dim_in is a single number (since the input is a vector)
         layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["depth"]).int().numpy())
         self.encoder = FCBlock(self.dim_in, layers, act_switch(params.get("act")))
-        self.full = full
         if not full:
             scm = VecSCM(self.latent_size, self.unit_dim, act=params.get("act"))
             reverse_encoder = FCBlock(self.latent_size, reversed(layers), act_switch(params.get("act")))
             self.decoder = nn.Sequential(scm, reverse_encoder)
         else: self.decoder = VecSCMDecoder(self.latent_size, self.unit_dim, reversed(layers), act=params.get("act"))
-
-    def encode(self, inputs: Tensor):
-        codes = self.encoder(inputs)
-        z, logvar, mu = self.gaussian_latent(codes)
-        return [z, mu, logvar]
-
 
     def decode(self, noise:Tensor, activate:bool):
         # since x is a constant we're always going to get the same output

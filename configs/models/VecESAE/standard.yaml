@@ -2,10 +2,15 @@ model_params:
   name: 'VecESAE'
   latent_vecs: 128 # for hybrid sampling
   latent_size: 10
-  depth: 8 #number of linear layers in the encoder and decoder
+  depth: 5 #number of linear layers in the encoder and decoder
   unit_dim: 1
   # --------- parameters related to MMD kernel setting ----------
   MMD_kernel: "RBF" #or IMQ or cat
   #"strict": False
   #"hierarchy": False
   lamda: 2.0
+  full: False
+  act: 'leaky_relu'
+
+logging_params:
+  save_dir: "./logs/"
