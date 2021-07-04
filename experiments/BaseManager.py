@@ -8,7 +8,7 @@ from experiments.data import DatasetLoader
 from visualisations import ModelVisualiser
 import pytorch_lightning as pl
 from metrics import FIDScorer, ModelDisentanglementEvaluator
-
+from torchsummary import summary
 
 class BaseVisualExperiment(pl.LightningModule):
 
@@ -19,6 +19,7 @@ class BaseVisualExperiment(pl.LightningModule):
         # split in train/test, apply transformations, divide in batches, extract data dimension
         self.loader = loader
         self.model = model
+        self.print_model()
         self.visualiser = ModelVisualiser(self.model,
                                           self.loader.test,
                                           **params["vis_params"])
@@ -34,6 +35,9 @@ class BaseVisualExperiment(pl.LightningModule):
 
     def forward(self, inputs: Tensor, **kwargs) -> Tensor:
         return self.model(inputs, **kwargs)
+
+    def print_model(self):
+        summary(self.model.cuda(), (self.loader.data_shape))
 
     def make_plots(self, originals=False):
         """originals: bool = Whether to plot the originals samples from the test set"""
@@ -122,11 +126,11 @@ class BaseVecExperiment(pl.LightningModule):
         super(BaseVecExperiment, self).__init__()
         self.params = params
         self.loader = DatasetLoader(params["data_params"])
+        self.dim_in = self.loader.data_shape # C, H, W
+        self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in, full=params["model_params"]["full"])
         self.visualiser = ModelVisualiser(self.model,
                                           self.loader.test,
                                           **params["vis_params"])
-        self.dim_in = self.loader.data_shape # C, H, W
-        self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in, full=params["model_params"]["full"])
         self._disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.val_dataloader())
         self.val_every = self.params["trainer_params"]["val_check_interval"]
         self.score_every = self.params['logging_params']['score_every']

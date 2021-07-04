@@ -45,6 +45,7 @@ def get_config(tuning:bool, model_name:str, data:str, version:str, data_version:
         data_path = str.join("/", ["configs", "data", data+".yaml"])
     else:
         data_path = str.join("/", ["configs", "data", data, data_version+".yaml"])
+        data = data+"_"+data_version
 
 
     # loading the base config file: this will be updated
@@ -73,6 +74,7 @@ def get_config(tuning:bool, model_name:str, data:str, version:str, data_version:
         # updating the hyper-parameters with the ones specific to this version
         # note that the version config file could contain hyper-parameters regarding data figs
         with open(model_path, 'r') as file:
+            print(model_path)
             model_fig = yaml.safe_load(file)
             for k in model_fig.keys():
                 config[k].update(model_fig[k])

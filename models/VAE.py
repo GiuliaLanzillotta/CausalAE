@@ -11,7 +11,7 @@ from abc import ABCMeta, abstractmethod, ABC
 
 class VAEBase(nn.Module, GenerativeAE, ABC):
 
-    def __int__(self, params):
+    def __init__(self, params):
         self.params = params
         self.latent_size = params["latent_size"]
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
@@ -82,16 +82,23 @@ class VAE(VAEBase):
         self.dittadi_v = params["dittadi"] # boolean flag determining whether or not to use Dittadi convolutional structure
         self.dim_in = dim_in # C, H, W
         # Building encoder
-        conv_net = ConvNet(dim_in, 256, depth=params["enc_depth"], **params) if not self.dittadi_v \
+        conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params) if not self.dittadi_v \
             else DittadiConvNet(self.latent_size)
         if not self.dittadi_v:
-            fc_enc = FCBlock(256, [128, 64, self.latent_size], act_switch(params["act"]))
-            fc_dec = FCBlock(self.latent_size, [64, 128, 256], act_switch(params["act"]))
+            fc_enc = FCBlock(conv_net.final_dim, [128, 64, self.latent_size], act_switch(params["act"]))
+            fc_dec = FCBlock(self.latent_size, [64, 128, conv_net.final_dim], act_switch(params["act"]))
 
         self.encoder = conv_net if self.dittadi_v else nn.Sequential(conv_net, fc_enc)
-        deconv_net = UpsampledConvNet((64, 2, 2), self.dim_in, depth=params["dec_depth"], **params) \
+        self.decoder_initial_shape = conv_net.final_shape
+        deconv_net = UpsampledConvNet(self.decoder_initial_shape, self.dim_in, depth=params["dec_depth"], **params) \
             if not self.dittadi_v else DittadiUpsampledConv(self.latent_size)
         self.decoder = deconv_net if self.dittadi_v else nn.Sequential(fc_dec, deconv_net)
+
+    def decode(self, noise: Tensor, activate:bool) -> Tensor: #overriding parent class implementation to inser reshaping
+        noise = noise.view((-1, )+self.decoder_initial_shape) # reshaping into image format
+        out = self.decoder(noise)
+        if activate: out = self.act(out)
+        return out
 
 class VecVAE(VAEBase):
     """Version of VAE model for vector based (not image based) data"""

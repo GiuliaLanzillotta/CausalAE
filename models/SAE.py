@@ -76,12 +76,12 @@ class SAE(HybridAE):
         HybridAE.__init__(self, params)
         self.dim_in = dim_in # C, H, W
         # Building encoder
-        conv_net = ConvNet(dim_in, 512, depth=params["enc_depth"], **params)
-        fc_net = FCBlock(512, [512, 256, 128, self.latent_size], act_switch(params.get("act")))
+        conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params)
+        fc_net = FCBlock(conv_net.final_dim, [256, 128, self.latent_size], act_switch(params.get("act")))
         self.encoder = nn.Sequential(conv_net, fc_net) # returns vector of latent_dim size
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
-        self.decoder_initial_shape = (128, 2, 2)
-        self.dec_init = FCBlock(self.latent_size, [128, 256, 512, 512], act_switch(params.get("act")))
+        self.decoder_initial_shape = conv_net.final_shape
+        self.dec_init = FCBlock(self.latent_size, [128, 256, conv_net.final_dim], act_switch(params.get("act")))
         self.scm = SCMDecoder(self.decoder_initial_shape, dim_in, depth=params["dec_depth"],**params)
 
     def decode(self, noise:Tensor, activate:bool):
@@ -100,7 +100,7 @@ class VecSAE(HybridAE):
     """Version of SAE model for vector based (not image based) data"""
     def __init__(self, params: dict, dim_in: int, full: bool) -> None:
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
-        super().__init__()
+        super().__init__(params)
         self.dim_in = dim_in
         # dim_in is a single number (since the input is a vector)
         layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["enc_depth"]).int().numpy())

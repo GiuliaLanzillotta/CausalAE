@@ -2,6 +2,7 @@ model_params:
   name: 'null'
   norm: 'batch'
   act: 'mish'
+  loss_type: "BCE"
 
 opt_params:
   LR: 0.0001

@@ -9,7 +9,6 @@ model_params:
   channels: 64
   dittadi: False
   gaussian_init: 'xavier' #other option: 'normal'
-  loss_type: "MSE"
 
 opt_params:
   KL_decay: 1.0

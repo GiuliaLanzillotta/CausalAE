@@ -46,9 +46,6 @@ def RBF_kernel(X:Tensor, Y:Tensor, device:str):
     Computes similarity as MMD between X and Y according to RBF kernel, using sigma equal to the median distance between
     vectors computed wrt to both samples
     """
-    N = X.shape[0]
-    M = Y.shape[0]
-
     norms_pz = torch.sum(X**2, axis=1, keepdim=True)
     dotprods_pz = torch.matmul(X, X.T)
     distances_pz = norms_pz + norms_pz.T - 2. * dotprods_pz
@@ -60,14 +57,17 @@ def RBF_kernel(X:Tensor, Y:Tensor, device:str):
     dotprods = torch.matmul(X, Y.T)
     distances = norms_pz + norms_qz.T - 2. * dotprods
 
+    # Median heuristic for the sigma^2 of Gaussian kernel
     sigma2_k = torch.quantile(distances_pz, q = 0.5)
     sigma2_k += torch.quantile(distances_qz, q = 0.5)
 
+    #TODO FIXME: should return similarities and not distances
+
     res1 = torch.exp( - distances_pz / 2. / sigma2_k)
-    res1 = torch.multiply(res1, 1. - torch.eye(N).to(device))
+    #res1 = torch.multiply(res1, 1. - torch.eye(N).to(device)) #this is wrong
 
     res2 = torch.exp( - distances_qz / 2. / sigma2_k)
-    res2 = torch.multiply(res2, 1. - torch.eye(M).to(device))
+    #res2 = torch.multiply(res2, 1. - torch.eye(M).to(device))
 
     res3 = torch.exp( - distances / 2. / sigma2_k)
 
@@ -79,9 +79,6 @@ def IMQ_kernel(X:Tensor, Y:Tensor, device:str):
     credits: @https://github.com/tolstikhin/wae/blob/master/wae.py
             @https://arxiv.org/pdf/1711.01558.pdf
     """
-    N = X.shape[0]
-    M = Y.shape[0]
-
     norms_pz = torch.sum(X**2, axis=1, keepdim=True)
     dotprods_pz = torch.matmul(X, X.T)
     distances_pz = norms_pz + norms_pz.T - 2. * dotprods_pz
@@ -103,10 +100,10 @@ def IMQ_kernel(X:Tensor, Y:Tensor, device:str):
     for scale in [.1, .2, .5, 1., 2., 5., 10.]: #TODO: why this sum over different scales
         C = Cbase * scale
         r = C / (C + distances_qz)
-        res1 += torch.multiply(r, 1. - torch.eye(N).to(device))
+        res1 += r #torch.multiply(r, 1. - torch.eye(N).to(device))
 
         r = C / (C + distances_pz)
-        res2 += torch.multiply(r, 1. - torch.eye(M).to(device))
+        res2 += r #torch.multiply(r, 1. - torch.eye(M).to(device))
 
         res3 += C / (C + distances)
 
@@ -118,6 +115,8 @@ def Categorical_kernel(X,Y, device, strict=False, hierarchy=False):
     See here for inspo: https://upcommons.upc.edu/bitstream/handle/2117/23347/KernelCATEG_CCIA2013.pdf?sequence=1
     strict: whether to use L1 or L_0 norm for the distance between any two latent vectors
     """
+    #NOTSURE: check whether L0 and L1 norm actually make up a valid kernel (PD)
+
     N = X.shape[0]
     M = Y.shape[0]
     Dz = X.shape[1]

@@ -153,39 +153,32 @@ class ConvNet(nn.Module):
     """ Implements convolutional net with multiple convolutional 
     blocks  + final flattening """
 
-    def __init__(self, dim_in, final_dim, depth:int, pool_every:int, **kwargs):
+    def __init__(self, dim_in, depth:int, pool_every:int, **kwargs):
         super(ConvNet, self).__init__()
-        C, H, W = dim_in
+        C, H, W = dim_in; h = H
         self.depth = depth
-        residual = kwargs.get("residual")
+        #residual = kwargs.get("residual") #FIXME
         norm = kwargs.get("norm")
         act = act_switch(kwargs.get("act"))
         channels = kwargs.get("channels")
+        channels_list = [C] + [channels]*depth
         # Stacking the conv layers
         modules = []
-        h = H # tracking image size
-        k = 5 # kernel size
-        c = channels
         for l in range(depth):
-            # conv block with kernel size 2, size 2 and padding 1
-            # halving the input dimension at every step
-            if l==depth-1: c = 1 # reducing depth at the end
-            reduce=l%pool_every==0
-            if l==1: k=3 # only first layer with kernel=5
-            modules.append(PoolingConvBlock(C, c, h, k, 1, 8, pool=reduce, act=act, norm=norm) if (not residual) or (l in [0,depth-1]) # changing num channels here
-                           else ResidualConvBlock(C, h, k, 1, 8, pool=reduce, act=act, norm=norm, scaling=True))
-            h = h//2 if reduce else h
-            k = min(h,k)
+            c = channels_list[l+1]
+            reduce = l%pool_every==0
+            if reduce: h=h//2
+            modules.append(ConvBlock(C,c,3,1,1,act=act,norm=norm,pool=reduce))
             C = c
 
         # calculating shape of the image after convolution
         self.final_shape = C, h, h # assuming square input image
         assert all(v>0 for v in self.final_shape), "Input not big enough for the convolutions requested"
-        flat_dim = int(np.product(self.final_shape))
+
+        # linear head
+        self.final_dim = int(np.product(self.final_shape))
         modules.append(nn.Flatten())
-        modules.append(nn.LayerNorm(flat_dim)) # idea taken by Dittadi et al. -should help in training with residual connections
-        if flat_dim!=self.final_shape: # re-adjusting the shape
-            modules.append(FCBlock(flat_dim, [final_dim], Mish))
+        modules.append(nn.LayerNorm(self.final_dim)) # idea taken by Dittadi et al. -should help in training with residual connections
         self.net = nn.Sequential(*modules)
         self.net.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
@@ -520,29 +513,36 @@ class UpsampledConvNet(nn.Module):
         self.final_shape = final_shape
         self.depth = depth
         C, H, W = initial_shape # the initial shape refers to the constant input block
-        _modules = []
-        h = H
-        pool_every = kwargs.get("pool_every")
-        residual = kwargs.get("residual")
+        conv_modules = nn.ModuleList([])
+        pool_every = kwargs.get("pool_every"); assert self.depth%pool_every==0
+        #residual = kwargs.get("residual") FIXME
         channels = kwargs.get("channels")
-        c = channels # output channels
+        channels_list = [C] + [channels]*depth; channels_list[-1] = final_shape[0] # reducing number of channels at the end
         norm = kwargs.get("norm")
+        act = act_switch(kwargs.get("act",'mish'))
+        assert H == self.final_shape[1]//(2**(depth//pool_every))
+        remainder = self.final_shape[1]%(2**(depth//pool_every))
         for l in range(depth):
-            if l == depth-1: c = final_shape[0] # reducing number of channels at the end
-            dim_in = (C, h, h)
-            _modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, c, 3, 1, 8,
-                                                   residual=residual and C==c, act=Mish, norm=norm))
-            h *= 2 if l%pool_every==0 else 1
-            C = c
-        _modules.append(nn.AdaptiveAvgPool2d(final_shape[1]))
-        self.net = nn.Sequential(*_modules)
-        self.net.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
+            c = channels_list[l+1]
+            if l%pool_every==0:
+                conv_modules.append(nn.Upsample(scale_factor=2., mode="bilinear", align_corners=False))
+            conv_modules.append(ConvBlock(C,c,3,1,1, act=act, norm=norm))
+            C = channels_list[l+1]
+        #adjusting the shape at the end using the following equation
+        # remainder + (k-1) = 2p - assuming s=1
+        if remainder % 2 == 0: k=3;p=(remainder+2)//2
+        else: k=2; p=(remainder+1)//2
+        conv_modules.append(ConvBlock(C,C,k,1,p, act=act, norm=norm))
+        self.conv_modules = conv_modules
+        self.channels_list = channels_list
+        self.conv_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
     def forward(self, inputs):
         """ Simply the forward pass """
-        reshaped = inputs.view((-1,) + self.initial_shape)
-        outputs = self.net(reshaped)
-        return outputs
+        x = inputs.view((-1,) + self.initial_shape)
+        for i,l in enumerate(self.conv_modules):
+            x = self.net[i](x)
+        return x
 
 
 class DittadiUpsampledConv(nn.Module):
@@ -608,39 +608,27 @@ class SCMDecoder(nn.Module):
         self.depth = depth
         self.hierarchy_depth = latent_size//unit_dim
         assert self.depth>=self.hierarchy_depth, "Given depth for decoder network is not enough for given noise size"
-        C, H, W = initial_shape # the initial shape refers to the constant input block
-        self.conv_modules = nn.ModuleList([])
-        self.str_trf_modules = nn.ModuleList([])
-        h = H
-        pool_every = kwargs.get("pool_every")
-        residual = kwargs.get("residual")
-        channels = kwargs.get("channels")
-        c = channels # output channels
-        norm = kwargs.get("norm")
+        self.conv_backbone = UpsampledConvNet(initial_shape, final_shape, depth, **kwargs)
+
         act = act_switch(kwargs.get("act"))
-        for l in range(depth):
-            if l == depth-1: c = final_shape[0] # reducing number of channels at the end
-            dim_in = (C, h, h)
-            if l<self.hierarchy_depth:
-                self.str_trf_modules.append(StrTrf(self.unit_dim, C, act=act))
-            self.conv_modules.append(UpsampledConv(2 if l%pool_every==0 else 1, dim_in, c, 3, 1, 8,
-                                                   residual=residual and C==c, act=act, norm=norm))
-            h *= 2 if l%pool_every==0 else 1
-            C = c
-        self.shape_adjusting_block = nn.AdaptiveAvgPool2d(final_shape[1])
+
+        self.conv_modules = self.conv_backbone.conv_modules
+        self.str_trf_modules = nn.ModuleList([])
+        for l in range(self.hierarchy_depth):
+            self.str_trf_modules.append(StrTrf(self.unit_dim, self.conv_backbone.channels_list[l], act=act))
+
         self.str_trf_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
-        self.conv_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
     def forward(self, x, z):
         """ Implements forward pass with 2 possible modes:
         - auto: no hybrid sampling (only the convolution)
         - hybrid: hybrid sampling included """
-        for l in range(self.depth):
+        for l in range(len(self.conv_modules)):
             if l<self.hierarchy_depth:
                 z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
                 x = self.str_trf_modules[l](x, z_i)
             x = self.conv_modules[l](x)
-        outputs = self.shape_adjusting_block(x)
+        outputs = x
         return outputs
 
 class VecSCMDecoder(nn.Module):

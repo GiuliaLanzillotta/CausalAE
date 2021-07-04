@@ -22,6 +22,7 @@ class EHybridAE(HybridAE, ABC):
         noise = self.hybrid_layer.controlled_sampling(latent_vecs, level, use_prior=False)
         return noise
 
+    @abstractmethod
     def decode(self, noise:Tensor, activate:bool):
         raise NotImplementedError
 
@@ -35,7 +36,7 @@ class EHybridAE(HybridAE, ABC):
 
     def reconstruction_hybrid(self, X, X_hat, Z, Z_hybrid, level:int, device:str, use_MSE:bool=True):
         """Computes reconstruction loss for hybridised samples
-        #NOTSURE """
+        #NOTSURE - not beautiful"""
         N = X_hat.shape[0]
         if level==0: factors= torch.ones(N).to(device)
         else:
@@ -135,6 +136,9 @@ class ESAE(EHybridAE, SAE):
         self.kernel_type = params["MMD_kernel"]
         #TODO: allow M
         #self.M = max(params["num_hybrid_samples"], self.latent_units)
+
+    def decode(self, noise:Tensor, activate:bool):
+        return SAE.decode(self, noise, activate)
 
 
 class VecESAE(EHybridAE):

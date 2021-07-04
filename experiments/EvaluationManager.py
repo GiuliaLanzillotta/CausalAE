@@ -14,9 +14,9 @@ from metrics import FIDScorer, ModelDisentanglementEvaluator
 
 class ModelHandler(object):
     """Offers a series of tools to inspect a given model."""
-    def __init__(self, model_name:str, model_version:str, data:str, **kwargs):
-        self.config = get_config(tuning=False, model_name=model_name,
-                            data=data, version=model_version)
+    def __init__(self, model_name:str, model_version:str, data:str, data_version="", **kwargs):
+        self.config = get_config(tuning=False, model_name=model_name, data=data,
+                                 version=model_version, data_version=data_version)
         self.experiment = experiments_switch[model_name](self.config)
         self.model = self.experiment.model
         assert issubclass(type(self.model), GenerativeAE), "Selected model is not an instance of GenerativeAE. " \
@@ -128,8 +128,8 @@ class VisualModelHandler(ModelHandler):
 
 class VectorModelHandler(ModelHandler):
     """Offers a series of tools to inspect a given model."""
-    def __init__(self, model_name: str, model_version: str, data: str, **kwargs):
-        super().__init__(model_name, model_version, data, **kwargs)
+    def __init__(self, model_name: str, model_version: str, data: str, data_version:str, **kwargs):
+        super().__init__(model_name, model_version, data, data_version=data_version, **kwargs)
 
     def plot_model(self):
         #TODO
