@@ -14,4 +14,5 @@ opt_params:
   beta_schedule: 'cyclic'
 
 logging_params:
-  save_dir: "./logs/"
+  manual_seed: 1265
+  #save_dir: "./logs/"

@@ -46,7 +46,7 @@ class EHybridAE(HybridAE, ABC):
             ZHN = (Z_hybrid -means) / stds  #standardise both samples with respect to the input distribution
             # in this way the changes to the distribution brought by hybridisation will be more evident
             # (ideally these two distributions should be the same)
-            factors = (1/((level*torch.norm(ZN-ZHN,1, dim=1))+10e-5)).to(device)
+            factors = (1/((level*torch.norm(ZN-ZHN,1, dim=1))+10e-5)).to(device) #TODO: change norm here (inlude hierarchy info)
         if use_MSE:
             distance = torch.sum(F.mse_loss(self.act(X_hat), X, reduction="none"),
                          tuple(range(X_hat.dim()))[1:])

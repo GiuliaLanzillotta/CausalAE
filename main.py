@@ -131,17 +131,17 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='VecESAE')
+                        default='ESAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="SynthVec")
+                        default="MNIST")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="standard")
+                        default="dummy_IMQ")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",

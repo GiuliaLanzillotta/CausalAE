@@ -88,7 +88,7 @@ def IMQ_kernel(X:Tensor, Y:Tensor, device:str):
     distances_qz = norms_qz + norms_qz.T - 2. * dotprods_qz
 
     dotprods = torch.matmul(X, Y.T)
-    distances = norms_qz + norms_pz.T - 2. * dotprods
+    distances = norms_pz + norms_qz.T - 2. * dotprods
 
     # expected squared distance between two multivariate Gaussian vectors drawn from prior
     Cbase = 2.*float(X.shape[1])*torch.mean(distances_qz)

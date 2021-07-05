@@ -157,16 +157,28 @@ class ConvNet(nn.Module):
         super(ConvNet, self).__init__()
         C, H, W = dim_in; h = H
         self.depth = depth
+        dec_depth = kwargs.get("dec_depth",depth)
+        assert depth >=dec_depth, "The encoder must be at least as deep as the decoder"
+
+        # To keep the code simple we downsample and upsample the image symmetrically between
+        # encoder and decoder. Hence if the encoder depth is greater than the decoder's the extra
+        # layers won't contain downsampling
+
         #residual = kwargs.get("residual") #FIXME
         norm = kwargs.get("norm")
         act = act_switch(kwargs.get("act"))
         channels = kwargs.get("channels")
         channels_list = [C] + [channels]*depth
+
+        #changing pool every to insert encoder's additional layers not only at the end
+        num_pools = dec_depth//pool_every
+        pool_every_2 = depth//num_pools
+
         # Stacking the conv layers
         modules = []
         for l in range(depth):
             c = channels_list[l+1]
-            reduce = l%pool_every==0
+            reduce = l%pool_every_2==0
             if reduce: h=h//2
             modules.append(ConvBlock(C,c,3,1,1,act=act,norm=norm,pool=reduce))
             C = c

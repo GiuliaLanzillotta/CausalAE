@@ -202,7 +202,7 @@ class SynthVec(DisentanglementDataset):
 
     def categorise_labels(self, labels):
         """Turn labels into categorical variables, and store them as integers"""
-        return _histogram_discretize(labels, self.NUM_CATEG_CONTINUOUS)
+        return _histogram_discretize(labels.T, self.NUM_CATEG_CONTINUOUS).T
 
     def elaborate_info(self):
         """Extracts dataset information from the metadata

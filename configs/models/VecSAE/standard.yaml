@@ -9,4 +9,5 @@ model_params:
   act: 'leaky_relu'
 
 logging_params:
-  save_dir: "./logs/"
+  manual_seed: 1265
+  #save_dir: "./logs/"
