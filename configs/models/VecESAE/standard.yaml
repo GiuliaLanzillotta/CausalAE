@@ -14,4 +14,4 @@ model_params:
 
 logging_params:
   manual_seed: 1265
-  #save_dir: "./logs/"
+  save_dir: "./logs/"

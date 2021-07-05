@@ -323,6 +323,7 @@ class SynthVec(DisentanglementDataset):
             "node_order":node_order,
             "node_ancestors":node_ancestors,
             "samplers":samplers,
+            "equations":equations,
             "discrete":discrete,
             "obs_mapping":obs_mapping
         }

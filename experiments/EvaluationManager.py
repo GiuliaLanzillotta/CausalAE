@@ -48,6 +48,7 @@ class ModelHandler(object):
         return checkpoints
 
     def load_checkpoint(self, name=None):
+        #TODO: together with checkpoint load some training status file, old results etc
         base_path = Path(self.config['logging_params']['save_dir']) / \
                     self.config['logging_params']['name'] / \
                     self.config['logging_params']['version']
