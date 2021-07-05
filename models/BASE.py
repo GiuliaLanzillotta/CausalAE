@@ -5,6 +5,8 @@ from torch import Tensor
 
 class GenerativeAE(ABC):
 
+    latent_size = None
+
     @abstractmethod
     def encode(self, inputs:Tensor) -> Tensor:
         """ returns all the encoder's output (noise and code included) for given input"""

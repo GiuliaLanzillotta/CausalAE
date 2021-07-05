@@ -61,6 +61,12 @@ class EHybridAE(HybridAE, ABC):
         """Naive implementation of MMD in the latent space
         Available kernels: RBF, IMQ, cat (stands for categorical) -- se utils module for more info
         """
+
+        # normalising to avoid implicitly penalising for magnitude with kernels that are
+        # sensitive to the spread of the variable - e.g. if we don't normalise then we get
+        # latents with more spread to be penalised more than the others by the regularisation
+        # term -> which will in turn make them react stronger to it
+        # the idea is to keep the natural spread that the latent distribution has
         normls = Normalize(0,1)
         ZHN = normls(Z_all_h.permute(1,0).unsqueeze(2)).squeeze(2).T
         ZMN = normls(Z_max_h.permute(1,0).unsqueeze(2)).squeeze(2).T

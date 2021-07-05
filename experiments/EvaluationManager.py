@@ -2,7 +2,7 @@
 import torch
 from experiments import experiments_switch
 from experiments.data import DatasetLoader
-from models import VAE, SAE, models_switch
+from models import VAEBase, SAE, models_switch
 from models.BASE import GenerativeAE
 from pathlib import Path
 from configs import get_config
@@ -10,7 +10,9 @@ import os
 import glob
 import json
 from visualisations import ModelVisualiser
-from metrics import FIDScorer, ModelDisentanglementEvaluator
+from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator
+
+from torchsummary import summary
 
 class ModelHandler(object):
     """Offers a series of tools to inspect a given model."""
@@ -19,10 +21,14 @@ class ModelHandler(object):
                                  version=model_version, data_version=data_version)
         self.experiment = experiments_switch[model_name](self.config)
         self.model = self.experiment.model
+        self.dataloader = self.experiment.loader
+        #TODO: add model print
         assert issubclass(type(self.model), GenerativeAE), "Selected model is not an instance of GenerativeAE. " \
                                                            "Can only score disentanglement against Generative AE networks."
         self.model.eval()
-        self.dataloader = self.experiment.loader
+        if kwargs.get("verbose",True):
+            self.experiment.print_model()
+
         print(model_name+ " model loaded.")
         self.visualiser = None
         self.fidscorer = None
@@ -74,10 +80,15 @@ class ModelHandler(object):
         except ValueError:
             print(f"No checkpoint available at {actual_checkpoint_path}. Cannot load trained weights.")
 
-    def score_model(self, FID=False, disentanglement=False, save_scores=False):
+    def score_model(self, FID=False, disentanglement=False, orthogonality=False, save_scores=False):
         """Scores the model on the test set in loss and other terms selected"""
         scores = {}
         loader = self.dataloader.test
+        if orthogonality:
+            unit_dim = 1 if isinstance(self.model, VAEBase) else self.model.unit_dim
+            _orthogonalityScorer = LatentOrthogonalityEvaluator(self.model, loader, self.model.latent_size, unit_dim)
+            ortho_scores = _orthogonalityScorer.score_model(device=self.device, strict=False, hierarchy=True)
+            scores.update(ortho_scores)
         if disentanglement:
             _disentanglementScorer = ModelDisentanglementEvaluator(self.model, loader)
             disentanglement_scores, complete_scores = _disentanglementScorer.score_model()
@@ -96,13 +107,25 @@ class ModelHandler(object):
                 FID_score = self.fidscorer.calculate_fid()
                 scores["FID"]=FID_score
         if save_scores:
-            base_path = Path(self.config['logging_params']['save_dir']) / \
+            path = Path(self.config['logging_params']['save_dir']) / \
                         self.config['logging_params']['name'] / \
                         self.config['logging_params']['version'] / "scoring.json"
-            with open(base_path, 'w') as o:
+            with open(path, 'w') as o:
                 json.dump(scores, o)
 
         return scores
+
+    def load_scores(self):
+        """Return saved scores dictionary if any"""
+        path = Path(self.config['logging_params']['save_dir']) / \
+                    self.config['logging_params']['name'] / \
+                    self.config['logging_params']['version'] / "scoring.json"
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return json.load(f)
+
+        print("No scores file found at "+str(path))
+
 
 class VisualModelHandler(ModelHandler):
     """Offers a series of tools to inspect a given model."""

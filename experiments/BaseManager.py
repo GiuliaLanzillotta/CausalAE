@@ -37,6 +37,7 @@ class BaseVisualExperiment(pl.LightningModule):
         return self.model(inputs, **kwargs)
 
     def print_model(self):
+        print("MODEL SUMMARY")
         summary(self.model.cuda(), (self.loader.data_shape))
 
     def make_plots(self, originals=False):
@@ -128,6 +129,7 @@ class BaseVecExperiment(pl.LightningModule):
         self.loader = DatasetLoader(params["data_params"])
         self.dim_in = self.loader.data_shape # C, H, W
         self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in, full=params["model_params"]["full"])
+        self.print_model()
         self.visualiser = ModelVisualiser(self.model,
                                           self.loader.test,
                                           **params["vis_params"])
@@ -141,6 +143,9 @@ class BaseVecExperiment(pl.LightningModule):
 
     def forward(self, inputs: Tensor, **kwargs) -> Tensor:
         return self.model(inputs, **kwargs)
+
+    def print_model(self):
+        summary(self.model.cuda(), (self.loader.data_shape))
 
     def validation_epoch_end(self, outputs):
         # Scoring val performance

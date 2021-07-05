@@ -200,7 +200,7 @@ class DatasetLoader:
 
         elif args["dataset_name"] == 'SynthVec': #new dataset: https://arxiv.org/pdf/2010.14407.pdf - h5 version
 
-            data_folder = './datasets/SynthVec/'
+            data_folder = '/cluster/scratch/glanzillo/datasets/SynthVec/'
             train_set =SynthVec(data_folder,
                                 name=args["experiment_name"],
                                 num_factors = args["num_factors"],
