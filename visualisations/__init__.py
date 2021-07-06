@@ -1,1 +1,2 @@
 from .visualise_model import ModelVisualiser
+from .visualise_data import SynthVecDataVisualiser

@@ -1,6 +1,5 @@
 """Script for the creation and maintanance of synthetic datasets """
 from pathlib import Path
-import scipy.stats
 from typing import Any, Optional, Callable, List, Union, overload
 from .disentanglement_datasets import DisentanglementDataset
 import numpy as np
@@ -14,7 +13,8 @@ import urllib
 import pickle
 import os
 from torchvision.datasets import VisionDataset
-from .utils import gen_bar_updater, transform_discrete_labels
+import datasets.utils as dutils
+import metrics.utils as mutils
 
 def matrix_poly_np(matrix, d):
     x = np.eye(d) + matrix/d
@@ -92,26 +92,6 @@ def get_samplers(num_variables:int, all_discrete:bool, all_continuous:bool):
         is_discrete.append(True)
     return samplers, is_discrete
 
-def discretise_Normal(mu,std, num_bins=20):
-    """Transforming continuous variable drawn from normal distribution into a
-    discrete variable by exploiting its quantiles (in this way we can generalise
-    to unseen samples)
-    Returns a list of num_bins centers for the new categorical
-    """
-    centers = []
-    probs = np.linspace(0.,1., num_bins+1, endpoint=False)[1:]
-    for i in range(num_bins):
-     centers.append(scipy.stats.norm.ppf(probs[i], loc=mu, scale=std))
-    return centers
-
-def categorise_label(label:np.ndarray, discrete:bool, distrib, num_categories):
-    """Turn labels into categorical variables, and store them as integers.
-    labels: numpy array of shape (num_samples, num_factors) containing the labels."""
-    if len(label.shape)>1: label.squeeze(-1)
-    if discrete: return label
-    else:
-        centers = discretise_Normal(distrib.mean, distrib.stddev, num_bins=num_categories)
-        return np.digitize(label, centers)
 
 
 class SynthVec(DisentanglementDataset):
@@ -142,7 +122,8 @@ class SynthVec(DisentanglementDataset):
                  overwrite:bool = False,
                  test:bool = False,
                  noise:bool=False, #whether to use noises as labels or the causal variables (for disentanglement scoring)
-                 verbose:bool=False) -> None:
+                 verbose:bool=False,
+                 seed:int=11) -> None:
 
         super(SynthVec, self).__init__()
 
@@ -156,7 +137,7 @@ class SynthVec(DisentanglementDataset):
         self.noise = noise
 
         if generate:
-            X1,Y1,N1,X2,Y2,N2,metadata = self.generate(store=True, overwrite=overwrite)
+            X1,Y1,N1,X2,Y2,N2,metadata = self.generate(store=True, overwrite=overwrite, seed=seed)
         else:
             if not self._check_generated():
                 raise RuntimeError('Dataset not found.' +
@@ -202,7 +183,8 @@ class SynthVec(DisentanglementDataset):
 
     def categorise_labels(self, labels):
         """Turn labels into categorical variables, and store them as integers"""
-        return _histogram_discretize(labels.T, self.NUM_CATEG_CONTINUOUS).T
+        #TODO: include Gaussian option
+        return mutils.quantile_discretise(labels.T, self.NUM_CATEG_CONTINUOUS).T
 
     def elaborate_info(self):
         """Extracts dataset information from the metadata
@@ -252,7 +234,7 @@ class SynthVec(DisentanglementDataset):
         Returns both the sampled data and the noise values.
         """
         sample_noises = noises is None
-        updater = gen_bar_updater()
+        updater = dutils.gen_bar_updater()
         x = torch.zeros(batch_size, self.dim_in)
         if sample_noises: noises = [None]*self.dim_in
         for i,node in enumerate(node_order):
@@ -298,7 +280,7 @@ class SynthVec(DisentanglementDataset):
         obs2 = self.sample_observations_from_causes(X2)
         return index, obs1, obs2
 
-    def generate(self, store:bool=True, overwrite:bool=False):
+    def generate(self, store:bool=True, overwrite:bool=False, seed:int=11):
         """ Downloading source files (.h5)"""
         os.makedirs(self.raw_folder, exist_ok=True)
         # --------- download source file
@@ -306,7 +288,7 @@ class SynthVec(DisentanglementDataset):
             print("Files already there. Proceed to reading.")
             return self.read_source_files()
         # first generate the generating structure
-        graph, node_order, node_ancestors = generate_random_acyclic_graph(self.dim_in, seed=11)
+        graph, node_order, node_ancestors = generate_random_acyclic_graph(self.dim_in, seed=seed)
         samplers, discrete = get_samplers(self.dim_in, not self.allow_continuous, not self.allow_discrete)
         equations = nn.ModuleList(build_equations(node_order, node_ancestors))
         obs_mapping = get_random_MLP(num_layers=self.MAPPING_DEPTH, din=self.dim_in, dout=self.dim_out)

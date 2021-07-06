@@ -1,0 +1,19 @@
+model_params:
+  name: 'ESAE'
+  latent_vecs: 128 # for hybrid sampling
+  residual: True
+  latent_size: 12
+  enc_depth: 12 #number of convolutional layers in the encoder
+  dec_depth: 12
+  pool_every: 3
+  unit_dim: 1
+  channels: 64
+  # --------- parameters related to MMD kernel setting ----------
+  MMD_kernel: "IMQ" #or IMQ or cat
+  #"strict": False
+  #"hierarchy": False
+  lamda: 2.0
+
+
+vis_params:
+  plot_every: 5

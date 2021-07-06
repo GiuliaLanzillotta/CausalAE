@@ -211,7 +211,8 @@ class DatasetLoader:
                                 overwrite = False,
                                 test = False,
                                 noise=args["noise"],
-                                verbose=False)
+                                verbose=False,
+                                seed=args["seed"])
             test_set =SynthVec(data_folder,
                                name=args["experiment_name"],
                                num_factors = args["num_factors"],
@@ -222,7 +223,8 @@ class DatasetLoader:
                                overwrite = False,
                                test = True,
                                noise=args["noise"],
-                               verbose=False)
+                               verbose=False,
+                               seed=args["seed"])
 
         else:
             raise RuntimeError("Unrecognized data set '{}'".format(

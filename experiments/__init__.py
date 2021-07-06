@@ -10,6 +10,6 @@ from .ESAEManager import ESAEXperiment, ESAEVecExperiment
 experiments_switch = {'BetaVAE':VAEXperiment,
                       'BaseSAE':SAEXperiment,
                       'ESAE': ESAEXperiment,
-                      'VecBetaVAE':VAEVecEXperiment,
-                      'VecBaseVAE':SAEVecExperiment,
+                      'VecVAE':VAEVecEXperiment,
+                      'VecSAE':SAEVecExperiment,
                       'VecESAE':ESAEVecExperiment}

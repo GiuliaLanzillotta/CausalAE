@@ -1,5 +1,5 @@
 model_params:
-  name: 'VecBetaVAE'
+  name: 'VecVAE'
   beta: 4.0
   latent_size: 10
   depth: 5 #number of linear layers in the encoder and decoder

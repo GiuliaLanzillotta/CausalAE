@@ -43,7 +43,8 @@ class ESAEXperiment(BaseVisualExperiment):
         if batch_idx==0:
             self._fidscorer.start_new_scoring(self.params['data_params']['batch_size']*self.num_FID_steps,device=self.device)
         if  batch_idx<=self.num_FID_steps:#only one every 50 batches is included to avoid memory issues
-            try: self._fidscorer.get_activations(inputs, self.model.act(results[0])) #store activations for current batch
+            batch_size = inputs.shape[0] # taking only the non-hybridised samples
+            try: self._fidscorer.get_activations(inputs, self.model.act(results[0][:batch_size])) #store activations for current batch
             except Exception as e:
                 print(e)
                 print("Reached the end of FID scorer buffer")

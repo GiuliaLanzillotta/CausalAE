@@ -12,6 +12,7 @@ from abc import ABCMeta, abstractmethod, ABC
 class VAEBase(nn.Module, GenerativeAE, ABC):
 
     def __init__(self, params):
+        super().__init__()
         self.params = params
         self.latent_size = params["latent_size"]
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
@@ -105,7 +106,7 @@ class VecVAE(VAEBase):
     def __init__(self, params: dict, dim_in: int, full: bool) -> None:
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
         super().__init__(params)
-        self.dim_in = dim_in
+        self.dim_in = dim_in[0]
         self.beta = params["beta"]
         self.full = full
         # dim_in is a single number (since the input is a vector)

@@ -101,7 +101,7 @@ class VecSAE(HybridAE):
     def __init__(self, params: dict, dim_in: int, full: bool) -> None:
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
         super().__init__(params)
-        self.dim_in = dim_in
+        self.dim_in = dim_in[0]
         # dim_in is a single number (since the input is a vector)
         layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["enc_depth"]).int().numpy())
         self.encoder = FCBlock(self.dim_in, layers, act_switch(params.get("act")))

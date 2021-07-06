@@ -1,7 +1,8 @@
 """Script managing evaluation and exploration of models"""
+import pickle
+
 import torch
 from experiments import experiments_switch
-from experiments.data import DatasetLoader
 from models import VAEBase, SAE, models_switch
 from models.BASE import GenerativeAE
 from pathlib import Path
@@ -9,10 +10,13 @@ from configs import get_config
 import os
 import glob
 import json
+import time
 from visualisations import ModelVisualiser
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator
 
 from torchsummary import summary
+
+""" Evaluation toolbox for GenerativeAE models"""
 
 class ModelHandler(object):
     """Offers a series of tools to inspect a given model."""
@@ -22,18 +26,19 @@ class ModelHandler(object):
         self.experiment = experiments_switch[model_name](self.config)
         self.model = self.experiment.model
         self.dataloader = self.experiment.loader
-        #TODO: add model print
         assert issubclass(type(self.model), GenerativeAE), "Selected model is not an instance of GenerativeAE. " \
                                                            "Can only score disentanglement against Generative AE networks."
         self.model.eval()
-        if kwargs.get("verbose",True):
-            self.experiment.print_model()
-
         print(model_name+ " model loaded.")
         self.visualiser = None
         self.fidscorer = None
         self.num_FID_steps = kwargs.get("num_FID_steps",10)
         self.device = kwargs.get("device","cpu")
+        self.send_model_to(self.device)
+
+    def send_model_to(self, device:str):
+        if device=="cpu": self.model.cpu()
+        else: self.model.cuda()
 
     def load_batch(self, train=True, valid=False, test=False):
         if train: loader = self.dataloader.train
@@ -77,11 +82,13 @@ class ModelHandler(object):
                                                                    params=self.config)
             self.model = self.experiment.model
             self.model.eval()
+            self.send_model_to(self.device)
         except ValueError:
-            print(f"No checkpoint available at {actual_checkpoint_path}. Cannot load trained weights.")
+            print(f"No checkpoint available at "+checkpoint_path+". Cannot load trained weights.")
 
     def score_model(self, FID=False, disentanglement=False, orthogonality=False, save_scores=False):
         """Scores the model on the test set in loss and other terms selected"""
+        start=time.time()
         scores = {}
         loader = self.dataloader.test
         if orthogonality:
@@ -106,23 +113,26 @@ class ModelHandler(object):
                     except Exception: print("Reached the end of FID scorer buffer")
                 FID_score = self.fidscorer.calculate_fid()
                 scores["FID"]=FID_score
+
+        end = time.time()
+        print("Time elapsed for scoring {:.0f}".format(end-start))
+
         if save_scores:
             path = Path(self.config['logging_params']['save_dir']) / \
                         self.config['logging_params']['name'] / \
-                        self.config['logging_params']['version'] / "scoring.json"
-            with open(path, 'w') as o:
-                json.dump(scores, o)
-
+                        self.config['logging_params']['version'] / "scoring.pkl"
+            with open(path, 'wb') as o:
+                pickle.dump(scores, o)
         return scores
 
     def load_scores(self):
         """Return saved scores dictionary if any"""
         path = Path(self.config['logging_params']['save_dir']) / \
                     self.config['logging_params']['name'] / \
-                    self.config['logging_params']['version'] / "scoring.json"
+                    self.config['logging_params']['version'] / "scoring.pkl"
         if os.path.exists(path):
-            with open(path, 'r') as f:
-                return json.load(f)
+            with open(path, 'rb') as f:
+                return pickle.load(f)
 
         print("No scores file found at "+str(path))
 
@@ -159,8 +169,6 @@ class VectorModelHandler(ModelHandler):
         #TODO
         pass
 
-
-if __name__ == '__main__':
-    handler = ModelHandler(model_name="BaseSAE", model_version="v16", data="RFDh5")
-    handler.load_checkpoint()
-    scores = handler.score_model(FID=False, disentanglement=True)
+    def plot_data(self):
+        #TODO
+        pass

@@ -13,10 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Utility functions that are useful for the different metrics."""
+from typing import List
+
 import sklearn
 import torch
 from torch.utils.data import DataLoader
 import numpy as np
+import scipy.stats
+
 
 def generate_batch_factor_code(dataloader:DataLoader,
                                representation_function,
@@ -76,6 +80,46 @@ def _histogram_discretize(target, num_bins):
     for i in range(target.shape[0]):
         discretized[i, :] = np.digitize(target[i, :],
             np.histogram(target[i, :], num_bins)[1][:-1])
+    return discretized
+
+
+def normal_centers(mu,std, num_bins=20):
+    """Transforming continuous variable drawn from normal distribution into a
+    discrete variable by exploiting its quantiles (in this way we can generalise
+    to unseen samples)
+    Returns a list of num_bins centers for the new categorical
+    """
+    centers = []
+    probs = np.linspace(0.,1., num_bins+1, endpoint=False)[1:]
+    for i in range(num_bins):
+        centers.append(scipy.stats.norm.ppf(probs[i], loc=mu, scale=std))
+    return centers
+
+def empirical_centers(labels, num_bins=20):
+    """Extracts num_bins empirical quantiles for the given labels
+    Labels are expected in the shape num_labels x num_samples """
+    centers = []
+    probs = np.linspace(0.,1., num_bins+1, endpoint=False)[1:]
+    for i in range(num_bins):
+        centers.append(np.quantile(labels, probs[i], axis=1))
+    return np.stack(centers) #num_bins x num_labels
+
+def normal_discretise(labels:np.ndarray, mus:List, stds:List, num_categories):
+    """Turn labels into categorical variables, and store them as integers.
+    labels: numpy array of shape (num_samples, num_factors) containing the labels."""
+    discretized = np.zeros_like(labels)
+    for i in range(labels.shape[0]):
+        centers = normal_centers(mus[i], stds[i], num_bins=num_categories)
+        discretized[i, :] = np.digitize(labels[i, :], centers)
+    return discretized
+
+def quantile_discretise(labels:np.ndarray, num_categories):
+    """Uses empirical quantiles of the given label to perform distribution-aware
+    discretisation"""
+    quantiles = empirical_centers(labels, num_bins=num_categories)
+    discretized = np.zeros_like(labels)
+    for i in range(labels.shape[0]):
+        discretized[i, :] = np.digitize(labels[i, :], quantiles[:,i])
     return discretized
 
 def _identity_discretizer(target, num_bins):

@@ -25,7 +25,7 @@ class LatentOrthogonalityEvaluator(object):
         originals = []
         hybrids = []
 
-        print("Preparing the model for scoring ...")
+        print("Preparing the model for scoring orthogonality ...")
         for i in range(num_batches):
             observations, _ = next(iter(self.dataloader))
             codes = self.model.encode_mu(observations.to(device)); originals.append(codes)
@@ -40,10 +40,11 @@ class LatentOrthogonalityEvaluator(object):
         ON = normls(originals.permute(1,0).unsqueeze(2)).squeeze(2).T
         HN = normls(hybrids.permute(1,0).unsqueeze(2)).squeeze(2).T
 
+        print("Scoring orthogonality")
         scores = {}
-        print("Scoring RBF"); scores["RBF"] = utils.MMD(*utils.RBF_kernel(ON, HN, device))
-        print("Scoring IMQ"); scores["IMQ"] = utils.MMD(*utils.IMQ_kernel(ON, HN, device))
-        print("Scoring CAT"); scores["CAT"] = utils.MMD(*utils.Categorical_kernel(ON, HN, device,
+        print("RBF scoring"); scores["RBF"] = utils.MMD(*utils.RBF_kernel(ON, HN, device))
+        print("IMQ scoring"); scores["IMQ"] = utils.MMD(*utils.IMQ_kernel(ON, HN, device))
+        print("CAT scoring"); scores["CAT"] = utils.MMD(*utils.Categorical_kernel(ON, HN, device,
                                        kwargs.get("strict",True), kwargs.get("hierarchy",True)))
 
         return scores

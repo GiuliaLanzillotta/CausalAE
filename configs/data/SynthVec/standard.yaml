@@ -7,3 +7,4 @@ dim_observations: 100
 allow_continuous: True
 allow_discrete: True
 noise: False
+seed: 11
