@@ -164,7 +164,7 @@ class VecESAE(EHybridAE):
             scm = VecSCM(self.latent_size, self.unit_dim, act=params.get("act"))
             reverse_encoder = FCBlock(self.latent_size, reversed(layers), act_switch(params.get("act")))
             self.decoder = nn.Sequential(scm, reverse_encoder)
-        else: self.decoder = VecSCMDecoder(self.latent_size, self.unit_dim, reversed(layers), act=params.get("act"))
+        else: self.decoder = VecSCMDecoder(self.latent_size, self.unit_dim, list(reversed(layers)), act=params.get("act"))
 
 
     def decode(self, noise:Tensor, activate:bool):
