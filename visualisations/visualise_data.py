@@ -7,14 +7,13 @@ import networkx as nx
 import numpy as np
 
 
-class SynthVecDataVisualiser(object):
+class SynthVecDataVisualiser():
 
     APPROX_LEVEL = 10000
 
     def __init__(self, dataloader:DataLoader, **kwargs):
-        super(SynthVecDataVisualiser, self).__init__()
         self.loader = dataloader
-        self.dataset = self.loader.dataset.dataset
+        self.dataset = self.loader.dataset
         self.meta = self.dataset.metadata
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)

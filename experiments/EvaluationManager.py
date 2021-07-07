@@ -11,7 +11,7 @@ import os
 import glob
 import json
 import time
-from visualisations import ModelVisualiser
+from visualisations import ModelVisualiser, SynthVecDataVisualiser
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator
 
 from torchsummary import summary
@@ -86,7 +86,7 @@ class ModelHandler(object):
             self.model.eval()
             self.send_model_to(self.device)
         except ValueError:
-            print(f"No checkpoint available at "+checkpoint_path+". Cannot load trained weights.")
+            print(f"No checkpoint available at "+str(checkpoint_path)+". Cannot load trained weights.")
 
     def score_model(self, FID=False, disentanglement=False, orthogonality=False, save_scores=False, full=False):
         """Scores the model on the test set in loss and other terms selected"""
@@ -145,20 +145,23 @@ class VisualModelHandler(ModelHandler):
         super().__init__(model_name, model_version, data, **kwargs)
 
     def plot_model(self, do_originals=False, do_reconstructions=False,
-                   do_random_samples=False, do_traversals=False):
+                   do_random_samples=False, do_traversals=False, do_hybrisation=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
             self.visualiser = ModelVisualiser(self.model, self.dataloader.test, **self.config["vis_params"])
         if do_reconstructions:
-            plots["reconstructions"] = self.visualiser.plot_reconstructions(device=self.device)
+            plots["reconstructions"] = self.visualiser.plot_reconstructions(device=self.device, **kwargs)
         if do_random_samples:
-            try: plots["random_samples"] = self.visualiser.plot_samples_from_prior(device=self.device)
+            try: plots["random_samples"] = self.visualiser.plot_samples_from_prior(device=self.device, **kwargs)
             except ValueError:pass #no prior samples stored yet
         if do_traversals:
-            plots["traversals"] = self.visualiser.plot_latent_traversals(device=self.device, tailored=True)
+            plots["traversals"] = self.visualiser.plot_latent_traversals(device=self.device, tailored=True, **kwargs)
         if do_originals: # print the originals
             plots["originals"] = self.visualiser.plot_originals()
+        if do_hybrisation: # print the originals
+            plots["hybrids"] = self.visualiser.plot_hybridisation(device=self.device, **kwargs)
+
         return plots
 
 
@@ -167,10 +170,20 @@ class VectorModelHandler(ModelHandler):
     def __init__(self, model_name: str, model_version: str, data: str, data_version:str, **kwargs):
         super().__init__(model_name, model_version, data, data_version=data_version, **kwargs)
 
-    def plot_model(self):
-        #TODO
-        pass
-
     def plot_data(self):
-        #TODO
-        pass
+        plots = {}
+        if self.visualiser is None:
+            self.visualiser = SynthVecDataVisualiser(self.dataloader.test)
+
+        plots["graph"] = self.visualiser.plot_graph()
+        plots["noises"] = self.visualiser.plot_noises_distributions()
+        plots["causes2noises"] = self.visualiser.plot_causes2noises()
+
+
+if __name__ == '__main__':
+    handler = VisualModelHandler(model_name="BaseSAE", model_version="dummy", data="MNIST")
+    #handler.load_checkpoint()
+    handler.plot_model(do_originals=False, do_reconstructions=False,
+                       do_random_samples=False, do_traversals=False,
+                       do_hybrisation=True, first=True)
+

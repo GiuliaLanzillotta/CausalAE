@@ -131,7 +131,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='VecESAE')
+                        default='VecSAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
@@ -141,7 +141,7 @@ if __name__ == '__main__':
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="standard")
+                        default="full")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",

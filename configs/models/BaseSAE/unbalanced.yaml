@@ -8,3 +8,4 @@ model_params:
   pool_every: 2
   unit_dim: 2
   channels: 32
+

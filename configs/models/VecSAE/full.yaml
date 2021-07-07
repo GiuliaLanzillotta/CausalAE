@@ -1,0 +1,13 @@
+model_params:
+  name: 'VecSAE'
+  latent_vecs: 128 # for hybrid sampling
+  latent_size: 10
+  depth: 7 #number of linear layers in the encoder and decoder
+  unit_dim: 1
+  loss_type: "MSE"
+  full: True
+  act: 'leaky_relu'
+
+logging_params:
+  manual_seed: 1265
+  save_dir: "./logs/"

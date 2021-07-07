@@ -400,6 +400,32 @@ class HybridLayer(nn.Module):
         noise = torch.cat(new_vectors, dim=1)
         return noise
 
+    @staticmethod
+    def hybridise_from_N(inputs, parents, N, unit_dim, first=False):
+        """For each input hybridises N dimensions drawing components from the parents set while
+        keeping track of the origin.
+        first: whether to resample the first N dimensions or the last ones """
+        # obtain list of dimensions to resample
+        K, M = inputs.shape
+        available_samples = parents.shape[0]
+        chunks = torch.split(inputs, unit_dim, dim=1)
+        parent_chunks = torch.split(parents, unit_dim, dim=1)
+        if first: to_resample = list(range(N))
+        else: to_resample = list(range(len(chunks)))[-N:]
+        new_vectors = []; parent_idx = torch.zeros(K,N, dtype=int)
+        resampled = 0
+        for i, chunk in enumerate(chunks):
+            if i in to_resample:
+                # num_samples x N one-hot matrix
+                idx = torch.multinomial(torch.ones(available_samples), K, replacement=True).to(chunk.device)
+                parent_idx[:, resampled] = idx
+                new_vectors.append(torch.index_select(parent_chunks[i], 0, idx))
+                resampled+=1
+            else: new_vectors.append(chunk)
+        new_vectors = torch.hstack(new_vectors) # KxM
+        return new_vectors, parent_idx, to_resample
+
+
     def controlled_sampling(self, latent_vectors, hybridisation_level:int, num_samples:int=None, use_prior=False):
         """Generates hybrid samples at the desired level
         Hybridisation level: int between 0 and self.max_hybridisation determining how many dimensions get resampled

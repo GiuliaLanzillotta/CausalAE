@@ -5,7 +5,7 @@ import torch
 from torchvision import utils as tvu
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
-from models import GenerativeAE, ESAE
+from models import GenerativeAE, ESAE, HybridLayer
 import torchvision
 import itertools
 
@@ -18,7 +18,7 @@ class ModelVisualiser(object):
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
-    def plot_originals(self, grid_size:int=12, device=None, figsize=(12,12)):
+    def plot_originals(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         num_plots = grid_size**2
         test_sample = self.test_input[:num_plots]
         grid_originals = torchvision.utils.make_grid(test_sample, nrow=grid_size)
@@ -26,7 +26,7 @@ class ModelVisualiser(object):
         plt.imshow(grid_originals.permute(1, 2, 0).cpu().numpy())
         return figure
 
-    def plot_reconstructions(self, grid_size:int=12, device=None, figsize=(12,12)):
+    def plot_reconstructions(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         """ plots reconstructions from test set samples"""
         num_plots = grid_size**2
         test_sample = self.test_input[:num_plots]
@@ -37,7 +37,7 @@ class ModelVisualiser(object):
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
         return figure
 
-    def plot_samples_from_prior(self, grid_size:int=12, device=None, figsize=(12,12)):
+    def plot_samples_from_prior(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         """ samples from latent prior and plots reconstructions"""
         num_pics = grid_size**2 # square grid
         with torch.no_grad():
@@ -48,7 +48,7 @@ class ModelVisualiser(object):
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
         return figure
 
-    def plot_samples_controlled_hybridisation(self, grid_size:int=12, device=None, figsize=(12,12)):
+    def plot_samples_controlled_hybridisation(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         """ specific to ESAE model - to be used in ESAEmanager"""
         num_pics = grid_size**2 # square grid
         figures = []
@@ -63,15 +63,13 @@ class ModelVisualiser(object):
                 figures.append(figure)
         return figures
 
-    def plot_latent_traversals(self, steps:int=10, device=None, figsize=(12,12), tailored=False):
+    def plot_latent_traversals(self, steps:int=10, device=None, figsize=(12,12), tailored=False, **kwargs):
         """ traverses the latent space in different axis-aligned directions and plots
         model reconstructions"""
         # get posterior codes
         test_sample= self.test_input[11] #I like the number 11
         with torch.no_grad():
-            code = self.model.encode(test_sample.unsqueeze(0).to(device))
-        try: code = code[1] # if the output is a list extract the second element (VAE case)
-        except: pass
+            code = self.model.encode_mu(test_sample.unsqueeze(0).to(device))
         latent_vector = code.data.cpu().numpy()
         dimensions = np.arange(latent_vector.shape[1])
         if not tailored: values = np.tile(np.linspace(-1., 1., num=steps), [dimensions, 1])
@@ -86,13 +84,38 @@ class ModelVisualiser(object):
         plt.imshow(grid_traversals.permute(1, 2, 0).cpu().numpy())
         return figure
 
-    def plot_hybridisatiom(self, N=3, device=None, figsize=(12,12)):
-        """Takes N samples and plots them together with the result of their hybridisation"""
+    def plot_hybridisation(self, Ni=10, Np=100, N=2, first=False, device=None, figsize=(12,12), **kwargs):
+        """Takes Ni samples and hybridises them with Np samples, tracking the hybridisation and
+        plotting the result.
+        - N : number of dimensions that will undergo hybridisation """
         # extract samples
+        all_samples = self.test_input[:Ni+Np]
         # encode
-        # hybridise manually - the hybrid layer should be doing this
+        with torch.no_grad():
+            codes = self.model.encode_mu(all_samples.to(device))
+        M = codes.shape[1]
+        inputs = codes[:Ni]
+        parents = codes[Ni:Ni+Np]
+        # hybridise manually with hybrid layer
+        try: unit_dim = self.model.unit_dim #SAE case
+        except AttributeError: unit_dim=1 #VAE case
+        new_vectors, parent_idx, to_resample = HybridLayer.hybridise_from_N(inputs, parents, N, unit_dim=unit_dim, first=first)
+        # make an Nix(1+1+Np) grid plotting all the samples together with their parents
+        complete_set = []
+        for i,vec in enumerate(new_vectors):
+            complete_set.append(vec.view(1,M))
+            complete_set.append(inputs[i].view(1,M))
+            complete_set.append(parents[parent_idx[i]])
+        # this is a (2+N)*Ni long tensor
+        complete_set = torch.cat(complete_set, dim=0)
         # decode and plot
-        pass
+        with torch.no_grad():
+            recons = self.model.decode(complete_set.to(device), activate=True)
+        grid_recons = torchvision.utils.make_grid(recons, nrow=N+2)
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+
+        return figure
 
     def do_latent_traversals_multi_dim(self, latent_vector, dimensions, values, device=None):
         """ Creates a tensor where each element is obtained by passing a

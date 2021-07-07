@@ -40,7 +40,7 @@ class BaseVisualExperiment(pl.LightningModule):
         print("MODEL SUMMARY")
         summary(self.model.cuda(), (self.loader.data_shape))
 
-    def make_plots(self, originals=False):
+    def make_plots(self, hybrids=True, originals=False):
         """originals: bool = Whether to plot the originals samples from the test set"""
         logger = self.logger.experiment
         figure = self.visualiser.plot_reconstructions(device=self.device)
@@ -53,6 +53,11 @@ class BaseVisualExperiment(pl.LightningModule):
 
         figure = self.visualiser.plot_latent_traversals(device=self.device, tailored=True)
         logger.add_figure("traversals", figure, global_step=self.global_step)
+
+        if hybrids: #plot the result of hybridisation in the latent space
+            N=2
+            figure = self.visualiser.plot_hybridisation(device=self.device)
+            logger.add_figure(f"Hybridisation of {N+1} inputs.", figure)
 
         if originals: # print the originals
             figure = self.visualiser.plot_originals()

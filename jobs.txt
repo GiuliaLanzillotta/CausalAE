@@ -23,3 +23,9 @@ bsub -oo "VecBetaVAE_discrete.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=2]
 bsub -oo "VecBetaVAE_continuous.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name VecBetaVAE --data SynthVec --version standard --data_version continuous
 bsub -oo "VecBetaVAE_standard.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name VecBetaVAE --data SynthVec --version standard --data_version standard
 bsub -oo "VecBetaVAE_big.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name VecBetaVAE --data SynthVec --version standard --data_version big
+
+
+bsub -oo "VecSAEfull_discrete.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name VecSAE --data SynthVec --version full --data_version discrete
+bsub -oo "VecSAEfull_continuous.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name VecSAE --data SynthVec --version full --data_version continuous
+bsub -oo "VecSAEfull_standard.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name VecSAE --data SynthVec --version full --data_version standard
+bsub -oo "VecSAEfull_big.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=2]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name VecSAE --data SynthVec --version full --data_version big
