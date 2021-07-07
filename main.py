@@ -131,22 +131,22 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='ESAE')
+                        default='VecESAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="MNIST")
+                        default="SynthVec")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="dummy_IMQ")
+                        default="standard")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",
                         help= "Name of data version to use (available only for synthetic datasets for now)",
-                        default="standard")
+                        default="discrete")
     parser.add_argument('--test', '-e', #Note that when testing is switched on then training is switched off
                         dest="test",
                         metavar="TEST",

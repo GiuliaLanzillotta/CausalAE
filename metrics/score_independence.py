@@ -28,9 +28,10 @@ class LatentOrthogonalityEvaluator(object):
         print("Preparing the model for scoring orthogonality ...")
         for i in range(num_batches):
             observations, _ = next(iter(self.dataloader))
-            codes = self.model.encode_mu(observations.to(device)); originals.append(codes)
-            hybridised_codes = self.hybridiser.controlled_sampling(codes, use_prior=False,
-                                        hybridisation_level=self.hybridiser.max_hybridisation_level)
+            with torch.no_grad():
+                codes = self.model.encode_mu(observations.to(device)); originals.append(codes)
+                hybridised_codes = self.hybridiser.controlled_sampling(codes, use_prior=False,
+                                            hybridisation_level=self.hybridiser.max_hybridisation_level)
             hybrids.append(hybridised_codes)
         originals = torch.vstack(originals); hybrids = torch.vstack(hybrids)
 
@@ -42,9 +43,11 @@ class LatentOrthogonalityEvaluator(object):
 
         print("Scoring orthogonality")
         scores = {}
-        print("RBF scoring"); scores["RBF"] = utils.MMD(*utils.RBF_kernel(ON, HN, device))
-        print("IMQ scoring"); scores["IMQ"] = utils.MMD(*utils.IMQ_kernel(ON, HN, device))
-        print("CAT scoring"); scores["CAT"] = utils.MMD(*utils.Categorical_kernel(ON, HN, device,
-                                       kwargs.get("strict",True), kwargs.get("hierarchy",True)))
+
+        with torch.no_grad():
+            print("RBF scoring"); scores["RBF"] = float(utils.MMD(*utils.RBF_kernel(ON, HN, device)).numpy())
+            print("IMQ scoring"); scores["IMQ"] = float(utils.MMD(*utils.IMQ_kernel(ON, HN, device)).numpy())
+            print("CAT scoring"); scores["CAT"] = float(utils.MMD(*utils.Categorical_kernel(ON, HN, device,
+                                                kwargs.get("strict",True), kwargs.get("hierarchy",True))).numpy())
 
         return scores

@@ -103,7 +103,7 @@ class VecSAE(HybridAE):
         super().__init__(params)
         self.dim_in = dim_in[0]
         # dim_in is a single number (since the input is a vector)
-        layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["enc_depth"]).int().numpy())
+        layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["depth"]).int().numpy())
         self.encoder = FCBlock(self.dim_in, layers, act_switch(params.get("act")))
         self.full = full
         if not full:

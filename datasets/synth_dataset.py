@@ -135,6 +135,9 @@ class SynthVec(DisentanglementDataset):
         self.allow_discrete = allow_discrete
         self.test = test
         self.noise = noise
+        set_name = "test" if test else "train"
+        to_print="-"*10 + "Opening SynthVec dataset version "+ name + " / " + set_name + "-"*10
+        print(to_print)
 
         if generate:
             X1,Y1,N1,X2,Y2,N2,metadata = self.generate(store=True, overwrite=overwrite, seed=seed)

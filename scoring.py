@@ -4,22 +4,14 @@ from pathlib import Path
 from experiments.EvaluationManager import VectorModelHandler
 
 if __name__ == '__main__':
-    #handler = ModelHandler(model_name="BaseSAE", model_version="dummy", data="MNIST")
-    handler = VectorModelHandler(model_name="VecESAE",  model_version="standard", data="SynthVec", data_version="standard")
-    handler.load_checkpoint()
-    scores = handler.score_model(FID=False, disentanglement=True, orthogonality=True, save_scores=True)
 
-
-    handler = VectorModelHandler(model_name="VecESAE",  model_version="standard", data="SynthVec", data_version="continuous")
-    handler.load_checkpoint()
-    scores = handler.score_model(FID=False, disentanglement=True, orthogonality=True, save_scores=True)
-
-
-    handler = VectorModelHandler(model_name="VecESAE",  model_version="standard", data="SynthVec", data_version="discrete")
-    handler.load_checkpoint()
-    scores = handler.score_model(FID=False, disentanglement=True, orthogonality=True, save_scores=True)
-
-
-    handler = VectorModelHandler(model_name="VecESAE",  model_version="standard", data="SynthVec", data_version="big")
-    handler.load_checkpoint()
-    scores = handler.score_model(FID=False, disentanglement=True, orthogonality=True, save_scores=True)
+    # Experiments settings ......
+    data_versions = ["standard","discrete","continuous","big"]
+    model_names = ["VecESAE","VecSAE","VecVAE"]
+    for data_v in data_versions:
+        for model_n in model_names:
+            handler = VectorModelHandler(model_name=model_n, model_version="standard",
+                                               data="SynthVec", data_version=data_v)
+            handler.load_checkpoint() # loading latest checkpoint saved
+            handler.score_model(FID=False, disentanglement=True, orthogonality=True,
+                                save_scores=True, full=False)

@@ -86,6 +86,14 @@ class ModelVisualiser(object):
         plt.imshow(grid_traversals.permute(1, 2, 0).cpu().numpy())
         return figure
 
+    def plot_hybridisatiom(self, N=3, device=None, figsize=(12,12)):
+        """Takes N samples and plots them together with the result of their hybridisation"""
+        # extract samples
+        # encode
+        # hybridise manually - the hybrid layer should be doing this
+        # decode and plot
+        pass
+
     def do_latent_traversals_multi_dim(self, latent_vector, dimensions, values, device=None):
         """ Creates a tensor where each element is obtained by passing a
             modified version of latent_vector to the generato. For each

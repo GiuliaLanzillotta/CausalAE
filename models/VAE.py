@@ -44,7 +44,6 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
         return self.forward(x, activate)[0]
 
     def forward(self, inputs: Tensor, activate:bool=False) -> list:
-        inputs = inputs.view((-1, )+self.dim_in)
         z, mu, logvar = self.encode(inputs)
         return  [self.decode(z, activate), mu, logvar]
 
@@ -112,18 +111,10 @@ class VecVAE(VAEBase):
         # dim_in is a single number (since the input is a vector)
         layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["depth"]).int().numpy())
         self.encoder = FCBlock(self.dim_in, layers, act_switch(params.get("act")))
-        if not full:
-            scm = VecSCM(self.latent_size, self.unit_dim, act=params.get("act"))
-            reverse_encoder = FCBlock(self.latent_size, reversed(layers), act_switch(params.get("act")))
-            self.decoder = nn.Sequential(scm, reverse_encoder)
-        else: self.decoder = VecSCMDecoder(self.latent_size, self.unit_dim, reversed(layers), act=params.get("act"))
+        self.decoder = FCBlock(self.latent_size, reversed(layers), act_switch(params.get("act")))
 
     def decode(self, noise:Tensor, activate:bool):
         # since x is a constant we're always going to get the same output
-        if not self.full:
-            output = self.decoder(noise)
-        else:
-            x = torch.ones_like(noise).to(noise.device)
-            output = self.decoder(x, noise)
-        if activate: output = self.act(output)
+
+        output = self.decoder(noise)
         return output

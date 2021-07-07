@@ -23,6 +23,8 @@ class ModelHandler(object):
     def __init__(self, model_name:str, model_version:str, data:str, data_version="", **kwargs):
         self.config = get_config(tuning=False, model_name=model_name, data=data,
                                  version=model_version, data_version=data_version)
+        print("Loading "+model_name)
+        print("-"*20)
         self.experiment = experiments_switch[model_name](self.config)
         self.model = self.experiment.model
         self.dataloader = self.experiment.loader
@@ -86,7 +88,7 @@ class ModelHandler(object):
         except ValueError:
             print(f"No checkpoint available at "+checkpoint_path+". Cannot load trained weights.")
 
-    def score_model(self, FID=False, disentanglement=False, orthogonality=False, save_scores=False):
+    def score_model(self, FID=False, disentanglement=False, orthogonality=False, save_scores=False, full=False):
         """Scores the model on the test set in loss and other terms selected"""
         start=time.time()
         scores = {}
@@ -100,7 +102,7 @@ class ModelHandler(object):
             _disentanglementScorer = ModelDisentanglementEvaluator(self.model, loader)
             disentanglement_scores, complete_scores = _disentanglementScorer.score_model()
             scores.update(disentanglement_scores)
-            scores["extra_disentanglement"] = complete_scores
+            if full: scores["extra_disentanglement"] = complete_scores
         if FID:
             if self.fidscorer is None:
                 self.fidscorer = FIDScorer()

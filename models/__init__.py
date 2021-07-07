@@ -7,6 +7,6 @@ from .ESAE import ESAE, VecESAE, EHybridAE
 models_switch = {"BetaVAE":VAE,
                  "BaseSAE":SAE,
                  "ESAE":ESAE,
-                 "VecBetaVAE":VecVAE,
+                 "VecVAE":VecVAE,
                  "VecSAE":VecSAE,
                  "VecESAE":VecESAE}

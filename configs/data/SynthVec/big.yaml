@@ -1,5 +1,5 @@
 dataset_name: SynthVec
-experiment_name: standard
+experiment_name: big
 num_workers: 1
 batch_size: 128
 num_factors: 10

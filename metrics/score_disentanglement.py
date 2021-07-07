@@ -13,7 +13,7 @@ class ModelDisentanglementEvaluator(object):
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
-    def score_model(self, betaVAE=False, device:str='cpu'):
+    def score_model(self, betaVAE=False, device='cpu'):
         print("Scoring model disentanglement.")
         complete_scores = {}
         disentanglement_scores = {}
