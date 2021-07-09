@@ -141,12 +141,12 @@ if __name__ == '__main__':
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="full")
+                        default="standard")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",
                         help= "Name of data version to use (available only for synthetic datasets for now)",
-                        default="discrete")
+                        default="continuous")
     parser.add_argument('--test', '-e', #Note that when testing is switched on then training is switched off
                         dest="test",
                         metavar="TEST",

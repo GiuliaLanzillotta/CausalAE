@@ -1,5 +1,5 @@
 model_params:
-  name: 'BaseSAE'
+  name: 'RSAE'
   latent_vecs: 128 # for hybrid sampling
   residual: True
   latent_size: 12
@@ -8,8 +8,8 @@ model_params:
   pool_every: 2
   unit_dim: 2
   channels: 32
-
-
-logging_params:
-  score_every: 1000
-  save_dir: "./logs/"
+  # --------- parameters related to MMD kernel setting ----------
+  MMD_kernel: "IMQ" #or IMQ or cat
+  #"strict": False
+  #"hierarchy": False
+  lamda: 2.0

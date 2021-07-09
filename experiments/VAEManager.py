@@ -29,11 +29,11 @@ scheduler_switch = {
 
 class VAEXperiment(BaseVisualExperiment):
 
-    def __init__(self, params: dict) -> None:
+    def __init__(self, params: dict, verbose=True) -> None:
         loader = DatasetLoader(params["data_params"])
         dim_in =  loader.data_shape # C, H, W
         model = VAE(params["model_params"], dim_in)
-        super(VAEXperiment, self).__init__(params, model, loader)
+        super(VAEXperiment, self).__init__(params, model, loader, verbose=verbose)
         # Additional initialisations (used in training and validation steps)
         self.KL_weight = max(1.0, self.params["model_params"]["latent_size"]/self.params['data_params']['batch_size']) #this might be too high for the big datasets
         self.beta_scheduler = scheduler_switch[self.params["opt_params"]["beta_schedule"]]
@@ -93,8 +93,8 @@ class VAEXperiment(BaseVisualExperiment):
 
 class VAEVecEXperiment(BaseVecExperiment):
 
-    def __init__(self, params: dict) -> None:
-        super(VAEVecEXperiment, self).__init__(params)
+    def __init__(self, params: dict, verbose=True) -> None:
+        super(VAEVecEXperiment, self).__init__(params, verbose=verbose)
         # Additional initialisations (used in training and validation steps)
         self.KL_weight = max(1.0, self.params["model_params"]["latent_size"]/self.params['data_params']['batch_size']) #this might be too high for the big datasets
         self.beta_scheduler = scheduler_switch[self.params["opt_params"]["beta_schedule"]]

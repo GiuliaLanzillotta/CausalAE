@@ -56,32 +56,6 @@ class EHybridAE(HybridAE, ABC):
         total_cost = torch.matmul(distance.to(device), factors)/N
         return total_cost
 
-    @staticmethod
-    def compute_MMD(Z_all_h:Tensor, Z_max_h:Tensor, kernel="RBF", **kwargs):
-        """Naive implementation of MMD in the latent space
-        Available kernels: RBF, IMQ, cat (stands for categorical) -- se utils module for more info
-        """
-
-        # normalising to avoid implicitly penalising for magnitude with kernels that are
-        # sensitive to the spread of the variable - e.g. if we don't normalise then we get
-        # latents with more spread to be penalised more than the others by the regularisation
-        # term -> which will in turn make them react stronger to it
-        # the idea is to keep the natural spread that the latent distribution has
-        normls = Normalize(0,1)
-        ZHN = normls(Z_all_h.permute(1,0).unsqueeze(2)).squeeze(2).T
-        ZMN = normls(Z_max_h.permute(1,0).unsqueeze(2)).squeeze(2).T
-        device = kwargs.get('device')
-        #TODO: add switch to subsample first Z (in order to have same dimensionality)
-        #TODO: insert hierarchy RBF
-        if kernel=="RBF":
-            MMD = utils.MMD(*utils.RBF_kernel(ZHN, ZMN, device))
-        elif kernel=="IMQ":
-            MMD = utils.MMD(*utils.IMQ_kernel(ZHN, ZMN, device))
-        elif kernel=="cat":
-            MMD = utils.MMD(*utils.Categorical_kernel(ZHN, ZMN, device, kwargs.get("strict",True), kwargs.get("hierarchy",True)))
-        else: raise NotImplementedError("Specified kernel for MMD '"+kernel+"' not implemented.")
-        return MMD
-
     def generate(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
@@ -124,7 +98,7 @@ class EHybridAE(HybridAE, ABC):
         Z_max_h = Z_hybrid[l_max]
         Z_all = torch.vstack(Z_hybrid)
         Z_all = Z_all[torch.randperm(Z_all.shape[0])[:B]] #B should also be the number of vectors in Z_max
-        L_reg = self.compute_MMD(Z_all,Z_max_h, kernel=self.kernel_type, **self.params, device=device)
+        L_reg = utils.compute_MMD(Z_all,Z_max_h, kernel=self.kernel_type, **self.params, device=device)
         L_rec_tot /= len(H_levels)
         loss = L_rec_tot + lamda*L_reg
         return{'loss': loss, 'Reconstruction_loss':L_rec_tot, 'Regularization_loss':L_reg}

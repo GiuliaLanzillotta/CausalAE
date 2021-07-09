@@ -64,14 +64,14 @@ def compute_dci(dataloader:DataLoader,
     assert mus_test.shape[1] == num_test
     assert ys_test.shape[1] == num_test
 
-    # Delete all factors that have only one class
-    all_labels = np.concatenate([ys_train, ys_test], axis=1)
-    indices = np.argwhere(np.max(all_labels, axis=1) > 0).flatten()
-    ys_train = ys_train[indices, :]
-    ys_test = ys_test[indices, :]
+    ys_train_active, ys_test_active = utils.keep_only_active_everywhere(ys_train, ys_test)
+
+    if ys_train_active.shape[0] == 0 or ys_test_active.shape[0] == 0:
+        scores = {"disentanglement": 0.0}
+        return scores
 
     # Compute DCI metrics
-    scores, extras = _compute_dci(mus_train, ys_train, mus_test, ys_test)
+    scores, extras = _compute_dci(mus_train, ys_train_active, mus_test, ys_test_active)
 
     # Return dictionary containing:
     #   - 'informativeness_train'

@@ -113,18 +113,42 @@ def normal_discretise(labels:np.ndarray, mus:List, stds:List, num_categories):
         discretized[i, :] = np.digitize(labels[i, :], centers)
     return discretized
 
-def quantile_discretise(labels:np.ndarray, num_categories):
+def quantile_discretise(labels:np.ndarray, num_categories, quantiles:np.ndarray=None):
     """Uses empirical quantiles of the given label to perform distribution-aware
     discretisation"""
-    quantiles = empirical_centers(labels, num_bins=num_categories)
+    if quantiles is None: quantiles = empirical_centers(labels, num_bins=num_categories)
     discretized = np.zeros_like(labels)
     for i in range(labels.shape[0]):
         discretized[i, :] = np.digitize(labels[i, :], quantiles[:,i])
-    return discretized
+    return discretized, quantiles
 
 def _identity_discretizer(target, num_bins):
     del num_bins
     return target
+
+def drop_constant_dims(ys):
+    """Returns a view of the matrix `ys` with dropped constant rows."""
+    ys = np.asarray(ys)
+    if ys.ndim != 2:
+        raise ValueError("Expecting a matrix.")
+
+    variances = ys.var(axis=1)
+    active_mask = variances > 0.
+    return ys[active_mask, :], active_mask
+
+def keep_only_active_everywhere(ys_train, ys_test):
+    """Only keeps the dimensions (axis 0) that are active both in train and test set"""
+    _, active_classes_train = drop_constant_dims(ys_train)
+    _, active_classes_train = drop_constant_dims(ys_test)
+    everywhere_active_classes = active_classes_train*active_classes_train # logical AND
+
+    if not everywhere_active_classes.any():
+        return None
+
+    ys_train_active = ys_train[everywhere_active_classes, :]
+    ys_test_active = ys_test[everywhere_active_classes, :]
+
+    return ys_train_active, ys_test_active
 
 def discrete_mutual_info(mus, ys):
     """Compute discrete mutual information."""

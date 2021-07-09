@@ -61,7 +61,7 @@ def compute_irs(dataloader:DataLoader,
     # discretize the factors so that we restrict ourselves to the categories we see in the training
     ys_discrete = utils.make_discretizer(ys, num_bins=discretization_bins,
                                          discretizer_fn=utils._histogram_discretize)
-    active_mus = _drop_constant_dims(mus)
+    active_mus, _ = utils.drop_constant_dims(mus)
 
     if not active_mus.any(): irs_score = 0.0
     else:
@@ -73,17 +73,6 @@ def compute_irs(dataloader:DataLoader,
     score_dict["num_active_dims"] = np.sum(active_mus)
     del mus, ys
     return score_dict
-
-
-def _drop_constant_dims(ys):
-    """Returns a view of the matrix `ys` with dropped constant rows."""
-    ys = np.asarray(ys)
-    if ys.ndim != 2:
-        raise ValueError("Expecting a matrix.")
-
-    variances = ys.var(axis=1)
-    active_mask = variances > 0.
-    return ys[active_mask, :]
 
 
 def scalable_disentanglement_score(gen_factors, latents, diff_quantile=0.99):

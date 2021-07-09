@@ -54,15 +54,18 @@ def build_equations(node_order: List[int], node_ancestors) -> List[nn.Module]:
     for each node in the input graph"""
     eqs = [None]*len(node_order) #one equation for each node
     num_layers=2
-    for node in node_order:
-        din = 1 + len(node_ancestors[node]) # noise + ancestors --> this will be the dimensionality of the input for the mlp
+    for i in range(len(node_order)):
+        # ancestors has topological ordering: first node in the list is also the parent
+        din = 1 + len(node_ancestors[i]) # noise + ancestors --> this will be the dimensionality of the input for the mlp
         equation = get_random_MLP(num_layers,din)
-        eqs[node] = equation
+        eqs[node_order[i]] = equation #in this way equations will have labelling ordering - which is the one used during generation
+        # [ equation(0), equation(2), ..., equation(7), ... ]
+
     return eqs
 
 def sample_statistics():
     mu = torch.rand(1)*50 - 25
-    std = torch.rand(1)*10
+    std = torch.rand(1)*10 + 0.5
     return mu,std
 
 def sample_weights():
@@ -185,9 +188,24 @@ class SynthVec(DisentanglementDataset):
         return '\n'.join(lines)
 
     def categorise_labels(self, labels):
-        """Turn labels into categorical variables, and store them as integers"""
+        """Turn labels into categorical variables, and store them as integers.
+        In order to use the same classes for the categorised labels across different subsets of the data (e.g train/test)
+        we save the categories centers after having created them."""
         #TODO: include Gaussian option
-        return mutils.quantile_discretise(labels.T, self.NUM_CATEG_CONTINUOUS).T
+        path = Path(self.processed_folder)/"quantiles.pkl"
+        if os.path.exists(path):
+            print("Reading quantiles file")
+            with open(path,"rb") as f:
+                quantiles = pickle.load(f)
+            discretised, _ = mutils.quantile_discretise(labels.T, self.NUM_CATEG_CONTINUOUS, quantiles)
+        else:
+            print("Writing quantiles file")
+            discretised, quantiles = mutils.quantile_discretise(labels.T, self.NUM_CATEG_CONTINUOUS)
+            os.makedirs(self.processed_folder, exist_ok=True)
+            with open(path,"wb") as f:
+                pickle.dump(quantiles, f)
+
+        return discretised.T
 
     def elaborate_info(self):
         """Extracts dataset information from the metadata
@@ -246,8 +264,8 @@ class SynthVec(DisentanglementDataset):
                 noise = noise.reshape(batch_size, -1)
                 noises[node] = noise.view(batch_size)
             else: noise= noises[:,node]
-            if len(node_ancestors[node]):
-                noise = torch.cat([noise, x[:,node_ancestors[node]]], -1)
+            if len(node_ancestors[i]):
+                noise = torch.cat([noise, x[:,node_ancestors[i]]], -1)
             x[:,node] = equations[node](noise.float()).squeeze(-1)
             updater(i+1, 1, self.dim_in) #visual feedback of the progress
         if batch_size==1: x = x.squeeze(0)

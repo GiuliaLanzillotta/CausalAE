@@ -16,13 +16,13 @@ from metrics import FIDScorer
 
 class SAEXperiment(BaseVisualExperiment):
 
-    def __init__(self, params: dict) -> None:
+    def __init__(self, params: dict, verbose=True) -> None:
         # When initialised the dataset loader will download or load the data from the folder
         # split in train/test, apply transformations, divide in batches, extract data dimension
         loader = DatasetLoader(params["data_params"])
         dim_in =  loader.data_shape # C, H, W
         model = SAE(params["model_params"], dim_in)
-        super(SAEXperiment, self).__init__(params, model, loader)
+        super(SAEXperiment, self).__init__(params, model, loader, verbose=verbose)
         self.loss_type = params["model_params"]["loss_type"]
         assert self.loss_type in ["MSE","BCE"], "Requested loss type not available"
 
@@ -73,8 +73,8 @@ class SAEXperiment(BaseVisualExperiment):
 
 class SAEVecExperiment(BaseVecExperiment):
 
-    def __init__(self, params: dict) -> None:
-        super(SAEVecExperiment, self).__init__(params)
+    def __init__(self, params: dict, verbose=True) -> None:
+        super(SAEVecExperiment, self).__init__(params, verbose=verbose)
 
     def training_step(self, batch, batch_idx):
         inputs, labels = batch

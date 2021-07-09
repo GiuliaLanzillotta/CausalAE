@@ -1,28 +1,20 @@
-"""Experient manager for the E(quivariant)-SAE model"""
-import numpy as np
-import torch
-from torch import Tensor
-from torch import optim
-from models import ESAE
+"""Experiment manager for the R(egularised)-SAE model"""
+
+
+from models import RSAE
 from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
-from visualisations import ModelVisualiser
-import pytorch_lightning as pl
-from metrics import FIDScorer
-
-# Warmup schemes that should mimic the beta ones for the partial sampling
 
 
-
-class ESAEXperiment(BaseVisualExperiment):
+class RSAEXperiment(BaseVisualExperiment):
 
     def __init__(self, params: dict, verbose=True) -> None:
         # When initialised the dataset loader will download or load the data from the folder
         # split in train/test, apply transformations, divide in batches, extract data dimension
         loader = DatasetLoader(params["data_params"])
         dim_in =  loader.data_shape # C, H, W
-        model = ESAE(params["model_params"], dim_in)
-        super(ESAEXperiment, self).__init__(params, model, loader, verbose=verbose)
+        model = RSAE(params["model_params"], dim_in)
+        super(RSAEXperiment, self).__init__(params, model, loader, verbose=verbose)
         self.use_MSE = params["model_params"]["loss_type"] == "MSE"
 
     def training_step(self, batch, batch_idx):
@@ -76,10 +68,10 @@ class ESAEXperiment(BaseVisualExperiment):
         if self.FID_scoring: self.score_FID(batch_idx, input_imgs, results)
 
 
-class ESAEVecExperiment(BaseVecExperiment):
+class RSAEVecExperiment(BaseVecExperiment):
 
     def __init__(self, params: dict, verbose=True) -> None:
-        super(ESAEVecExperiment, self).__init__(params, verbose=verbose)
+        super(RSAEVecExperiment, self).__init__(params, verbose=verbose)
 
     def training_step(self, batch, batch_idx):
         inputs, labels = batch

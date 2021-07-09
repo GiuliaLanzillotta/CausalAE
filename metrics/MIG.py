@@ -49,11 +49,11 @@ def compute_mig(dataloader:DataLoader,
     # ys shape = (num_factors, num_train)
 
     # Delete all factors that have only one class
-    indices = np.argwhere(np.max(ys_train, axis=1) > 0).flatten() # select only rows that have entries above 0
-    ys_train = ys_train[indices, :]
+    active_ys, _ = utils.drop_constant_dims(ys_train)
+
 
     # Compute MIG
-    scores, extras = _compute_mig(mus_train, ys_train, bins=discretization_bins)
+    scores, extras = _compute_mig(mus_train, active_ys, bins=discretization_bins)
 
     # Return dictionary containing:
     #   - 'discrete_mig'

@@ -55,13 +55,14 @@ def compute_sap(dataloader:DataLoader,
     mus_test, ys_test = utils.generate_batch_factor_code(dataloader, representation_function, num_test, batch_size, device)
 
     # Delete all factors that have only one class
-    all_labels = np.concatenate([ys_train, ys_test], axis=1)
-    indices = np.argwhere(np.max(all_labels, axis=1) > 0).flatten()
-    ys_train = ys_train[indices, :]
-    ys_test = ys_test[indices, :]
+    ys_train_active, ys_test_active = utils.keep_only_active_everywhere(ys_train, ys_test)
+
+    if ys_train_active.shape[0] == 0 or ys_test_active.shape[0] == 0:
+        scores = {"SAP_score": 0.0}
+        return scores
 
     logging.info("Computing score matrix.")
-    SAP_score = _compute_sap(mus_train, ys_train, mus_test, ys_test, continuous_factors)
+    SAP_score = _compute_sap(mus_train, ys_train_active, mus_test, ys_test_active, continuous_factors)
     del mus_train, ys_train, mus_test, ys_test
     return SAP_score
 

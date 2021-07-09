@@ -5,6 +5,7 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 from torch import Tensor
+from torchvision.transforms import Normalize
 
 
 class Mish(nn.Module):
@@ -167,6 +168,32 @@ def MMD(similaritiesPP, similaritiesQQ, similaritiesPQ):
     res3 = torch.sum(similaritiesPQ) * 2. / float(N * M)
 
     return res1 + res2 - res3
+
+def compute_MMD(fromP:Tensor, fromQ:Tensor, kernel="RBF", **kwargs):
+    """Naive implementation of MMD in the latent space
+    Available kernels: RBF, IMQ, cat (stands for categorical) -- se utils module for more info
+    """
+
+    # normalising to avoid implicitly penalising for magnitude with kernels that are
+    # sensitive to the spread of the variable - e.g. if we don't normalise then we get
+    # latents with more spread to be penalised more than the others by the regularisation
+    # term -> which will in turn make them react stronger to it
+    # the idea is to keep the natural spread that the latent distribution has
+    normls = Normalize(0,1)
+    PN = normls(fromP.permute(1,0).unsqueeze(2)).squeeze(2).T
+    QN = normls(fromQ.permute(1,0).unsqueeze(2)).squeeze(2).T
+    device = kwargs.get('device')
+    #TODO: insert hierarchy RBF
+    if kernel=="RBF":
+        _MMD = MMD(*RBF_kernel(PN, QN, device))
+    elif kernel=="IMQ":
+        _MMD = MMD(*IMQ_kernel(PN, QN, device))
+    elif kernel=="cat":
+        _MMD = MMD(*Categorical_kernel(PN, QN, device, kwargs.get("strict",True), kwargs.get("hierarchy",True)))
+    else: raise NotImplementedError("Specified kernel for MMD '"+kernel+"' not implemented.")
+
+    return _MMD
+
 
 if __name__ == '__main__':
     #TESTING

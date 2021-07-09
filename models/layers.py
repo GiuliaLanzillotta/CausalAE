@@ -368,17 +368,13 @@ class HybridLayer(nn.Module):
         self.hierarchical_weights = torch.Tensor(range(1,self.max_hybridisation_level+1))/sum(range(1,self.max_hybridisation_level+1))
 
     def initialise_prior(self, latent_vectors):
-        # randomly selecting latent vectors for the prior
-        self.prior = latent_vectors[:self.N]
-        return
-        """
+        # randomly selecting latent vectors for the prior from the batch
         input_size = latent_vectors.detach().shape[0]
         idx = torch.randperm(input_size).to(latent_vectors.device) #shuffling indices
         if input_size<self.N:
             selected_idx = idx[:input_size]
         else: selected_idx = idx[:self.N]
         self.prior = torch.index_select(latent_vectors, 0, selected_idx)
-        """
 
     def update_prior(self, latent_vectors):
         # TODO: make initialisation incremental (store an incremental pool

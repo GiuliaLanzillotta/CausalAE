@@ -28,7 +28,9 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
 
     def encode_mu(self, inputs:Tensor) -> Tensor:
         """ returns latent code (not noise) for given input"""
-        return self.encode(inputs)
+        codes =  self.encode(inputs)
+        self.hybrid_layer.update_prior(codes)
+        return codes
 
     def sample_noise_from_prior(self, num_samples:int):
         """Equivalent to total hybridisation: every point is hybridised at the maximum level"""

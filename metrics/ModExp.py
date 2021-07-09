@@ -58,29 +58,30 @@ def compute_modularity_explicitness(dataloader:DataLoader,
     mus_test, ys_test = utils.generate_batch_factor_code(dataloader, representation_function, num_test, batch_size, device)
 
     # Delete all factors that have only one class
-    all_labels = np.concatenate([ys_train, ys_test], axis=1)
-    indices = np.argwhere(np.max(all_labels, axis=1) > 0).flatten()
-    ys_train = ys_train[indices, :]
-    ys_test = ys_test[indices, :]
+    ys_train_active, ys_test_active = utils.keep_only_active_everywhere(ys_train, ys_test)
+
+    if ys_train_active.shape[0] == 0 or ys_test_active.shape[0] == 0:
+        scores = {"modularity_score": 0.0}
+        return scores
 
     discretized_mus = utils.make_discretizer(mus_train, num_bins=discretization_bins,
                                              discretizer_fn=utils._histogram_discretize)
-    mutual_information = utils.discrete_mutual_info(discretized_mus, ys_train)
+    mutual_information = utils.discrete_mutual_info(discretized_mus, ys_train_active)
     # Mutual information should have shape [num_codes, num_factors].
     assert mutual_information.shape[0] == mus_train.shape[0]
-    assert mutual_information.shape[1] == ys_train.shape[0]
+    assert mutual_information.shape[1] == ys_train_active.shape[0]
     scores["modularity_score"] = modularity(mutual_information)
-    explicitness_score_train = np.zeros([ys_train.shape[0], 1])
-    explicitness_score_test = np.zeros([ys_test.shape[0], 1])
+    explicitness_score_train = np.zeros([ys_train_active.shape[0], 1])
+    explicitness_score_test = np.zeros([ys_test_active.shape[0], 1])
     mus_train_norm, mean_mus, stddev_mus = utils.normalize_data(mus_train)
     mus_test_norm, _, _ = utils.normalize_data(mus_test, mean_mus, stddev_mus)
-    for i in range(ys_train.shape[0]): # for each factor
+    for i in range(ys_train_active.shape[0]): # for each factor
         explicitness_score_train[i], explicitness_score_test[i] = \
-            explicitness_per_factor(mus_train_norm, ys_train[i, :],
-                                    mus_test_norm, ys_test[i, :])
+            explicitness_per_factor(mus_train_norm, ys_train_active[i, :],
+                                    mus_test_norm, ys_test_active[i, :])
     scores["explicitness_score_train"] = np.mean(explicitness_score_train)
     scores["explicitness_score_test"] = np.mean(explicitness_score_test)
-    del mus_train, ys_train, mus_test, ys_test
+    del mus_train, ys_train_active, mus_test, ys_test_active
     return scores
 
 

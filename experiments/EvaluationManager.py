@@ -25,7 +25,7 @@ class ModelHandler(object):
                                  version=model_version, data_version=data_version)
         print("Loading "+model_name)
         print("-"*20)
-        self.experiment = experiments_switch[model_name](self.config)
+        self.experiment = experiments_switch[model_name](self.config, verbose=kwargs.get("verbose"))
         self.model = self.experiment.model
         self.dataloader = self.experiment.loader
         assert issubclass(type(self.model), GenerativeAE), "Selected model is not an instance of GenerativeAE. " \
@@ -145,7 +145,8 @@ class VisualModelHandler(ModelHandler):
         super().__init__(model_name, model_version, data, **kwargs)
 
     def plot_model(self, do_originals=False, do_reconstructions=False,
-                   do_random_samples=False, do_traversals=False, do_hybrisation=False, **kwargs):
+                   do_random_samples=False, do_traversals=False, do_hybrisation=False,
+                   do_loss2distortion=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -161,6 +162,8 @@ class VisualModelHandler(ModelHandler):
             plots["originals"] = self.visualiser.plot_originals()
         if do_hybrisation: # print the originals
             plots["hybrids"] = self.visualiser.plot_hybridisation(device=self.device, **kwargs)
+        if do_loss2distortion:
+            plots["distortion"] = self.visualiser.plot_loss2distortion(device=self.device, **kwargs)
 
         return plots
 
@@ -169,21 +172,36 @@ class VectorModelHandler(ModelHandler):
     """Offers a series of tools to inspect a given model."""
     def __init__(self, model_name: str, model_version: str, data: str, data_version:str, **kwargs):
         super().__init__(model_name, model_version, data, data_version=data_version, **kwargs)
+        self.model_visualiser = None
+        self.data_visualiser = None
 
     def plot_data(self):
         plots = {}
-        if self.visualiser is None:
-            self.visualiser = SynthVecDataVisualiser(self.dataloader.test)
+        if self.data_visualiser is None:
+            self.data_visualiser = SynthVecDataVisualiser(self.dataloader.test)
 
-        plots["graph"] = self.visualiser.plot_graph()
-        plots["noises"] = self.visualiser.plot_noises_distributions()
-        plots["causes2noises"] = self.visualiser.plot_causes2noises()
+        plots["graph"] = self.data_visualiser.plot_graph()
+        plots["noises"] = self.data_visualiser.plot_noises_distributions()
+        plots["causes2noises"] = self.data_visualiser.plot_causes2noises()
+
+        return plots
+
+    def plot_model(self, **kwargs):
+
+        plots = {}
+        if self.model_visualiser is None:
+            self.model_visualiser = ModelVisualiser(self.model,
+                                                    self.dataloader.test)
+
+        figure = self.model_visualiser.plot_loss2distortion(device=self.device, **kwargs)
+        plots["distortion"] = figure
+
+        return plots
+
 
 
 if __name__ == '__main__':
-    handler = VisualModelHandler(model_name="BaseSAE", model_version="dummy", data="MNIST")
-    #handler.load_checkpoint()
-    handler.plot_model(do_originals=False, do_reconstructions=False,
-                       do_random_samples=False, do_traversals=False,
-                       do_hybrisation=True, first=True)
+    handler = VectorModelHandler(model_name="VecESAE", model_version="standard", data="SynthVec", data_version="big", verbose=False)
+    train = handler.dataloader.train.dataset.dataset
+    print(train)
 

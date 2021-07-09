@@ -7,6 +7,9 @@ from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 from models import GenerativeAE, ESAE, HybridLayer
 import torchvision
+import seaborn as sns
+from torch.nn import functional as F
+
 import itertools
 
 class ModelVisualiser(object):
@@ -116,6 +119,75 @@ class ModelVisualiser(object):
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
 
         return figure
+
+    def plot_loss2distortion(self, device=None, **kwargs):
+        """Plotting a curve measuring the amount of distortion along each dimension for
+        multiple starting points"""
+        figsize = kwargs.get("figsize",(20,20))
+        N = kwargs.get("N",50)
+        steps = kwargs.get("steps",21)
+        markersize = kwargs.get("markersize",20)
+
+        idx = torch.randperm(self.test_input.shape[0])[:N]
+        base_vecs = self.test_input[idx]
+        # encode - apply distortion - decode
+        with torch.no_grad():
+            codes = self.model.encode_mu(base_vecs.to(device))
+        ranges = self.model.get_prior_range() # (min, max) for each dimension
+        widths = [M-m for (m,M) in ranges]
+        distortion_levels = [np.linspace(-w,+w,steps) for w in widths]
+        ys = []
+        for i in range(N):
+            # losses is a list of floats
+            losses = self.do_latent_distortion_multi_dim(codes[i], distortion_levels, base_vecs[i], device=device)
+            ys.append(losses)
+        ys = torch.stack(ys) # N x D x steps
+        # now we want to plot N functions relatin the distortion levels to the different ys for each dimension
+        D = len(distortion_levels)
+        nrows = kwargs.get("nrows", D//3); ncols = D//nrows +1 if D%nrows!=0 else D//nrows
+        sns.set_style('darkgrid')
+        fig, ax = plt.subplots(nrows, ncols, sharey=True, figsize=figsize)
+        dim=0
+        for row in range(nrows):
+            for col in range(ncols):
+                if dim==D: break
+                Nlosses = ys[:,dim,:] # N x steps
+                ax[row,col].set_title(f"Latent dimension {dim}")
+                axi = sns.lineplot(np.tile(distortion_levels[dim], N), Nlosses.reshape(-1,), ax=ax[row,col],  marker=".", markersize=markersize)
+                axi.set(ylabel='L1 distance on pixels', xlabel='Latent space distortion')
+                dim+=1
+
+        return fig
+
+
+
+
+
+
+
+
+    def do_latent_distortion_multi_dim(self, latent_vector, distortion_levels, original_sample, device=None):
+        """ For each dimension in the original latent vector applies a sliding level of distortion
+        Returns tensor of size (num_dimensions) x num_steps - where num_steps is the number of distortion levels
+        applied to each dimension"""
+        losses = []
+        num_values = distortion_levels[0].shape[0]
+
+        for i, dist in enumerate(distortion_levels):
+            # Creates num_values copy of the latent_vector along the first axis.
+            _vectors = np.tile(latent_vector, [num_values, 1])
+            # Intervenes in the latent space.
+            _vectors[:, i] = dist
+            # Generate the batch of images and computes the loss as MSE distance
+            with torch.no_grad():
+                recons = self.model.decode(torch.tensor(_vectors, dtype=torch.float).to(device), activate=True)
+                # recons has shape stepsx(inout shape)
+            diff = recons - original_sample
+            loss = torch.norm(diff, 1, dim=tuple(range(diff.dim())[1:]))
+            losses.append(loss)
+        return torch.vstack(losses)
+
+
 
     def do_latent_traversals_multi_dim(self, latent_vector, dimensions, values, device=None):
         """ Creates a tensor where each element is obtained by passing a

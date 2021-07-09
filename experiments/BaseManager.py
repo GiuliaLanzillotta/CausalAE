@@ -5,21 +5,21 @@ from torch import Tensor
 from torch import optim
 from models import BASE, ESAE, models_switch
 from experiments.data import DatasetLoader
-from visualisations import ModelVisualiser
+from visualisations import ModelVisualiser, SynthVecDataVisualiser
 import pytorch_lightning as pl
 from metrics import FIDScorer, ModelDisentanglementEvaluator
 from torchsummary import summary
 
 class BaseVisualExperiment(pl.LightningModule):
 
-    def __init__(self, params: dict, model:BASE, loader:DatasetLoader) -> None:
+    def __init__(self, params: dict, model:BASE, loader:DatasetLoader, verbose=True) -> None:
         super(BaseVisualExperiment, self).__init__()
         self.params = params
         # When initialised the dataset loader will download or load the data from the folder
         # split in train/test, apply transformations, divide in batches, extract data dimension
         self.loader = loader
         self.model = model
-        self.print_model()
+        if verbose: self.print_model()
         self.visualiser = ModelVisualiser(self.model,
                                           self.loader.test,
                                           **params["vis_params"])
@@ -40,7 +40,7 @@ class BaseVisualExperiment(pl.LightningModule):
         print("MODEL SUMMARY")
         summary(self.model.cuda(), (self.loader.data_shape))
 
-    def make_plots(self, hybrids=True, originals=False):
+    def make_plots(self, hybrids=True, originals=False, distortion=True):
         """originals: bool = Whether to plot the originals samples from the test set"""
         logger = self.logger.experiment
         figure = self.visualiser.plot_reconstructions(device=self.device)
@@ -62,6 +62,10 @@ class BaseVisualExperiment(pl.LightningModule):
         if originals: # print the originals
             figure = self.visualiser.plot_originals()
             logger.add_figure("originals", figure)
+
+        if distortion:
+            figure = self.visualiser.plot_loss2distortion(device=self.device)
+            logger.add_figure("Output-Latent distortion plot", figure)
 
         if isinstance(self.model, ESAE):
             figures = self.visualiser.plot_samples_controlled_hybridisation(device=self.device)
@@ -126,7 +130,7 @@ class BaseVisualExperiment(pl.LightningModule):
 
 class BaseVecExperiment(pl.LightningModule):
 
-    def __init__(self, params: dict) -> None:
+    def __init__(self, params: dict, verbose=True) -> None:
         # When initialised the dataset loader will download or load the data from the folder
         # split in train/test, apply transformations, divide in batches, extract data dimension
         super(BaseVecExperiment, self).__init__()
@@ -134,10 +138,11 @@ class BaseVecExperiment(pl.LightningModule):
         self.loader = DatasetLoader(params["data_params"])
         self.dim_in = self.loader.data_shape # C, H, W
         self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in, full=params["model_params"]["full"])
-        self.print_model()
-        self.visualiser = ModelVisualiser(self.model,
-                                          self.loader.test,
-                                          **params["vis_params"])
+        if verbose: self.print_model()
+        self.model_visualiser = ModelVisualiser(self.model,
+                                                self.loader.test,
+                                                **params["vis_params"])
+        self.data_visualiser = SynthVecDataVisualiser(self.loader.test)
         self._disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.val_dataloader())
         self.val_every = self.params["trainer_params"]["val_check_interval"]
         self.score_every = self.params['logging_params']['score_every']
@@ -160,6 +165,23 @@ class BaseVecExperiment(pl.LightningModule):
             for k,v in disentanglement_scores.items():
                 self.log(k, v, prog_bar=False)
         self.num_val_steps+=1
+
+    def make_plots(self, dataset=False, distortion=True):
+        """originals: bool = Whether to plot the originals samples from the test set"""
+        logger = self.logger.experiment
+
+        if dataset: # print the originals
+            graph =  self.data_visualiser.plot_graph()
+            logger.add_figure("graph", graph)
+            noises =  self.data_visualiser.plot_noises_distributions()
+            logger.add_figure("noises' distribution", noises)
+            causes2noises =  self.data_visualiser.plot_causes2noises()
+            logger.add_figure("cause to noise plot", causes2noises)
+
+        if distortion:
+            figure = self.model_visualiser.plot_loss2distortion(device=self.device)
+            logger.add_figure("Output-Latent distortion plot", figure)
+
 
     def test_epoch_end(self, outputs):
         disentanglement_scores, complete_scores = self._disentanglementScorer.score_model(betaVAE=False,device=self.device)
