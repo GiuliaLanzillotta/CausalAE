@@ -86,6 +86,9 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
     if not test:
         print(f"======= Training {config['model_params']['name']} =======")
         runner.fit(experiment)
+        print("Training completed.")
+        print("Saving final checkpoint")
+        runner.save_checkpoint(str(checkpoint_path/"final.ckpt"))
     else:
         print(f"======= Testing {config['model_params']['name']} =======")
         test_res = runner.test(experiment)
@@ -131,12 +134,12 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='VecSAE')
+                        default='BetaVAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="SynthVec")
+                        default="MNIST")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",

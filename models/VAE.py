@@ -92,11 +92,12 @@ class VAE(VAEBase):
         self.decoder_initial_shape = conv_net.final_shape
         deconv_net = UpsampledConvNet(self.decoder_initial_shape, self.dim_in, depth=params["dec_depth"], **params) \
             if not self.dittadi_v else DittadiUpsampledConv(self.latent_size)
-        self.decoder = deconv_net if self.dittadi_v else nn.Sequential(fc_dec, deconv_net)
+        self.decoder = deconv_net if self.dittadi_v else nn.ModuleList([fc_dec, deconv_net])
 
     def decode(self, noise: Tensor, activate:bool) -> Tensor: #overriding parent class implementation to inser reshaping
+        noise = self.decoder[0](noise)
         noise = noise.view((-1, )+self.decoder_initial_shape) # reshaping into image format
-        out = self.decoder(noise)
+        out = self.decoder[1](noise)
         if activate: out = self.act(out)
         return out
 

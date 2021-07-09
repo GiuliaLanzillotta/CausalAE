@@ -92,7 +92,7 @@ class ESAEVecExperiment(BaseVecExperiment):
         self.log('REC_loss', losses["Reconstruction_loss"], on_epoch=True)
         self.log('REG_loss', losses["Regularization_loss"], on_epoch=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            figure = self.visualiser.plot_training_gradients()
+            figure = self.model_visualiser.plot_training_gradients()
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
         return losses
 

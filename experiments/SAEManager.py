@@ -82,7 +82,7 @@ class SAEVecExperiment(BaseVecExperiment):
         BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            figure = self.visualiser.plot_training_gradients()
+            figure = self.model_visualiser.plot_training_gradients()
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
         return MSE
 

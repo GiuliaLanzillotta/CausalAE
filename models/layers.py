@@ -575,7 +575,7 @@ class UpsampledConvNet(nn.Module):
         """ Simply the forward pass """
         x = inputs.view((-1,) + self.initial_shape)
         for i,l in enumerate(self.conv_modules):
-            x = self.net[i](x)
+            x = self.conv_modules[i](x)
         return x
 
 

@@ -113,7 +113,7 @@ class VAEVecEXperiment(BaseVecExperiment):
         self.log_dict({key: val.item() for key, val in train_loss.items()})
         self.log('beta', KL_weight*self.model.beta, prog_bar=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            figure = self.visualiser.plot_training_gradients()
+            figure = self.model_visualiser.plot_training_gradients()
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
 
         return train_loss["loss"]

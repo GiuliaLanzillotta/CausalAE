@@ -56,8 +56,10 @@ class BaseVisualExperiment(pl.LightningModule):
 
         if hybrids: #plot the result of hybridisation in the latent space
             N=2
-            figure = self.visualiser.plot_hybridisation(device=self.device)
-            logger.add_figure(f"Hybridisation of {N+1} inputs.", figure)
+            figure = self.visualiser.plot_hybridisation(device=self.device, first=True)
+            logger.add_figure(f"Hybridisation of {N+1} inputs on first dimensions.", figure, global_step=self.global_step)
+            figure = self.visualiser.plot_hybridisation(device=self.device, first=False)
+            logger.add_figure(f"Hybridisation of {N+1} inputs on last dimensions.", figure, global_step=self.global_step)
 
         if originals: # print the originals
             figure = self.visualiser.plot_originals()
@@ -65,7 +67,7 @@ class BaseVisualExperiment(pl.LightningModule):
 
         if distortion:
             figure = self.visualiser.plot_loss2distortion(device=self.device)
-            logger.add_figure("Output-Latent distortion plot", figure)
+            logger.add_figure("Output-Latent distortion plot", figure, global_step=self.global_step)
 
         if isinstance(self.model, ESAE):
             figures = self.visualiser.plot_samples_controlled_hybridisation(device=self.device)

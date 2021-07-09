@@ -141,7 +141,7 @@ class ModelVisualiser(object):
             # losses is a list of floats
             losses = self.do_latent_distortion_multi_dim(codes[i], distortion_levels, base_vecs[i], device=device)
             ys.append(losses)
-        ys = torch.stack(ys) # N x D x steps
+        ys = torch.stack(ys).cpu().numpy() # N x D x steps
         # now we want to plot N functions relatin the distortion levels to the different ys for each dimension
         D = len(distortion_levels)
         nrows = kwargs.get("nrows", D//3); ncols = D//nrows +1 if D%nrows!=0 else D//nrows
@@ -154,6 +154,7 @@ class ModelVisualiser(object):
                 Nlosses = ys[:,dim,:] # N x steps
                 ax[row,col].set_title(f"Latent dimension {dim}")
                 axi = sns.lineplot(np.tile(distortion_levels[dim], N), Nlosses.reshape(-1,), ax=ax[row,col],  marker=".", markersize=markersize)
+                ax[row,col].axvline(0, color='r', linestyle="--")
                 axi.set(ylabel='L1 distance on pixels', xlabel='Latent space distortion')
                 dim+=1
 
@@ -175,14 +176,14 @@ class ModelVisualiser(object):
 
         for i, dist in enumerate(distortion_levels):
             # Creates num_values copy of the latent_vector along the first axis.
-            _vectors = np.tile(latent_vector, [num_values, 1])
+            _vectors = np.tile(latent_vector.cpu().numpy(), [num_values, 1])
             # Intervenes in the latent space.
             _vectors[:, i] = dist
             # Generate the batch of images and computes the loss as MSE distance
             with torch.no_grad():
                 recons = self.model.decode(torch.tensor(_vectors, dtype=torch.float).to(device), activate=True)
                 # recons has shape stepsx(inout shape)
-            diff = recons - original_sample
+            diff = recons - original_sample.to(device)
             loss = torch.norm(diff, 1, dim=tuple(range(diff.dim())[1:]))
             losses.append(loss)
         return torch.vstack(losses)

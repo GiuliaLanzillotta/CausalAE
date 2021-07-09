@@ -10,7 +10,7 @@ model_params:
 
 logging_params:
   manual_seed: 1265
-  #save_dir: "./logs/"
+  save_dir: "./logs/"
 
 trainer_params:
   val_check_interval: 500 #check validation every 200 steps
