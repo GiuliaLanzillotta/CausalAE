@@ -16,7 +16,7 @@ opt_params:
 
 
 logging_params:
-#  save_dir: "./logs/"
+  save_dir: "./logs/"
 
 vis_params:
   plot_every: 1

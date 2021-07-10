@@ -7,6 +7,7 @@ from models import VAEBase, SAE, models_switch
 from models.BASE import GenerativeAE
 from pathlib import Path
 from configs import get_config
+from experiments.data import DatasetLoader
 import os
 import glob
 import json
@@ -88,7 +89,8 @@ class ModelHandler(object):
         except ValueError:
             print(f"No checkpoint available at "+str(checkpoint_path)+". Cannot load trained weights.")
 
-    def score_model(self, FID=False, disentanglement=False, orthogonality=False, save_scores=False, full=False):
+    def score_model(self, FID=False, disentanglement=False, orthogonality=False,
+                    save_scores=False, full=False, **kwargs):
         """Scores the model on the test set in loss and other terms selected"""
         start=time.time()
         scores = {}
@@ -120,21 +122,25 @@ class ModelHandler(object):
         print("Time elapsed for scoring {:.0f}".format(end-start))
 
         if save_scores:
+            name = kwargs.get("name","scoring")
             path = Path(self.config['logging_params']['save_dir']) / \
                         self.config['logging_params']['name'] / \
-                        self.config['logging_params']['version'] / "scoring.pkl"
+                        self.config['logging_params']['version'] / (name+".pkl")
             with open(path, 'wb') as o:
                 pickle.dump(scores, o)
         return scores
 
-    def load_scores(self):
+    def load_scores(self, **kwargs):
         """Return saved scores dictionary if any"""
+
+        name = kwargs.get("name","scoring")
         path = Path(self.config['logging_params']['save_dir']) / \
                     self.config['logging_params']['name'] / \
-                    self.config['logging_params']['version'] / "scoring.pkl"
+                    self.config['logging_params']['version'] / (name+".pkl")
         if os.path.exists(path):
             with open(path, 'rb') as f:
                 return pickle.load(f)
+
 
         print("No scores file found at "+str(path))
 
@@ -174,6 +180,11 @@ class VectorModelHandler(ModelHandler):
         super().__init__(model_name, model_version, data, data_version=data_version, **kwargs)
         self.model_visualiser = None
         self.data_visualiser = None
+
+    def switch_labels_to_noises(self):
+        print("Loading noises as labels.")
+        self.config["data_params"]["noise"] = True
+        self.dataloader = DatasetLoader(self.config["data_params"])
 
     def plot_data(self):
         plots = {}

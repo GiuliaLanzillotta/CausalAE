@@ -13,5 +13,6 @@ if __name__ == '__main__':
             handler = VectorModelHandler(model_name=model_n, model_version="standard",
                                                data="SynthVec", data_version=data_v)
             handler.load_checkpoint() # loading latest checkpoint saved
+            #handler.switch_labels_to_noises()
             handler.score_model(FID=False, disentanglement=True, orthogonality=True,
-                                save_scores=True, full=False)
+                                save_scores=True, full=False, name="scoring_noises")

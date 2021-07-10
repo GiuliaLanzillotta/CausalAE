@@ -125,8 +125,11 @@ class ModelVisualiser(object):
         multiple starting points"""
         figsize = kwargs.get("figsize",(20,20))
         N = kwargs.get("N",50)
-        steps = kwargs.get("steps",21)
+        steps = kwargs.get("steps",21) # odd steps will include 0 in the linspace
         markersize = kwargs.get("markersize",20)
+        font_scale = kwargs.get("font_scale",20)
+        ylim = kwargs.get("ylim")
+        xlim = kwargs.get("xlim")
 
         idx = torch.randperm(self.test_input.shape[0])[:N]
         base_vecs = self.test_input[idx]
@@ -156,6 +159,10 @@ class ModelVisualiser(object):
                 axi = sns.lineplot(np.tile(distortion_levels[dim], N), Nlosses.reshape(-1,), ax=ax[row,col],  marker=".", markersize=markersize)
                 ax[row,col].axvline(0, color='r', linestyle="--")
                 axi.set(ylabel='L1 distance on pixels', xlabel='Latent space distortion')
+                axi.tick_params(axis="x", labelsize=font_scale)
+                axi.tick_params(axis="y", labelsize=font_scale)
+                if ylim is not None: axi.set(ylim=(0, ylim))
+                if xlim is not None: axi.set(xlim=(-xlim, xlim))
                 dim+=1
 
         return fig

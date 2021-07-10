@@ -153,12 +153,18 @@ class ConvNet(nn.Module):
     """ Implements convolutional net with multiple convolutional 
     blocks  + final flattening """
 
-    def __init__(self, dim_in, depth:int, pool_every:int, **kwargs):
+    def __init__(self, dim_in, depth:int, **kwargs):
         super(ConvNet, self).__init__()
         C, H, W = dim_in; h = H
         self.depth = depth
         dec_depth = kwargs.get("dec_depth",depth)
-        assert depth >=dec_depth, "The encoder must be at least as deep as the decoder"
+        num_pools = kwargs.get("num_pools")
+        if num_pools is None:
+            pool_every = kwargs.get("pool_every"); assert pool_every is not None, "Specify either number of pooling layers or pooling frequency"
+            num_pools = dec_depth//pool_every
+            pool_every = depth//num_pools
+        else:
+            pool_every = self.depth//num_pools
 
         # To keep the code simple we downsample and upsample the image symmetrically between
         # encoder and decoder. Hence if the encoder depth is greater than the decoder's the extra
@@ -170,15 +176,13 @@ class ConvNet(nn.Module):
         channels = kwargs.get("channels")
         channels_list = [C] + [channels]*depth
 
-        #changing pool every to insert encoder's additional layers not only at the end
-        num_pools = dec_depth//pool_every
-        pool_every_2 = depth//num_pools
+
 
         # Stacking the conv layers
         modules = []
         for l in range(depth):
             c = channels_list[l+1]
-            reduce = l%pool_every_2==0
+            reduce = l%pool_every==0
             if reduce: h=h//2
             modules.append(ConvBlock(C,c,3,1,1,act=act,norm=norm,pool=reduce))
             C = c
@@ -548,7 +552,13 @@ class UpsampledConvNet(nn.Module):
         self.depth = depth
         C, H, W = initial_shape # the initial shape refers to the constant input block
         conv_modules = nn.ModuleList([])
-        pool_every = kwargs.get("pool_every"); assert self.depth%pool_every==0
+        num_pools = kwargs.get("num_pools")
+        if num_pools is None:
+            pool_every = kwargs.get("pool_every"); assert pool_every is not None, "Specify either number of pooling layers or pooling frequency"
+            num_pools = depth//pool_every
+            pool_every = depth//num_pools
+        else: pool_every = self.depth//num_pools
+
         #residual = kwargs.get("residual") FIXME
         channels = kwargs.get("channels")
         channels_list = [C] + [channels]*depth; channels_list[-1] = final_shape[0] # reducing number of channels at the end
