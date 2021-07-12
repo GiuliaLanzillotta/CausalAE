@@ -23,7 +23,7 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
         z, logvar, mu = self.gaussian_latent(codes)
         return [z, mu, logvar]
 
-    def encode_mu(self, inputs:Tensor) -> Tensor:
+    def encode_mu(self, inputs:Tensor, **kwargs) -> Tensor:
         """ returns latent code (not noise) for given input"""
         return self.encode(inputs)[0]
 

@@ -3,16 +3,16 @@ import numpy as np
 import torch
 from torch import Tensor
 from torch import optim
-from models import BASE, ESAE, models_switch
+from models import ESAE, models_switch
 from experiments.data import DatasetLoader
 from visualisations import ModelVisualiser, SynthVecDataVisualiser
 import pytorch_lightning as pl
-from metrics import FIDScorer, ModelDisentanglementEvaluator
+from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator
 from torchsummary import summary
 
 class BaseVisualExperiment(pl.LightningModule):
 
-    def __init__(self, params: dict, model:BASE, loader:DatasetLoader, verbose=True) -> None:
+    def __init__(self, params: dict, model, loader:DatasetLoader, verbose=True) -> None:
         super(BaseVisualExperiment, self).__init__()
         self.params = params
         # When initialised the dataset loader will download or load the data from the folder
@@ -23,13 +23,9 @@ class BaseVisualExperiment(pl.LightningModule):
         self.visualiser = ModelVisualiser(self.model,
                                           self.loader.test,
                                           **params["vis_params"])
-        self._fidscorer = FIDScorer()
-        self._disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.val_dataloader())
         self.val_every = self.params["trainer_params"]["val_check_interval"]
         self.plot_every = self.params['vis_params']['plot_every']
-        self.score_every = self.params['logging_params']['score_every']
         self.log_every = self.params['logging_params']['log_every']
-        self.FID_scoring = self.params['data_params']['FID_scoring']
         self.num_FID_steps = len(self.val_dataloader())//20 # basically take 5% of the batches available
         self.num_val_steps = 0 #counts number of validation steps done
 
@@ -74,38 +70,16 @@ class BaseVisualExperiment(pl.LightningModule):
             for l,figure in enumerate(figures):
                 logger.add_figure(f"prior_samples_hybridisation_level_{l}", figure, global_step=self.global_step)
 
-
     def validation_epoch_end(self, outputs):
         # Logging hyperparameters
         # Visualisation
         if self.num_val_steps%self.plot_every==0 or \
                 self.global_step==self.params["trainer_params"]["max_steps"]:
             self.make_plots(originals=self.global_step==0)
-        # Scoring val performance
-        if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
-            # compute and store the fid scoring
-            disentanglement_scores, complete_scores = self._disentanglementScorer.score_model(device=self.device)
-            for k,v in disentanglement_scores.items():
-                self.log(k, v, prog_bar=False)
-            if self.FID_scoring:
-                fid_score = self._fidscorer.calculate_fid()
-                self.log("FID", fid_score, prog_bar=True)
-
         self.num_val_steps+=1
 
     def test_epoch_end(self, outputs):
-        disentanglement_scores, complete_scores = self._disentanglementScorer.score_model(betaVAE=False,device=self.device)
-        for k,v in disentanglement_scores.items():
-            self.log(k, v, prog_bar=False)
-        _scores = disentanglement_scores
-        if self.FID_scoring:
-            fid_score = self._fidscorer.calculate_fid()
-            self.log("FID_test", fid_score, prog_bar=False)
-            _scores['FID'] = fid_score
-
         self.make_plots(originals=self.global_step==0)
-
-        return _scores
 
 
     def configure_optimizers(self):
@@ -145,9 +119,7 @@ class BaseVecExperiment(pl.LightningModule):
                                                 self.loader.test,
                                                 **params["vis_params"])
         self.data_visualiser = SynthVecDataVisualiser(self.loader.test)
-        self._disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.val_dataloader())
         self.val_every = self.params["trainer_params"]["val_check_interval"]
-        self.score_every = self.params['logging_params']['score_every']
         self.plot_every = self.params['vis_params']['plot_every']
         self.num_val_steps = 0 #counts number of validation steps done
         self.log_every = self.params['logging_params']['log_every']
@@ -158,15 +130,6 @@ class BaseVecExperiment(pl.LightningModule):
 
     def print_model(self):
         summary(self.model.cuda(), (self.loader.data_shape))
-
-    def validation_epoch_end(self, outputs):
-        # Scoring val performance
-        if self.num_val_steps%self.score_every==0 and self.num_val_steps!=0:
-            # compute and store the fid scoring
-            disentanglement_scores, complete_scores = self._disentanglementScorer.score_model(device=self.device)
-            for k,v in disentanglement_scores.items():
-                self.log(k, v, prog_bar=False)
-        self.num_val_steps+=1
 
     def make_plots(self, dataset=False, distortion=True):
         """originals: bool = Whether to plot the originals samples from the test set"""
@@ -183,14 +146,6 @@ class BaseVecExperiment(pl.LightningModule):
         if distortion:
             figure = self.model_visualiser.plot_loss2distortion(device=self.device)
             logger.add_figure("Output-Latent distortion plot", figure)
-
-
-    def test_epoch_end(self, outputs):
-        disentanglement_scores, complete_scores = self._disentanglementScorer.score_model(betaVAE=False,device=self.device)
-        for k,v in disentanglement_scores.items():
-            self.log(k, v, prog_bar=False)
-        _scores = disentanglement_scores
-        return _scores
 
     def configure_optimizers(self):
         opt_params = self.params["opt_params"]

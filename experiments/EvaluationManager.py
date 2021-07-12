@@ -14,6 +14,7 @@ import json
 import time
 from visualisations import ModelVisualiser, SynthVecDataVisualiser
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator
+import pytorch_lightning as pl
 
 from torchsummary import summary
 
@@ -21,23 +22,75 @@ from torchsummary import summary
 
 class ModelHandler(object):
     """Offers a series of tools to inspect a given model."""
-    def __init__(self, model_name:str, model_version:str, data:str, data_version="", **kwargs):
-        self.config = get_config(tuning=False, model_name=model_name, data=data,
-                                 version=model_version, data_version=data_version)
-        print("Loading "+model_name)
-        print("-"*20)
-        self.experiment = experiments_switch[model_name](self.config, verbose=kwargs.get("verbose"))
+    def __init__(self, experiment:pl.LightningModule, **kwargs):
+        self.config = experiment.params
+        self.experiment = experiment
         self.model = self.experiment.model
         self.dataloader = self.experiment.loader
-        assert issubclass(type(self.model), GenerativeAE), "Selected model is not an instance of GenerativeAE. " \
-                                                           "Can only score disentanglement against Generative AE networks."
         self.model.eval()
-        print(model_name+ " model loaded.")
+        model_name = self.config["model_params"]["name"]
+        print(model_name+ " model hanlder loaded.")
         self.visualiser = None
         self.fidscorer = None
-        self.num_FID_steps = kwargs.get("num_FID_steps",10)
-        self.device = kwargs.get("device","cpu")
-        self.send_model_to(self.device)
+        self._orthogonalityScorer = None
+        self._disentanglementScorer = None
+        self.device = next(self.model.parameters()).device
+        #self.send_model_to(self.device)
+
+    @classmethod
+    def from_experiment(cls, experiment:pl.LightningModule, **kwargs):
+        return cls(experiment, **kwargs)
+
+    @classmethod
+    def from_config(cls, model_name:str, model_version:str, data:str, data_version="", **kwargs):
+        config = get_config(tuning=False, model_name=model_name, data=data,
+                                 version=model_version, data_version=data_version)
+        experiment = experiments_switch[model_name](config, verbose=kwargs.get("verbose"))
+        return cls(experiment, **kwargs)
+
+    def score_disentanglement(self, **kwargs):
+        """Scoring model on disentanglement metrics"""
+        scores = {}
+        full = kwargs.get("full",False) # full report
+        if self._disentanglementScorer is None:
+            self._disentanglementScorer = ModelDisentanglementEvaluator(self.model, self.dataloader.val)
+        disentanglement_scores, complete_scores = self._disentanglementScorer.score_model(device = self.device)
+        scores.update(disentanglement_scores)
+        if full: scores["extra_disentanglement"] = complete_scores
+        return scores
+
+    def score_orthogonality(self, **kwargs):
+        """Scoring the model against orthogonality measures """
+        if self._orthogonalityScorer is None:
+            try: unit_dim = self.model.unit_dim
+            except AttributeError: unit_dim=1
+            self._orthogonalityScorer = LatentOrthogonalityEvaluator(self.model, self.dataloader.val,
+                                                                     self.model.latent_size, unit_dim)
+        ortho_scores = self._orthogonalityScorer.score_latent(device=self.device,
+                                                              strict=kwargs.get("strict",False),
+                                                              hierarchy=kwargs.get("hierarchy",False))
+        return ortho_scores
+
+    def score_FID(self, **kwargs):
+        """Scoring the model reconstraction quality with FID"""
+        num_FID_steps = kwargs.get("num_FID_steps",10)
+
+        if self.fidscorer is None:
+            self.fidscorer = FIDScorer()
+
+        for idx in range(num_FID_steps):
+            if idx==0:
+                self.fidscorer.start_new_scoring(self.config['data_params']['batch_size']*num_FID_steps,
+                                                 device=self.device)
+            inputs, labels = next(iter(self.dataloader.val))
+            #TODO: check whether we want to evaluate prior samples here
+            reconstructions = self.model.generate(inputs, activate=True)
+            try: self.fidscorer.get_activations(inputs, reconstructions) #store activations for current batch
+            except Exception: print("Reached the end of FID scorer buffer")
+
+        FID_score = self.fidscorer.calculate_fid()
+
+        return FID_score
 
     def send_model_to(self, device:str):
         if device=="cpu": self.model.cpu()
@@ -90,34 +143,18 @@ class ModelHandler(object):
             print(f"No checkpoint available at "+str(checkpoint_path)+". Cannot load trained weights.")
 
     def score_model(self, FID=False, disentanglement=False, orthogonality=False,
-                    save_scores=False, full=False, **kwargs):
+                    save_scores=False, **kwargs):
         """Scores the model on the test set in loss and other terms selected"""
         start=time.time()
         scores = {}
-        loader = self.dataloader.test
         if orthogonality:
-            unit_dim = 1 if isinstance(self.model, VAEBase) else self.model.unit_dim
-            _orthogonalityScorer = LatentOrthogonalityEvaluator(self.model, loader, self.model.latent_size, unit_dim)
-            ortho_scores = _orthogonalityScorer.score_model(device=self.device, strict=False, hierarchy=True)
+            ortho_scores = self.score_orthogonality(**kwargs)
             scores.update(ortho_scores)
         if disentanglement:
-            _disentanglementScorer = ModelDisentanglementEvaluator(self.model, loader)
-            disentanglement_scores, complete_scores = _disentanglementScorer.score_model()
+            disentanglement_scores = self.score_disentanglement(**kwargs)
             scores.update(disentanglement_scores)
-            if full: scores["extra_disentanglement"] = complete_scores
         if FID:
-            if self.fidscorer is None:
-                self.fidscorer = FIDScorer()
-                for idx in range(self.num_FID_steps):
-                    if idx==0:
-                        self.fidscorer.start_new_scoring(self.config['data_params']['batch_size']*self.num_FID_steps,device=self.device)
-                    inputs, labels = next(iter(loader))
-                    reconstructions = self.model.generate(inputs, activate=True)
-                    try: self.fidscorer.get_activations(inputs, reconstructions) #store activations for current batch
-                    except Exception: print("Reached the end of FID scorer buffer")
-                FID_score = self.fidscorer.calculate_fid()
-                scores["FID"]=FID_score
-
+            scores["FID"]= self.score_FID(**kwargs)
         end = time.time()
         print("Time elapsed for scoring {:.0f}".format(end-start))
 
@@ -147,9 +184,6 @@ class ModelHandler(object):
 
 class VisualModelHandler(ModelHandler):
     """Offers a series of tools to inspect a given model."""
-    def __init__(self, model_name: str, model_version: str, data: str, **kwargs):
-        super().__init__(model_name, model_version, data, **kwargs)
-
     def plot_model(self, do_originals=False, do_reconstructions=False,
                    do_random_samples=False, do_traversals=False, do_hybrisation=False,
                    do_loss2distortion=False, **kwargs):
@@ -176,8 +210,8 @@ class VisualModelHandler(ModelHandler):
 
 class VectorModelHandler(ModelHandler):
     """Offers a series of tools to inspect a given model."""
-    def __init__(self, model_name: str, model_version: str, data: str, data_version:str, **kwargs):
-        super().__init__(model_name, model_version, data, data_version=data_version, **kwargs)
+    def __init__(self, experiment:pl.LightningModule, **kwargs):
+        super().__init__(experiment, **kwargs)
         self.model_visualiser = None
         self.data_visualiser = None
 

@@ -32,7 +32,6 @@ logging_params:
   score_every: 20 # number of validations
   log_every: 100
 
-
 vis_params:
   save_dir: "vis/"
   plot_every: 10
@@ -40,6 +39,12 @@ vis_params:
   num_frames: 5
   fpd: 10
   num_points_irs: 10000
+
+eval_params:
+  name: "scoring"
+  FID: True
+  disentanglement: True
+  orthogonality: True
 
 
 

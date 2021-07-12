@@ -61,13 +61,13 @@ class EHybridAE(HybridAE, ABC):
         the net"""
         inputs = x.view((-1, )+self.dim_in) # just making sure
         codes = self.encode(inputs)
-        self.hybrid_layer.update_prior(codes)
+        self.hybrid_layer.update_prior(codes, integrate=True)
         output = self.decode(codes, activate)
         return  output
 
-    def forward(self, inputs: Tensor, activate:bool=False, update_prior:bool=False) -> list:
+    def forward(self, inputs: Tensor, activate:bool=False, update_prior=False, integrate=False) -> list:
         codes = self.encode(inputs)
-        self.hybrid_layer.update_prior(codes)
+        self.hybrid_layer.update_prior(codes, integrate=integrate)
 
         hybridisation_levels = []
         noises = []

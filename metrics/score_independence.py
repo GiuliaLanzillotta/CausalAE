@@ -8,6 +8,27 @@ from models.BASE import GenerativeAE
 from models.layers import HybridLayer
 from models import utils
 from torchvision.transforms import Normalize
+import dcor
+
+def compute_dCov_multiDim(data, unbiased=False):
+    """ Computes the distance covariance over multiple dimensions by aggregating
+    the result on pair-wise correlation measures.
+    data: numpy array of size NxD
+    covariance vs correlation:
+    - covariance is faster and safer (no divisions)
+    - correlation is normalised
+    """
+    D = data.shape[1]
+    total_corr = 0.0
+    count = 0
+    for i in range(D):
+        for j in range(i+1):
+            total_corr+= dcor.distance_covariance(data[:,i], data[:,j]) #note that here we're using the biased estimator
+            if unbiased: total_corr+=np.sqrt(dcor.u_distance_covariance_sqr(data[:,i],data[:,j]))
+            count+=1
+    total_corr/=count #averaging correlations among features
+    return total_corr
+
 
 class LatentOrthogonalityEvaluator(object):
     """ Takes a (trained) generative model and  evaluates the independence between its latent dimensions
@@ -20,7 +41,7 @@ class LatentOrthogonalityEvaluator(object):
         self.random_state = np.random.RandomState(0)
         self.hybridiser = HybridLayer(latent_size, unit_dim, self.test_input.shape[0])
 
-    def score_model(self, device:str='cpu', **kwargs):
+    def score_latent(self, device:str='cpu', **kwargs):
         num_batches = 10
         originals = []
         hybrids = []
@@ -45,9 +66,10 @@ class LatentOrthogonalityEvaluator(object):
         scores = {}
 
         with torch.no_grad():
-            print("RBF scoring"); scores["RBF"] = float(utils.MMD(*utils.RBF_kernel(ON, HN, device)).numpy())
-            print("IMQ scoring"); scores["IMQ"] = float(utils.MMD(*utils.IMQ_kernel(ON, HN, device)).numpy())
+            print("RBF scoring"); scores["RBF"] = float(utils.MMD(*utils.RBF_kernel(ON, HN, device)).cpu().numpy())
+            print("IMQ scoring"); scores["IMQ"] = float(utils.MMD(*utils.IMQ_kernel(ON, HN, device)).cpu().numpy())
             print("CAT scoring"); scores["CAT"] = float(utils.MMD(*utils.Categorical_kernel(ON, HN, device,
-                                                kwargs.get("strict",True), kwargs.get("hierarchy",True))).numpy())
+                                                kwargs.get("strict",True), kwargs.get("hierarchy",True))).cpu().numpy())
+            print("dCov scoring"); scores["dCOV"] = compute_dCov_multiDim(ON.cpu().numpy())
 
         return scores

@@ -72,7 +72,7 @@ class ModelVisualiser(object):
         # get posterior codes
         test_sample= self.test_input[11] #I like the number 11
         with torch.no_grad():
-            code = self.model.encode_mu(test_sample.unsqueeze(0).to(device))
+            code = self.model.encode_mu(test_sample.unsqueeze(0).to(device), update_prior=False)
         latent_vector = code.data.cpu().numpy()
         dimensions = np.arange(latent_vector.shape[1])
         if not tailored: values = np.tile(np.linspace(-1., 1., num=steps), [dimensions, 1])
@@ -95,7 +95,7 @@ class ModelVisualiser(object):
         all_samples = self.test_input[:Ni+Np]
         # encode
         with torch.no_grad():
-            codes = self.model.encode_mu(all_samples.to(device))
+            codes = self.model.encode_mu(all_samples.to(device), update_prior=False)
         M = codes.shape[1]
         inputs = codes[:Ni]
         parents = codes[Ni:Ni+Np]
@@ -135,9 +135,9 @@ class ModelVisualiser(object):
         base_vecs = self.test_input[idx]
         # encode - apply distortion - decode
         with torch.no_grad():
-            codes = self.model.encode_mu(base_vecs.to(device))
+            codes = self.model.encode_mu(base_vecs.to(device), update_prior=True)
         ranges = self.model.get_prior_range() # (min, max) for each dimension
-        widths = [M-m for (m,M) in ranges]
+        widths = [(M-m)/2 for (m,M) in ranges]
         distortion_levels = [np.linspace(-w,+w,steps) for w in widths]
         ys = []
         for i in range(N):
@@ -156,7 +156,9 @@ class ModelVisualiser(object):
                 if dim==D: break
                 Nlosses = ys[:,dim,:] # N x steps
                 ax[row,col].set_title(f"Latent dimension {dim}")
-                axi = sns.lineplot(np.tile(distortion_levels[dim], N), Nlosses.reshape(-1,), ax=ax[row,col],  marker=".", markersize=markersize)
+                # x = distortion level ; y = loss x step
+                axi = sns.lineplot(np.tile(distortion_levels[dim], N), Nlosses.reshape(-1,),
+                                   ax=ax[row,col], marker=".", markersize=markersize)
                 ax[row,col].axvline(0, color='r', linestyle="--")
                 axi.set(ylabel='L1 distance on pixels', xlabel='Latent space distortion')
                 axi.tick_params(axis="x", labelsize=font_scale)
@@ -166,13 +168,6 @@ class ModelVisualiser(object):
                 dim+=1
 
         return fig
-
-
-
-
-
-
-
 
     def do_latent_distortion_multi_dim(self, latent_vector, distortion_levels, original_sample, device=None):
         """ For each dimension in the original latent vector applies a sliding level of distortion
@@ -190,10 +185,10 @@ class ModelVisualiser(object):
             with torch.no_grad():
                 recons = self.model.decode(torch.tensor(_vectors, dtype=torch.float).to(device), activate=True)
                 # recons has shape stepsx(inout shape)
-            diff = recons - original_sample.to(device)
-            loss = torch.norm(diff, 1, dim=tuple(range(diff.dim())[1:]))
+            diff = recons - original_sample.to(device) # n_steps x image_dim
+            loss = torch.norm(diff, 1, dim=tuple(range(diff.dim())[1:])) # n_steps x 1
             losses.append(loss)
-        return torch.vstack(losses)
+        return torch.vstack(losses) # D x n_steps
 
 
 

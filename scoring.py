@@ -15,4 +15,4 @@ if __name__ == '__main__':
             handler.load_checkpoint() # loading latest checkpoint saved
             #handler.switch_labels_to_noises()
             handler.score_model(FID=False, disentanglement=True, orthogonality=True,
-                                save_scores=True, full=False, name="scoring_noises")
+                                save_scores=True, full=False, name="scoring")

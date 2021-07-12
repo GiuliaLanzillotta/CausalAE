@@ -62,7 +62,6 @@ def RBF_kernel(X:Tensor, Y:Tensor, device:str):
     sigma2_k = torch.quantile(distances_pz, q = 0.5)
     sigma2_k += torch.quantile(distances_qz, q = 0.5)
 
-    #TODO FIXME: should return similarities and not distances
 
     res1 = torch.exp( - distances_pz / 2. / sigma2_k)
     #res1 = torch.multiply(res1, 1. - torch.eye(N).to(device)) #this is wrong
@@ -145,6 +144,7 @@ def Categorical_kernel(X,Y, device, strict=False, hierarchy=False):
 
     similarities1 = torch.zeros(N,N, dtype=torch.float).to(device)
     for i in range(N):
+        #TODO: check this delta - is this the only way to obtain a similarity from the distance?
         similarities_i = delta_X - torch.abs(X-X[i]) if not strict else (X==X[i]).type(torch.float)
         similarities1[:,i] = torch.matmul(similarities_i,hierarchy_weights)
 

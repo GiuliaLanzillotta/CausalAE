@@ -20,14 +20,14 @@ class RHybridAE(HybridAE, ABC):
     def decode(self, noise:Tensor, activate:bool):
         raise NotImplementedError
 
-    def forward(self, inputs: Tensor, activate:bool=False, update_prior:bool=False) -> list:
+    def forward(self, inputs: Tensor, activate:bool=False, update_prior:bool=False, integrate=True) -> list:
         codes = self.encode(inputs)
-        self.hybrid_layer.update_prior(codes)
+        if update_prior: self.hybrid_layer.update_prior(codes, integrate=integrate)
         output = self.decode(codes, activate)
         return  [output, codes]
 
     def generate(self, x: Tensor, activate:bool) -> Tensor:
-        return self.forward(x, activate, update_prior=True)[0]
+        return self.forward(x, activate, update_prior=True, integrate=True)[0]
 
     def loss_function(self, *args, **kwargs):
         X_hat = args[0]

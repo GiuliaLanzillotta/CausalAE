@@ -13,6 +13,7 @@ from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 
 from experiments import experiments_switch
+from experiments.EvaluationManager import VectorModelHandler, VisualModelHandler, ModelHandler
 from configs import get_config
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
@@ -85,19 +86,20 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
     experiment = experiments_switch[config['model_params']['name']](config)
     if not test:
         print(f"======= Training {config['model_params']['name']} =======")
-        runner.fit(experiment)
+        #runner.fit(experiment)
         print("Training completed.")
         print("Saving final checkpoint")
-        runner.save_checkpoint(str(checkpoint_path/"final.ckpt"))
+        #runner.save_checkpoint(str(checkpoint_path/"final.ckpt"))
     else:
         print(f"======= Testing {config['model_params']['name']} =======")
         test_res = runner.test(experiment)
         # saving results to .json
         # resuming from checkpoint
-        print("Testing finished. Saving results.")
-        test_path = base_path /"test_res.json"
-        with open(test_path, 'w') as outfile:
-            json.dump(test_res, outfile)
+        print("Testing finished. ")
+
+    print("Scoring the model")
+    handler = ModelHandler.from_experiment(experiment)
+    handler.score_model(save_scores=True, **config['eval_params'])
 
 def do_tuning(config:dict):
     # using Ray tuning functionality to do hyperparameter search
@@ -144,7 +146,7 @@ if __name__ == '__main__':
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="standard")
+                        default="standardS")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",

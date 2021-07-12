@@ -2,19 +2,16 @@ model_params:
   name: 'ESAE'
   latent_vecs: 128 # for hybrid sampling
   residual: True
-  latent_size: 12
-  enc_depth: 12 #number of convolutional layers in the encoder
-  dec_depth: 12
+  latent_size: 6
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
   num_pools: 3
   unit_dim: 1
   channels: 32
   # --------- parameters related to MMD kernel setting ----------
-  MMD_kernel: "RBF" #or IMQ or cat
+  MMD_kernel: "IMQ" #or IMQ or cat
   #"strict": False
   #"hierarchy": False
   lamda: 2.0
+  loss_type: "BCE"
 
-
-logging_params:
-  score_every: 1000
-  save_dir: "./logs/"

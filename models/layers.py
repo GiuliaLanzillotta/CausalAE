@@ -375,15 +375,23 @@ class HybridLayer(nn.Module):
         # randomly selecting latent vectors for the prior from the batch
         input_size = latent_vectors.detach().shape[0]
         idx = torch.randperm(input_size).to(latent_vectors.device) #shuffling indices
-        if input_size<self.N:
-            selected_idx = idx[:input_size]
-        else: selected_idx = idx[:self.N]
-        self.prior = torch.index_select(latent_vectors, 0, selected_idx)
+        if input_size>self.N:
+            idx = idx[:self.N]
+        self.prior = torch.index_select(latent_vectors, 0, idx)
 
-    def update_prior(self, latent_vectors):
-        # TODO: make initialisation incremental (store an incremental pool
-        #  over different batches and sample from that)
-        self.initialise_prior(latent_vectors)
+    def update_prior(self, latent_vectors, integrate=False):
+        if self.prior is None:
+            self.initialise_prior(latent_vectors)
+            return
+        if not integrate: return
+        # increment prior pool by integrating it with the new vectors and sample
+        # from that
+        all_vecs = torch.vstack([self.prior, latent_vectors])
+        all_vecs_size = all_vecs.detach().shape[0]
+        idx = torch.randperm(all_vecs_size).to(latent_vectors.device)[:self.N]
+        self.prior = torch.index_select(all_vecs, 0, idx)
+
+
 
     def sample_from_prior(self, input_shape):
         # splitting the prior latent vectors into chunks (one for each noise dimension)
@@ -431,6 +439,7 @@ class HybridLayer(nn.Module):
         Hybridisation level: int between 0 and self.max_hybridisation determining how many dimensions get resampled
         use_prior: if True the sampling base is the prior set (which usually is a subset of the latent set)"""
         if hybridisation_level==0:
+            #TODO: adjust for num_samples here
             if not use_prior: return latent_vectors
             return self.prior
         if use_prior and self.prior is None: raise ValueError("use_prior set to True and prior not initialised")
@@ -711,11 +720,10 @@ class VecSCMDecoder(nn.Module):
     def forward(self, x, z):
         """ x is a constant, z is the noise """
         for l in range(self.depth):
+            x = self.forward_modules[l](x)
             if l < self.hierarchy_depth:
                 z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
-                x = self.forward_modules[l](x)
                 x = self.str_trf_modules[l](x, z_i)
-            else: x = self.forward_modules[l](x)
         return x
 
 

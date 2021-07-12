@@ -26,10 +26,12 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
         codes = self.encoder(inputs)
         return codes
 
-    def encode_mu(self, inputs:Tensor) -> Tensor:
+    def encode_mu(self, inputs:Tensor, **kwargs) -> Tensor:
         """ returns latent code (not noise) for given input"""
         codes =  self.encode(inputs)
-        self.hybrid_layer.update_prior(codes)
+        _update_prior = kwargs.get("update_prior", False)
+        _integrate = kwargs.get("integrate", False)
+        if _update_prior: self.hybrid_layer.update_prior(codes, integrate=_integrate)
         return codes
 
     def sample_noise_from_prior(self, num_samples:int):
@@ -48,11 +50,11 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
     def generate(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
-        return self.forward(x, activate, update_prior=True)
+        return self.forward(x, activate, update_prior=True, integrate=True)
 
-    def forward(self, inputs: Tensor, activate:bool=False, update_prior:bool=False) -> Tensor:
+    def forward(self, inputs: Tensor, activate:bool=False, update_prior:bool=False, integrate=True) -> Tensor:
         codes = self.encode(inputs)
-        if update_prior: self.hybrid_layer.update_prior(codes)
+        if update_prior: self.hybrid_layer.update_prior(codes, integrate=integrate)
         output = self.decode(codes, activate)
         return  output
 

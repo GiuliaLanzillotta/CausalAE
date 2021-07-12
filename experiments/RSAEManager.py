@@ -19,7 +19,7 @@ class RSAEXperiment(BaseVisualExperiment):
 
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
-        results = self.forward(input_imgs)
+        results = self.forward(input_imgs, update_prior=True, integrate=False)
         losses = self.model.loss_function(*results, X = input_imgs,
                                           lamda = self.model.params["lamda"],
                                           device=self.device,
@@ -33,39 +33,26 @@ class RSAEXperiment(BaseVisualExperiment):
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
         return losses
 
-    def score_FID(self, batch_idx, inputs, results):
-        if batch_idx==0:
-            self._fidscorer.start_new_scoring(self.params['data_params']['batch_size']*self.num_FID_steps,device=self.device)
-        if  batch_idx<=self.num_FID_steps:#only one every 50 batches is included to avoid memory issues
-            batch_size = inputs.shape[0] # taking only the non-hybridised samples
-            try: self._fidscorer.get_activations(inputs, self.model.act(results[0][:batch_size])) #store activations for current batch
-            except Exception as e:
-                print(e)
-                print("Reached the end of FID scorer buffer")
-
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
-        results = self.forward(input_imgs)
+        results = self.forward(input_imgs, update_prior=True, integrate=True)
         val_losses = self.model.loss_function(*results, X = input_imgs,
                                               lamda = self.model.params["lamda"],
                                               device=self.device,
                                               use_MSE=self.use_MSE)
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', val_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        if (self.num_val_steps)%(self.score_every)==0 and self.num_val_steps!=0 and self.FID_scoring:
-            self.score_FID(batch_idx, input_imgs, results)
         return val_losses
 
     def test_step(self, batch, batch_idx):
         input_imgs, labels = batch
-        results = self.forward(input_imgs)
+        results = self.forward(input_imgs, update_prior=True, integrate=True)
         test_losses = self.model.loss_function(*results, X = input_imgs,
                                                lamda = self.model.params["lamda"],
                                                device=self.device,
                                                use_MSE=self.use_MSE)
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        if self.FID_scoring: self.score_FID(batch_idx, input_imgs, results)
 
 
 class RSAEVecExperiment(BaseVecExperiment):
@@ -75,7 +62,7 @@ class RSAEVecExperiment(BaseVecExperiment):
 
     def training_step(self, batch, batch_idx):
         inputs, labels = batch
-        results = self.forward(inputs)
+        results = self.forward(inputs, update_prior=True, integrate=False)
         losses = self.model.loss_function(*results, X = inputs,
                                           lamda = self.model.params["lamda"],
                                           device=self.device)
@@ -90,7 +77,7 @@ class RSAEVecExperiment(BaseVecExperiment):
 
     def validation_step(self, batch, batch_idx):
         inputs, labels = batch
-        results = self.forward(inputs)
+        results = self.forward(inputs, update_prior=True, integrate=True)
         val_losses = self.model.loss_function(*results, X = inputs,
                                               lamda = self.model.params["lamda"],
                                               device=self.device)
@@ -100,7 +87,7 @@ class RSAEVecExperiment(BaseVecExperiment):
 
     def test_step(self, batch, batch_idx):
         inputs, labels = batch
-        results = self.forward(inputs)
+        results = self.forward(inputs, update_prior=True, integrate=True)
         test_losses = self.model.loss_function(*results, X = inputs,
                                                lamda = self.model.params["lamda"],
                                                device=self.device)

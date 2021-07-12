@@ -13,7 +13,7 @@ class GenerativeAE(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def encode_mu(self, inputs:Tensor) -> Tensor:
+    def encode_mu(self, inputs:Tensor, **kwargs) -> Tensor:
         """ returns latent code (not noise) for given input"""
         raise NotImplementedError
 
