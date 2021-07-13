@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 from models.BASE import GenerativeAE
 from torch import Tensor
 import torch
+from datasets.utils import gen_bar_updater
 
 def compute_response_matrix(dataloader:DataLoader,
                             model:GenerativeAE,
@@ -14,29 +15,60 @@ def compute_response_matrix(dataloader:DataLoader,
     Note: the response matrix will be approximated here as only a part of the dataset will be used
     - num_samples= number of samples from the aggregate posterior (to obtain v_i)"""
     originals = []
-    for i in range(num_batches):
-        observations, _ = next(iter(dataloader))
-        with torch.no_grad():
-            codes = model.encode(observations.to(device)) # samples from posterior
-            originals.append(codes)
-    originals = torch.vstack(originals); N, D = originals.shape # this will constitute the base for the aggregate posterior
-    Rz = compute_response(originals, model, device)
+    original_responses = []
 
-    # to obtain a perfect estimate we would need N to be the size of the dataset and
-    # num samples to be comparable to it
-    matrix = torch.zeros(D, D).to(device)
-    for d in range(D):
-        # for each new dimension obtain num_samplesxN new latent vectors
-        new_codes = torch.stack(num_samples*[originals]).to(device)
-        idxs = torch.multinomial(torch.ones(N), N*num_samples, replacement=True).to(device)
-        # resample only the given dimension for each latent vector
-        new_codes[:, :, d] = originals[idxs, d].view(num_samples, N)
-        # compute the response to the resampled vector
-        responses = compute_response(new_codes.view(-1,D), model, device).view(num_samples, N, D)
-        #compute the distance between the response and the original latent vector
-        delta = responses - Rz
-        # square and average
-        matrix[d, :] = torch.sum(delta**2, axis=[0,1])/(N*num_samples)
+    with torch.no_grad():
+
+        print("Sampling from aggregate posterior...")
+        updater = gen_bar_updater()
+
+        for i in range(num_batches):
+            observations, _ = next(iter(dataloader))
+            #TODO: support for stochastic decoders
+            codes = model.encode_mu(observations.to(device)) # samples from posterior
+            originals.append(codes)
+            original_responses.append(compute_response(codes, model, device))
+            updater(i+1, 1, num_batches)
+        all_originals = torch.vstack(originals); N, D = all_originals.shape # this will constitute the base for the aggregate posterior
+        B = originals[0].shape[0]
+
+        # to obtain a perfect estimate we would need N to be the size of the dataset and
+        # num samples to be comparable to it
+        print("Computing responses across latent dimensions...")
+        updater = gen_bar_updater()
+        matrix = torch.zeros(D, D).to(device)
+        for d in range(D):
+            # for each new dimension obtain num_samplesxN new latent vectors
+            for b in range(num_batches):
+                batch = originals[b]
+                batch_responses = original_responses[b]
+                for i in range(num_samples):
+                    new_codes = batch.clone().detach() # B x D
+                    idxs = torch.multinomial(torch.ones(N), B, replacement=True).to(device)
+                    new_codes[:, d] = all_originals[idxs, d] # still B x D
+                    new_responses = compute_response(new_codes, model, device)
+                    delta = new_responses - batch_responses # B x D
+                    matrix[d, :] += torch.sum(delta**2, axis=0) # 1 x D
+            updater(d+1, 1, D)
+            matrix[d,:]/=float(N*num_samples) # taking the average at the end
+
+            """ 
+
+            
+            Rz = torch.vstack(original_responses)
+            new_codes = torch.stack(num_samples*[all_originals]).to(device)
+            idxs = torch.multinomial(torch.ones(N), N*num_samples, replacement=True).to(device)
+            # resample only the given dimension for each latent vector
+            new_codes[:, :, d] = all_originals[idxs, d].view(num_samples, N)
+            # compute the response to the resampled vector
+            new_responses = compute_response(new_codes.view(-1,D), model, device).view(num_samples, N, D)
+            #compute the distance between the response and the original latent vector
+            delta = new_responses - Rz
+            # square and average
+            matrix[d, :] = torch.sum(delta**2, axis=[0,1])/(N*num_samples)
+            updater(d+1, 1, D)
+            """
+
 
     return matrix
 

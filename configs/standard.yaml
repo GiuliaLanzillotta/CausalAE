@@ -26,6 +26,7 @@ trainer_params:
   deterministic: True #might make the system slower
 
 logging_params:
+  #save_dir: "/logs"
   save_dir: "/cluster/scratch/glanzillo/logs/"
   manual_seed: 1265
   version: 'null'

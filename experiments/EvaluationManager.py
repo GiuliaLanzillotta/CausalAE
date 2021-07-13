@@ -112,11 +112,13 @@ class ModelHandler(object):
             if os.path.exists(path):
                 with open(path, 'rb') as f:
                     return pickle.load(f)
-            print("No matrix found at "+path)
+            print("No matrix found at "+str(path))
 
         print("Computing latent response matrix")
-        matrix = compute_response_matrix(self.dataloader.val, self.model, self.device,
-                                         num_batches, num_samples)
+        #self.send_model_to("cpu")
+        matrix = compute_response_matrix(self.dataloader.val, self.model, device=self.device, #we need memory
+                                         num_batches=num_batches, num_samples=num_samples)
+        self.send_model_to(self.device)
 
         if store_it:
             print("Storing latent response matrix")

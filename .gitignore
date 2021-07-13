@@ -12,3 +12,4 @@ datasets/celeba
 datasets/SynthVec
 */.ipynb_checkpoints/
 figures/
+*.csv
