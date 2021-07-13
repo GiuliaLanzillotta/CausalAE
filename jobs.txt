@@ -28,3 +28,13 @@ bsub -oo "VecSAEfull_discrete.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]
 bsub -oo "VecSAEfull_continuous.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecSAE --data SynthVec --version full --data_version continuous
 bsub -oo "VecSAEfull_standard.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecSAE --data SynthVec --version full --data_version standard
 bsub -oo "VecSAEfull_big.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecSAE --data SynthVec --version full --data_version big
+
+bsub -oo "VecRSAE_discrete.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version standard --data_version discrete
+bsub -oo "VecRSAE_continuous.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version standard --data_version continuous
+bsub -oo "VecRSAE_standard.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version standard --data_version standard
+bsub -oo "VecRSAE_big.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version standard --data_version big
+
+bsub -oo "VecRSAEfull_discrete.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version full --data_version discrete
+bsub -oo "VecRSAEfull_continuous.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version full --data_version continuous
+bsub -oo "VecRSAEfull_standard.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version full --data_version standard
+bsub -oo "VecRSAEfull_big.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version full --data_version big

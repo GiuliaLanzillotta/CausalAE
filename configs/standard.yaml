@@ -45,6 +45,8 @@ eval_params:
   FID: True
   disentanglement: True
   orthogonality: True
+  num_batches: 10
+  num_samples: 100
 
 
 

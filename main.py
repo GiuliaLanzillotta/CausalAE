@@ -27,7 +27,7 @@ from pathlib import Path
 
 
 
-def train_model(config:dict, tuning:bool=False, test:bool=False):
+def train_model(config:dict, tuning:bool=False, test:bool=False, score=True):
     """ Wrapper for the model training loop to be used by the hyper-parameter tuner"""
     tb_logger = TensorBoardLogger(save_dir=config['logging_params']['save_dir'],
                                   name=config['logging_params']['name'],
@@ -86,10 +86,10 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
     experiment = experiments_switch[config['model_params']['name']](config)
     if not test:
         print(f"======= Training {config['model_params']['name']} =======")
-        #runner.fit(experiment)
+        runner.fit(experiment)
         print("Training completed.")
         print("Saving final checkpoint")
-        #runner.save_checkpoint(str(checkpoint_path/"final.ckpt"))
+        runner.save_checkpoint(str(checkpoint_path/"final.ckpt"))
     else:
         print(f"======= Testing {config['model_params']['name']} =======")
         test_res = runner.test(experiment)
@@ -97,9 +97,12 @@ def train_model(config:dict, tuning:bool=False, test:bool=False):
         # resuming from checkpoint
         print("Testing finished. ")
 
-    print("Scoring the model")
-    handler = ModelHandler.from_experiment(experiment)
-    handler.score_model(save_scores=True, **config['eval_params'])
+    if score:
+        print("Scoring the model")
+        handler = ModelHandler.from_experiment(experiment)
+        handler.score_model(save_scores=True, **config['eval_params'])
+        if config['eval_params'].get("latent_responses",True):
+            handler.latent_responses(**config['eval_params'], store=True)
 
 def do_tuning(config:dict):
     # using Ray tuning functionality to do hyperparameter search
@@ -136,17 +139,17 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='ESAE')
+                        default='VecRSAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="MNIST")
+                        default="SynthVec")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="standardS")
+                        default="full")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",
@@ -157,9 +160,14 @@ if __name__ == '__main__':
                         metavar="TEST",
                         help= "Whether to load the model for testing",
                         default=False)
+    parser.add_argument('--score', '-s', #Note that when testing is switched on then training is switched off
+                        dest="score",
+                        metavar="SCORE",
+                        help= "Whether to score the model at the end of training/testing",
+                        default=True)
 
 
     args = parser.parse_args()
     config = get_config(args.tuning, args.name, args.data, args.version, args.data_version)
     if args.tuning: do_tuning(config)
-    else: train_model(config, test=args.test)
+    else: train_model(config, test=args.test, score=args.score)

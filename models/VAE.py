@@ -25,7 +25,7 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
 
     def encode_mu(self, inputs:Tensor, **kwargs) -> Tensor:
         """ returns latent code (not noise) for given input"""
-        return self.encode(inputs)[0]
+        return self.encode(inputs)[1]
 
     def decode(self, noise: Tensor, activate:bool) -> Tensor:
         out = self.decoder(noise)
@@ -36,6 +36,7 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
         return self.gaussian_latent.sample_standard(num_samples)
 
     def sample_noise_from_posterior(self, inputs: Tensor):
+        #TODO: change here
         return self.encode(inputs)[0]
 
     def generate(self, x: Tensor, activate:bool) -> Tensor:

@@ -332,10 +332,14 @@ class GaussianLayer(nn.Module):
         return std * eps + mu, logvar, mu
 
     def sample_standard(self, num_samples:int) -> Tensor:
-        """ Sampling noise from the latent space and generating images
-            through the decoder"""
+        """ Sampling noise from a standard Gaussian"""
         z = torch.randn(num_samples, self.latent_size)
         return z
+
+    def sample_parametric(self, num_samples:int, mus, logvars):
+        """Sampling noise from a parametrised Orthogonal Gaussian"""
+        samples = [torch.normal(mus, logvars) for i in range(num_samples)]
+        return torch.stack(samples)
 
     def init_weights(self, init_type="xavier"):
         if init_type=="normal":
@@ -390,7 +394,6 @@ class HybridLayer(nn.Module):
         all_vecs_size = all_vecs.detach().shape[0]
         idx = torch.randperm(all_vecs_size).to(latent_vectors.device)[:self.N]
         self.prior = torch.index_select(all_vecs, 0, idx)
-
 
 
     def sample_from_prior(self, input_shape):
@@ -495,7 +498,7 @@ class HybridLayer(nn.Module):
         if self.prior is None: raise ValueError("No samples from the prior have been obtained yet")
         prior_min = torch.min(self.prior, dim=0).values
         prior_max = torch.max(self.prior, dim=0).values
-        ranges = [(m.cpu().numpy(),M.cpu().numpy())
+        ranges = [(m.detach().cpu().numpy(),M.detach().cpu().numpy())
                   for (m,M) in zip(prior_min,prior_max)]
         return ranges
 

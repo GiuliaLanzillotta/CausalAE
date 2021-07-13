@@ -14,3 +14,8 @@ model_params:
   #"hierarchy": False
   lamda: 2.0
 
+
+
+logging_params:
+  score_every: 1000
+  save_dir: "./logs/"

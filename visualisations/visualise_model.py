@@ -136,7 +136,7 @@ class ModelVisualiser(object):
         # encode - apply distortion - decode
         with torch.no_grad():
             codes = self.model.encode_mu(base_vecs.to(device), update_prior=True)
-        ranges = self.model.get_prior_range() # (min, max) for each dimension
+            ranges = self.model.get_prior_range() # (min, max) for each dimension
         widths = [(M-m)/2 for (m,M) in ranges]
         distortion_levels = [np.linspace(-w,+w,steps) for w in widths]
         ys = []
@@ -180,7 +180,7 @@ class ModelVisualiser(object):
             # Creates num_values copy of the latent_vector along the first axis.
             _vectors = np.tile(latent_vector.cpu().numpy(), [num_values, 1])
             # Intervenes in the latent space.
-            _vectors[:, i] = dist
+            _vectors[:, i] = dist + _vectors[:,i]
             # Generate the batch of images and computes the loss as MSE distance
             with torch.no_grad():
                 recons = self.model.decode(torch.tensor(_vectors, dtype=torch.float).to(device), activate=True)

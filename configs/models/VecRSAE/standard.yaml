@@ -1,5 +1,5 @@
 model_params:
-  name: 'VecESAE'
+  name: 'VecRSAE'
   latent_vecs: 128 # for hybrid sampling
   latent_size: 10
   depth: 5 #number of linear layers in the encoder and decoder
@@ -14,7 +14,7 @@ model_params:
 
 logging_params:
   manual_seed: 1265
-  save_dir: "./logs/"
+  #save_dir: "./logs/"
   score_every: 20 # number of validations
 
 trainer_params:

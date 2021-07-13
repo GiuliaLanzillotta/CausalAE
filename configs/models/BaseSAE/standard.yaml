@@ -12,4 +12,9 @@ model_params:
 
 logging_params:
   score_every: 1000
-  save_dir: "./logs/"
+  #save_dir: "./logs/"
+
+
+eval_params:
+  name: "scoring"
+  FID: True

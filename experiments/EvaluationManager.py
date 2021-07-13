@@ -15,6 +15,7 @@ import time
 from visualisations import ModelVisualiser, SynthVecDataVisualiser
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator
 import pytorch_lightning as pl
+from metrics.responses import compute_response_matrix
 
 from torchsummary import summary
 
@@ -35,7 +36,7 @@ class ModelHandler(object):
         self._orthogonalityScorer = None
         self._disentanglementScorer = None
         self.device = next(self.model.parameters()).device
-        #self.send_model_to(self.device)
+        self.send_model_to(self.device)
 
     @classmethod
     def from_experiment(cls, experiment:pl.LightningModule, **kwargs):
@@ -66,6 +67,8 @@ class ModelHandler(object):
             except AttributeError: unit_dim=1
             self._orthogonalityScorer = LatentOrthogonalityEvaluator(self.model, self.dataloader.val,
                                                                      self.model.latent_size, unit_dim)
+
+        self.device = next(self.model.parameters()).device
         ortho_scores = self._orthogonalityScorer.score_latent(device=self.device,
                                                               strict=kwargs.get("strict",False),
                                                               hierarchy=kwargs.get("hierarchy",False))
@@ -91,6 +94,39 @@ class ModelHandler(object):
         FID_score = self.fidscorer.calculate_fid()
 
         return FID_score
+
+    def latent_responses(self, **kwargs):
+        """Computes latent response matrix for the given model plus handles storage
+        (saving and loading) of the same."""
+
+        num_batches = kwargs.get("num_batches",10)
+        num_samples = kwargs.get("num_samples",100)
+        store_it = kwargs.get("store",False)
+        load_it = kwargs.get("load", False)
+
+        if load_it:
+            print("Loading latent response matrix")
+            path = Path(self.config['logging_params']['save_dir']) / \
+                   self.config['logging_params']['name'] / \
+                   self.config['logging_params']['version'] / ("responses"+".pkl")
+            if os.path.exists(path):
+                with open(path, 'rb') as f:
+                    return pickle.load(f)
+            print("No matrix found at "+path)
+
+        print("Computing latent response matrix")
+        matrix = compute_response_matrix(self.dataloader.val, self.model, self.device,
+                                         num_batches, num_samples)
+
+        if store_it:
+            print("Storing latent response matrix")
+            path = Path(self.config['logging_params']['save_dir']) / \
+                   self.config['logging_params']['name'] / \
+                   self.config['logging_params']['version'] / ("responses"+".pkl")
+            with open(path, 'wb') as o:
+                pickle.dump(matrix, o)
+
+        return matrix
 
     def send_model_to(self, device:str):
         if device=="cpu": self.model.cpu()
@@ -138,6 +174,7 @@ class ModelHandler(object):
                                                                    params=self.config)
             self.model = self.experiment.model
             self.model.eval()
+            self.device = next(self.model.parameters()).device
             self.send_model_to(self.device)
         except ValueError:
             print(f"No checkpoint available at "+str(checkpoint_path)+". Cannot load trained weights.")
@@ -246,7 +283,9 @@ class VectorModelHandler(ModelHandler):
 
 
 if __name__ == '__main__':
-    handler = VectorModelHandler(model_name="VecESAE", model_version="standard", data="SynthVec", data_version="big", verbose=False)
-    train = handler.dataloader.train.dataset.dataset
-    print(train)
+    handler = VisualModelHandler.from_config(model_name="ESAE", model_version="standardS", data="MNIST", verbose=False)
+    handler.load_checkpoint()
+    handler.plot_model(do_originals=False, do_reconstructions=False,
+                       do_random_samples=False, do_traversals=False, do_loss2distortion=True,
+                       figsize=(50,20), nrows=2, ylim=180, xlim=2)
 

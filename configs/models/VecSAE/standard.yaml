@@ -16,3 +16,9 @@ logging_params:
 trainer_params:
   val_check_interval: 500 #check validation every 200 steps
   max_steps: 20000
+
+
+
+eval_params:
+  name: "scoring"
+  FID: False
