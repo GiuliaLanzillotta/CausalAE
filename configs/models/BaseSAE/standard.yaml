@@ -9,12 +9,6 @@ model_params:
   unit_dim: 1
   channels: 32
 
-
-logging_params:
-  score_every: 1000
-  #save_dir: "./logs/"
-
-
 eval_params:
   name: "scoring"
-  FID: True
+  FID: False

@@ -15,3 +15,7 @@ model_params:
   lamda: 2.0
   loss_type: "MSE"
 
+
+eval_params:
+  name: "scoring"
+  FID: False

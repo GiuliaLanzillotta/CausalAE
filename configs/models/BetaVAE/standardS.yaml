@@ -1,18 +1,22 @@
 model_params:
-  name: 'BaseSAE'
-  latent_vecs: 128 # for hybrid sampling
+  name: 'BetaVAE'
+  beta: 4.0
   residual: True
   latent_size: 6
   enc_depth: 6 #number of convolutional layers in the encoder
   dec_depth: 6
   num_pools: 3
-  unit_dim: 1
   channels: 32
+  dittadi: False
+  gaussian_init: 'xavier' #other option: 'normal'
   loss_type: "MSE"
+
+opt_params:
+  KL_decay: 1.0
+  beta_schedule: 'cyclic'
 
 
 eval_params:
   name: "scoring"
   FID: False
   latent_responses: True
-

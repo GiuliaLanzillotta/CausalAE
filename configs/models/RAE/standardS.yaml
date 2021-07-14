@@ -1,5 +1,5 @@
 model_params:
-  name: 'BaseSAE'
+  name: 'RAE'
   latent_vecs: 128 # for hybrid sampling
   residual: True
   latent_size: 6
@@ -8,11 +8,13 @@ model_params:
   num_pools: 3
   unit_dim: 1
   channels: 32
+  # --------- parameters related to MMD kernel setting ----------
+  MMD_kernel: "RBF" #or IMQ or cat
+  #"strict": False
+  #"hierarchy": False
+  lamda: 2.0
   loss_type: "MSE"
-
 
 eval_params:
   name: "scoring"
   FID: False
-  latent_responses: True
-

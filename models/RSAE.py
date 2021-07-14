@@ -1,12 +1,13 @@
 """Script for the 'Regularised SAE' model"""
-from torch import nn
-from torch import Tensor
+from abc import abstractmethod, ABC
+
 import torch
-from torchvision.transforms import Normalize
-from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock, GenerativeAE, SAE, utils, VecSCM, VecSCMDecoder, HybridAE
+from torch import Tensor
+from torch import nn
 from torch.nn import functional as F
+
+from . import FCBlock, SAE, utils, VecSCM, VecSCMDecoder, HybridAE, ConvAE, VecAE
 from .utils import act_switch
-from abc import ABCMeta, abstractmethod, ABC
 
 
 class RHybridAE(HybridAE, ABC):
@@ -62,7 +63,7 @@ class RSAE(RHybridAE, SAE):
 
 class VecRSAE(RHybridAE):
     """Version of RSAE model for vector based (not image based) data"""
-    def __init__(self, params: dict, dim_in: int, full: bool) -> None:
+    def __init__(self, params: dict, dim_in: int, full: bool, **kwargs) -> None:
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
         super(VecRSAE, self).__init__(params)
         self.dim_in = dim_in[0]
@@ -89,3 +90,20 @@ class VecRSAE(RHybridAE):
         if activate: output = self.act(output)
         return output
 
+class RAE(RHybridAE, ConvAE):
+    """Regularised version of the ConvAE"""
+    def __init__(self, params:dict, dim_in) -> None:
+        ConvAE.__init__(self, params, dim_in)
+        self.kernel_type = params["MMD_kernel"]
+
+    def decode(self, noise:Tensor, activate:bool):
+        return ConvAE.decode(self, noise, activate)
+
+class VecRAE(RHybridAE, VecAE):
+    """ Regularised version of the VecAE """
+    def __init__(self, params:dict, dim_in, **kwargs) -> None:
+        VecAE.__init__(self, params, dim_in)
+        self.kernel_type = params["MMD_kernel"]
+
+    def decode(self, noise:Tensor, activate:bool):
+        return VecAE.decode(self, noise, activate)

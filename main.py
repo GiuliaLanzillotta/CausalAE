@@ -92,9 +92,7 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, score=True):
         runner.save_checkpoint(str(checkpoint_path/"final.ckpt"))
     else:
         print(f"======= Testing {config['model_params']['name']} =======")
-        test_res = runner.test(experiment)
-        # saving results to .json
-        # resuming from checkpoint
+        runner.test(experiment)
         print("Testing finished. ")
 
     if score:
@@ -139,17 +137,17 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='BaseSAE')
+                        default='VecRAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="MNIST")
+                        default="SynthVec")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="standardS")
+                        default="standard")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",

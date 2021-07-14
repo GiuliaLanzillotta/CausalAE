@@ -15,7 +15,7 @@ model_params:
   lamda: 2.0
 
 
-
-logging_params:
-  score_every: 1000
-  #save_dir: "./logs/"
+eval_params:
+  name: "scoring"
+  FID: False
+  latent_responses: True

@@ -5,14 +5,16 @@ from .data import DatasetLoader
 from .VAEManager import VAEXperiment, cyclic_beta_schedule, linear_determ_warmup, VAEVecEXperiment
 from .SAEManager import SAEXperiment, SAEVecExperiment
 from .ESAEManager import ESAEXperiment, ESAEVecExperiment
-from .RSAEManager import RSAEXperiment, RSAEVecExperiment
+from .RSAEManager import RSAEXperiment, RegVecExperiment,RAEXperiment
 
 
 experiments_switch = {'BetaVAE':VAEXperiment,
                       'BaseSAE':SAEXperiment,
                       'ESAE': ESAEXperiment,
                       'RSAE': RSAEXperiment,
+                      'RAE': RAEXperiment,
                       'VecVAE':VAEVecEXperiment,
                       'VecSAE':SAEVecExperiment,
                       'VecESAE':ESAEVecExperiment,
-                      'VecRSAE':RSAEVecExperiment}
+                      'VecRSAE':RegVecExperiment,
+                      'VecRAE':RegVecExperiment}

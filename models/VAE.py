@@ -104,12 +104,11 @@ class VAE(VAEBase):
 
 class VecVAE(VAEBase):
     """Version of VAE model for vector based (not image based) data"""
-    def __init__(self, params: dict, dim_in: int, full: bool) -> None:
+    def __init__(self, params: dict, dim_in: int, **kwargs) -> None:
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
         super().__init__(params)
         self.dim_in = dim_in[0]
         self.beta = params["beta"]
-        self.full = full
         # dim_in is a single number (since the input is a vector)
         layers = list(torch.linspace(self.dim_in, self.latent_size, steps=params["depth"]).int().numpy())
         self.encoder = FCBlock(self.dim_in, layers, act_switch(params.get("act")))

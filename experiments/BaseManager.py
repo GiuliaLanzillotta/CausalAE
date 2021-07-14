@@ -113,7 +113,7 @@ class BaseVecExperiment(pl.LightningModule):
         self.params = params
         self.loader = DatasetLoader(params["data_params"])
         self.dim_in = self.loader.data_shape # C, H, W
-        self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in, full=params["model_params"]["full"])
+        self.model = models_switch[params["model_params"]["name"]](params["model_params"], self.dim_in, **params["model_params"])
         if verbose: self.print_model()
         self.model_visualiser = ModelVisualiser(self.model,
                                                 self.loader.test,

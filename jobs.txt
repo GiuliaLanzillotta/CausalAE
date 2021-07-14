@@ -38,3 +38,26 @@ bsub -oo "VecRSAEfull_discrete.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1
 bsub -oo "VecRSAEfull_continuous.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version full --data_version continuous
 bsub -oo "VecRSAEfull_standard.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version full --data_version standard
 bsub -oo "VecRSAEfull_big.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRSAE --data SynthVec --version full --data_version big
+
+bsub -oo "VecRAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRAE --data SynthVec --version standard --data_version discrete
+bsub -oo "VecRAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRAE --data SynthVec --version standard --data_version continuous
+bsub -oo "VecRAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRAE --data SynthVec --version standard --data_version big
+bsub -oo "VecRAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRAE --data SynthVec --version standard --data_version standard
+
+# MNIST EXPERIMENTS -----------------------------------------------
+# standard
+bsub -oo "SAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version standard
+bsub -oo "ESAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name ESAE --data MNIST --version standard
+bsub -oo "RSAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data MNIST --version standard
+bsub -oo "VAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data MNIST --version standard
+bsub -oo "RAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data MNIST --version standard
+
+#standard SMALL
+bsub -oo "SAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version standardS
+bsub -oo "ESAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name ESAE --data MNIST --version standardS
+bsub -oo "RSAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data MNIST --version standardS
+bsub -oo "VAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data MNIST --version standardS
+bsub -oo "RAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data MNIST --version standardS
+
+# unbalanced
+bsub -oo "SAE_U_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version unbalanced

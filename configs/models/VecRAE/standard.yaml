@@ -1,27 +1,23 @@
 model_params:
-  name: 'VecVAE'
-  beta: 4.0
+  name: 'VecRAE'
+  latent_vecs: 128 # for hybrid sampling
   latent_size: 10
   depth: 5 #number of linear layers in the encoder and decoder
-  dittadi: False
-  gaussian_init: 'xavier' #other option: 'normal'
-  loss_type: "MSE"
+  unit_dim: 1
+  # --------- parameters related to MMD kernel setting ----------
+  MMD_kernel: "RBF" #or IMQ or cat
+  #"strict": False
+  #"hierarchy": False
+  lamda: 2.0
   act: 'leaky_relu'
-
-opt_params:
-  KL_decay: 2.0
-  beta_schedule: 'cyclic'
 
 logging_params:
   manual_seed: 1265
-  #save_dir: "./logs/"
   score_every: 20 # number of validations
 
 trainer_params:
   val_check_interval: 500 #check validation every 200 steps
   max_steps: 20000
-
-
 
 eval_params:
   name: "scoring"

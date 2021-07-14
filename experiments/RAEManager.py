@@ -1,16 +1,16 @@
-"""Experiment manager for the R(egularised)-SAE model"""
+"""Experiment manager for the R(egularised)-AE model"""
 
 
-from models import RSAE, RAE
+from models import RAE
 from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
+from experiments.RSAEManager import RSAEXperiment, RegVecExperiment
 
 
-class RSAEXperiment(BaseVisualExperiment):
+class RAEXperiment(RSAEXperiment):
 
     def __init__(self, params: dict, verbose=True) -> None:
-        # When initialised the dataset loader will download or load the data from the folder
-        # split in train/test, apply transformations, divide in batches, extract data dimension
+        super(RAEXperiment, self).__init__(params, verbose)
         loader = DatasetLoader(params["data_params"])
         dim_in =  loader.data_shape # C, H, W
         model = RSAE(params["model_params"], dim_in)
@@ -55,17 +55,7 @@ class RSAEXperiment(BaseVisualExperiment):
         self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
 
 
-class RAEXperiment(RSAEXperiment):
-
-    def __init__(self, params: dict, verbose=True) -> None:
-        loader = DatasetLoader(params["data_params"])
-        dim_in =  loader.data_shape # C, H, W
-        model = RAE(params["model_params"], dim_in)
-        BaseVisualExperiment.__init__(self, params, model, loader, verbose=verbose)
-        self.use_MSE = params["model_params"]["loss_type"] == "MSE"
-
-
-class RegVecExperiment(BaseVecExperiment):
+class RSAEVecExperiment(BaseVecExperiment):
 
     def __init__(self, params: dict, verbose=True) -> None:
         super(RegVecExperiment, self).__init__(params, verbose=verbose)

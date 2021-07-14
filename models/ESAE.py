@@ -123,7 +123,7 @@ class ESAE(EHybridAE, SAE):
 
 class VecESAE(EHybridAE):
     """Version of ESAE model for vector based (not image based) data"""
-    def __init__(self, params: dict, dim_in: int, full: bool) -> None:
+    def __init__(self, params: dict, dim_in: int, full: bool, **kwargs) -> None:
         """ full: whether to use the VecSCMDecoder layer as a decoder"""
         super(VecESAE, self).__init__(params)
         self.dim_in = dim_in[0]
