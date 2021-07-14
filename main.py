@@ -92,7 +92,7 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, score=True):
         runner.save_checkpoint(str(checkpoint_path/"final.ckpt"))
     else:
         print(f"======= Testing {config['model_params']['name']} =======")
-        #test_res = runner.test(experiment)
+        test_res = runner.test(experiment)
         # saving results to .json
         # resuming from checkpoint
         print("Testing finished. ")

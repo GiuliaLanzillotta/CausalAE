@@ -5,7 +5,7 @@ model_params:
   num_pools: 4
   unit_dim: 1
   loss_type: "MSE"
-  channels: 32
+  channels: 64
 
 eval_params:
   name: "scoring"

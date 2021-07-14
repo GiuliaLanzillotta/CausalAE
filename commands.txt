@@ -1,0 +1,16 @@
+USEFUL BATCH COMMANDS
+
+----
+** copying responses matrix **
+
+cp /cluster/scratch/glanzillo/logs/ESAE/standardS_MNIST/responses.pkl ./logs/ESAE/standardS_MNIST/
+cp /cluster/scratch/glanzillo/logs/BaseSAE/standardS_MNIST/responses.pkl ./logs/BaseSAE/standardS_MNIST/
+cp /cluster/scratch/glanzillo/logs/RSAE/standardS_MNIST/responses.pkl ./logs/RSAE/standardS_MNIST/
+cp /cluster/scratch/glanzillo/logs/BetaVAE/standard_MNIST/responses.pkl ./logs/BetaVAE/standard_MNIST/
+
+
+
+cp /cluster/scratch/glanzillo/logs/VecSAE/standard_SynthVec_standard/responses.pkl ./logs/VecSAE/standard_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecESAE/standard_SynthVec_standard/responses.pkl ./logs/VecESAE/standard_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/standard_SynthVec_standard/responses.pkl ./logs/VecRSAE/standard_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_standard/responses.pkl ./logs/VecVAE/standard_SynthVec_standard/

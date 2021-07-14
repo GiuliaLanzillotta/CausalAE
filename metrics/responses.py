@@ -10,7 +10,8 @@ def compute_response_matrix(dataloader:DataLoader,
                             model:GenerativeAE,
                             device:str,
                             num_batches=10,
-                            num_samples=100):
+                            num_samples=100,
+                            scaling=True):
     """Computes latent response matrix as described in https://arxiv.org/abs/2106.16091
     Note: the response matrix will be approximated here as only a part of the dataset will be used
     - num_samples= number of samples from the aggregate posterior (to obtain v_i)"""
@@ -42,17 +43,23 @@ def compute_response_matrix(dataloader:DataLoader,
             for b in range(num_batches):
                 batch = originals[b]
                 batch_responses = original_responses[b]
+                new_codes = batch.clone().detach() # B x D
                 for i in range(num_samples):
-                    new_codes = batch.clone().detach() # B x D
                     idxs = torch.multinomial(torch.ones(N), B, replacement=True).to(device)
                     new_codes[:, d] = all_originals[idxs, d] # still B x D
                     new_responses = compute_response(new_codes, model, device)
                     delta = new_responses - batch_responses # B x D
-                    matrix[d, :] += torch.sum(delta**2, axis=0) # 1 x D
+                    matrix[d, :] = matrix[d, :] + torch.sum(delta**2, axis=0) # 1 x D
             updater(d+1, 1, D)
             matrix[d,:]/=float(N*num_samples) # taking the average at the end
+            if scaling: # normalise the dimension responses by its standard deviation
+                # if the response is higher than 1 the dimension affects others
+                # if it's less than 1 the dimension is not used
+                matrix[d,:]/=torch.std(matrix[d,:])
 
-            """ 
+        matrix = torch.sqrt(matrix)
+
+        """ 
 
             
             Rz = torch.vstack(original_responses)
@@ -67,7 +74,7 @@ def compute_response_matrix(dataloader:DataLoader,
             # square and average
             matrix[d, :] = torch.sum(delta**2, axis=[0,1])/(N*num_samples)
             updater(d+1, 1, D)
-            """
+        """
 
 
     return matrix
@@ -78,6 +85,6 @@ def compute_response(latent_vectors:Tensor, model:GenerativeAE, device:str):
     """ computes R(z) = E(D(z))
     Note: for now all our models have deterministic decoders."""
     with torch.no_grad():
-        z_hat = model.encode(model.decode(latent_vectors.to(device), activate=True))
+        z_hat = model.encode_mu(model.decode(latent_vectors.to(device), activate=True))
     return z_hat
 
