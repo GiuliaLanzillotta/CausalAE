@@ -412,7 +412,7 @@ class HybridLayer(nn.Module):
         return noise
 
     @staticmethod
-    def hybridise_from_N(inputs, parents, N, unit_dim, first=False):
+    def hybridise_from_N(inputs, parents, to_resample:List[int], unit_dim):
         """For each input hybridises N dimensions drawing components from the parents set while
         keeping track of the origin.
         first: whether to resample the first N dimensions or the last ones """
@@ -421,8 +421,7 @@ class HybridLayer(nn.Module):
         available_samples = parents.shape[0]
         chunks = torch.split(inputs, unit_dim, dim=1)
         parent_chunks = torch.split(parents, unit_dim, dim=1)
-        if first: to_resample = list(range(N))
-        else: to_resample = list(range(len(chunks)))[-N:]
+        N = len(to_resample)
         new_vectors = []; parent_idx = torch.zeros(K,N, dtype=int)
         resampled = 0
         for i, chunk in enumerate(chunks):
@@ -434,7 +433,7 @@ class HybridLayer(nn.Module):
                 resampled+=1
             else: new_vectors.append(chunk)
         new_vectors = torch.hstack(new_vectors) # KxM
-        return new_vectors, parent_idx, to_resample
+        return new_vectors, parent_idx
 
 
     def controlled_sampling(self, latent_vectors, hybridisation_level:int, num_samples:int=None, use_prior=False):

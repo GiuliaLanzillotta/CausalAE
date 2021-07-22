@@ -42,11 +42,15 @@ class ModelDisentanglementEvaluator(object):
         disentanglement_scores['MIG'] = mig_results['discrete_mig']
         complete_scores['MIG'] = mig_results
         # ModExp -----
-        print("Modularity explicitness scoring")
-        modexp_results = ModExp.compute_modularity_explicitness(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TRAIN_NUM,
-                                                                batch_size=self.dataloader.batch_size, device=device)
-        disentanglement_scores['ModExp'] = modexp_results['modularity_score']
-        complete_scores['ModExp'] = modexp_results
+        try:
+            print("Modularity explicitness scoring")
+            modexp_results = ModExp.compute_modularity_explicitness(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TRAIN_NUM,
+                                                                    batch_size=self.dataloader.batch_size, device=device)
+            disentanglement_scores['ModExp'] = modexp_results['modularity_score']
+            complete_scores['ModExp'] = modexp_results
+        except ValueError:
+            disentanglement_scores['ModExp'] = None
+            complete_scores['ModExp'] = None
         # SAP -----
         print("SAP scoring")
         sap_results = SAP.compute_sap(self.dataloader, self.model.encode_mu, num_train=TRAIN_NUM, num_test=TEST_NUM,

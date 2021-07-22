@@ -11,8 +11,10 @@ models_switch = {"BetaVAE":VAE,
                  "ESAE":ESAE,
                  "RSAE":RSAE,
                  "RAE":RAE,
+                 "AE": ConvAE,
                  "VecVAE":VecVAE,
                  "VecSAE":VecSAE,
                  "VecESAE":VecESAE,
                  "VecRSAE":VecRSAE,
-                 "VecRAE":VecRAE}
+                 "VecRAE":VecRAE,
+                 "VecAE": VecAE}

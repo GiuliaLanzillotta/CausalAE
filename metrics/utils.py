@@ -139,8 +139,8 @@ def drop_constant_dims(ys):
 def keep_only_active_everywhere(ys_train, ys_test):
     """Only keeps the dimensions (axis 0) that are active both in train and test set"""
     _, active_classes_train = drop_constant_dims(ys_train)
-    _, active_classes_train = drop_constant_dims(ys_test)
-    everywhere_active_classes = active_classes_train*active_classes_train # logical AND
+    _, active_classes_test = drop_constant_dims(ys_test)
+    everywhere_active_classes = active_classes_train*active_classes_test # logical AND
 
     if not everywhere_active_classes.any():
         return None

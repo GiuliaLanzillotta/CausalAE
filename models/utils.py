@@ -179,11 +179,15 @@ def compute_MMD(fromP:Tensor, fromQ:Tensor, kernel="RBF", **kwargs):
     # latents with more spread to be penalised more than the others by the regularisation
     # term -> which will in turn make them react stronger to it
     # the idea is to keep the natural spread that the latent distribution has
-    normls = Normalize(0,1)
-    PN = normls(fromP.permute(1,0).unsqueeze(2)).squeeze(2).T
-    QN = normls(fromQ.permute(1,0).unsqueeze(2)).squeeze(2).T
+
+    all_ = torch.vstack([fromP,fromQ])
+    means = all_.mean(dim=0, keepdim=True)
+    stds = all_.std(dim=0, keepdim=True)
+    PN = (fromP - means) / stds
+    QN = (fromQ -means) / stds  #standardise both samples with respect to the input distribution
+
     device = kwargs.get('device')
-    #TODO: insert hierarchy RBF
+    #TODO: insert hierarchy RBF -why though? we would end up giving more slack to some dimensions: is this what we want?
     if kernel=="RBF":
         _MMD = MMD(*RBF_kernel(PN, QN, device))
     elif kernel=="IMQ":

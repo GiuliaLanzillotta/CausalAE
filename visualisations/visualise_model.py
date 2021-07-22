@@ -2,12 +2,14 @@
 import numpy as np
 import os
 import torch
+from torch import Tensor
 from torchvision import utils as tvu
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 from models import GenerativeAE, ESAE, HybridLayer
 import torchvision
 import seaborn as sns
+import pandas as pd
 from torch.nn import functional as F
 
 import itertools
@@ -17,6 +19,7 @@ class ModelVisualiser(object):
     def __init__(self, model:GenerativeAE,test_dataloader, **kwargs):
         super(ModelVisualiser, self).__init__()
         self.model = model
+        self.dataloader = test_dataloader
         self.test_input, _ = next(iter(test_dataloader))
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
@@ -27,6 +30,8 @@ class ModelVisualiser(object):
         grid_originals = torchvision.utils.make_grid(test_sample, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_originals.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.grid(b=None)
         return figure
 
     def plot_reconstructions(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
@@ -38,6 +43,8 @@ class ModelVisualiser(object):
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.grid(b=None)
         return figure
 
     def plot_samples_from_prior(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
@@ -49,6 +56,8 @@ class ModelVisualiser(object):
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.grid(b=None)
         return figure
 
     def plot_samples_controlled_hybridisation(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
@@ -63,6 +72,8 @@ class ModelVisualiser(object):
                 grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
                 figure = plt.figure(figsize=figsize)
                 plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+                plt.axis('off')
+                plt.grid(b=None)
                 figures.append(figure)
         return figures
 
@@ -85,47 +96,117 @@ class ModelVisualiser(object):
         grid_traversals = torchvision.utils.make_grid(traversals, nrow=steps)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_traversals.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.grid(b=None)
         return figure
 
-    def plot_hybridisation(self, Ni=10, Np=100, N=2, first=False, device=None, figsize=(12,12), **kwargs):
+    def plot_hybridisation(self, Np=100, device=None, figsize=(12,12), **kwargs):
         """Takes Ni samples and hybridises them with Np samples, tracking the hybridisation and
         plotting the result.
-        - N : number of dimensions that will undergo hybridisation """
+        - N : number of dimensions that will undergo hybridisation
+        - Ni : number of times the
+        - Np : size of parents samples set to draw from """
         # extract samples
-        all_samples = self.test_input[:Ni+Np]
+        all_samples = self.test_input[:1+Np]
         # encode
         with torch.no_grad():
             codes = self.model.encode_mu(all_samples.to(device), update_prior=False)
         M = codes.shape[1]
-        inputs = codes[:Ni]
-        parents = codes[Ni:Ni+Np]
+        base = codes[0]
+        parents = codes[1:]
         # hybridise manually with hybrid layer
         try: unit_dim = self.model.unit_dim #SAE case
         except AttributeError: unit_dim=1 #VAE case
-        new_vectors, parent_idx, to_resample = HybridLayer.hybridise_from_N(inputs, parents, N, unit_dim=unit_dim, first=first)
-        # make an Nix(1+1+Np) grid plotting all the samples together with their parents
         complete_set = []
-        for i,vec in enumerate(new_vectors):
-            complete_set.append(vec.view(1,M))
-            complete_set.append(inputs[i].view(1,M))
-            complete_set.append(parents[parent_idx[i]])
-        # this is a (2+N)*Ni long tensor
+        for u in range(M//unit_dim):
+            # two M dimensional vectors
+            new_vector, parent_idx = HybridLayer.hybridise_from_N(base, parents, [u], unit_dim=unit_dim)
+            # 1x(3) grid plotting all the samples together with their parents
+            complete_set.append(new_vector.view(1,M))
+            complete_set.append(base.view(1,M))
+            complete_set.append(parents[parent_idx])
+
+        # this is a (3*M) long tensor
         complete_set = torch.cat(complete_set, dim=0)
         # decode and plot
         with torch.no_grad():
             recons = self.model.decode(complete_set.to(device), activate=True)
-        grid_recons = torchvision.utils.make_grid(recons, nrow=N+2)
+        grid_recons = torchvision.utils.make_grid(recons, nrow=3) #nrow is actually ncol
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.grid(b=None)
 
         return figure
 
-    def plot_loss2distortion(self, device=None, **kwargs):
-        """Plotting a curve measuring the amount of distortion along each dimension for
-        multiple starting points"""
+    def plot_marginal(self, device=None, **kwargs):
+        """plotting marginal distributions over latent dimensions"""
         figsize = kwargs.get("figsize",(20,20))
+        num_batches = kwargs.get("num_batches",10)
+        n_bins = kwargs.get("bins",200)
+        pair = kwargs.get("pair",False) # whether to make a pairplot over the latents
+        xlim = kwargs.get("xlim")
+        font_scale = kwargs.get("font_scale",20)
+
+        _all_codes = []
+        for b in range(num_batches):
+            batch = next(iter(self.dataloader))
+            with torch.no_grad():
+                codes = self.model.encode_mu(batch.to(device), update_prior=True, integrate=True)
+                _all_codes.append(codes)
+        _all_codes = torch.vstack(_all_codes) # (B x num batches) x D
+
+        D, N = _all_codes.shape
+        if not pair:
+            nrows = 3; ncols = D//nrows +1 if D%nrows!=0 else D//nrows
+            fig, ax = plt.subplots(nrows, ncols, sharey=True, figsize=figsize)
+            dim=0
+            for row in range(nrows):
+                for col in range(ncols):
+                    if dim==D: break
+                    axi = sns.histplot(codes[:,dim].cpu().numpy(), ax=ax[row,col], kde=True, bins=n_bins, fill=False)
+                    axi.set(ylabel='Number of observations', xlabel=f'Latent dim {dim}')
+                    axi.tick_params(axis="x", labelsize=font_scale)
+                    axi.tick_params(axis="y", labelsize=font_scale)
+                    if xlim is not None: axi.set(xlim=(-xlim, xlim))
+                    dim+=1
+            return fig
+
+        fig = plt.figure(figsize=figsize)
+        axi = sns.pairplot(pd.DataFrame(_all_codes.cpu().numpy()), diag_kws = {'alpha':0.55, 'bins':200, 'kde':True})
+        return fig
+
+    def compute_output_distortion(self, latents, originals, device):
+        """Computes loss on the pixel space for the given latents"""
+        with torch.no_grad():
+            recons = self.model.decode(latents.to(device), activate=True) # N x image_dim
+            diff = recons - originals.to(device) # N x image_dim
+            loss = torch.norm(diff, 1, dim=tuple(range(diff.dim())[1:])) # N x 1
+        return loss
+
+    def compute_max_loss(self, codes:Tensor, originals:Tensor, eps:float, dim:int, device):
+        """Computes value of maximal loss for an epsilon sized distortion on the dimension dim"""
+        altered_codes = codes.clone()
+        # positive distortion
+        altered_codes[:,dim] += eps
+        losses = self.compute_output_distortion(altered_codes, originals, device)
+        # negative distortion
+        altered_codes = codes.clone()
+        altered_codes[:,dim] -= eps
+        new_losses = self.compute_output_distortion(altered_codes, originals, device)
+        losses = torch.max(torch.stack([losses, new_losses]), dim=0)[0] # N x 1
+        return losses # N x 1 tensor
+
+
+    def plot_loss2marginaldistortion(self, device=None, **kwargs):
+        """Given a fixed distortion size the plot shows the amount of error increase in the output
+        given by applying the distortion to the latent space - basically showing the effect of an epsilon-sized L1
+        adversarial attack on each latent dimension"""
+        figsize = kwargs.get("figsize",(20,15))
         N = kwargs.get("N",50)
         steps = kwargs.get("steps",21) # odd steps will include 0 in the linspace
+        relative = kwargs.get("relative",True) # whether to print only the difference from the base error or both base and incurred error
+        ro = kwargs.get("ro",0.1) # magnitude of distortion (in percentage) - it varies for each dimension depending on its range
         markersize = kwargs.get("markersize",20)
         font_scale = kwargs.get("font_scale",20)
         ylim = kwargs.get("ylim")
@@ -137,8 +218,69 @@ class ModelVisualiser(object):
         with torch.no_grad():
             codes = self.model.encode_mu(base_vecs.to(device), update_prior=True)
             ranges = self.model.get_prior_range() # (min, max) for each dimension
+
+        D = len(ranges)
+        distortions = [ro*(M-m) for (m,M) in ranges] # D x 1
+        ys = []
+        for i in range(D):
+            # losses is a list of floats
+            losses = self.compute_max_loss(codes, base_vecs, eps=distortions[i], dim=i, device=device)
+            ys.append(losses)
+        ys = torch.stack(ys).cpu().numpy() # D x N
+        initial_loss = self.compute_output_distortion(codes, base_vecs, device).cpu().numpy() # N x 1
+
+
+        nrows = kwargs.get("nrows", D//3); ncols = D//nrows +1 if D%nrows!=0 else D//nrows
+        sns.set_style('darkgrid')
+        fig, ax = plt.subplots(nrows, ncols, sharey=True, figsize=figsize)
+        dim=0
+        for row in range(nrows):
+            for col in range(ncols):
+                if dim==D: break
+                ax[row,col].set_title(f"Latent dimension {dim}")
+                x = codes[:,dim].cpu().numpy() # N x 1
+                Nlosses = ys[dim,:] # N x 1
+                hues = None
+                if not relative:
+                    y = np.hstack([Nlosses,initial_loss])
+                    x = np.tile(x,2)
+                    hues = [i for i in range(2) for _ in range(N)] # [1,1,1,...,1,2,2,2,...,2]
+                else:
+                    # relative increase
+                    y = (Nlosses - initial_loss)/distortions[dim]
+                axi = sns.lineplot(x, y, ax=ax[row,col], marker=".", markersize=markersize, hue=hues, palette="Blues")
+                if not relative: axi.legend(labels=['+ distortion', 'base loss'])
+                ax[row,col].axvline(np.mean(x), color='r', linestyle="--")
+                axi.set(ylabel='Worst L1 distance increase for fixed latent distortion',
+                        xlabel=f'Latent dim {dim}')
+                axi.tick_params(axis="x", labelsize=font_scale)
+                axi.tick_params(axis="y", labelsize=font_scale)
+                if ylim is not None: axi.set(ylim=(0, ylim))
+                if xlim is not None: axi.set(xlim=(-xlim, xlim))
+                dim+=1
+
+        return fig
+
+    def plot_loss2distortion(self, device=None, **kwargs):
+        """Plotting a curve measuring the amount of distortion along each dimension for
+        multiple starting points"""
+        figsize = kwargs.get("figsize",(20,15))
+        N = kwargs.get("N",50)
+        steps = kwargs.get("steps",21) # odd steps will include 0 in the linspace
+        markersize = kwargs.get("markersize",20)
+        font_scale = kwargs.get("font_scale",20)
+        x_scale = kwargs.get("x_scale",1.0) # inflating the size of the latent
+        ylim = kwargs.get("ylim")
+        xlim = kwargs.get("xlim")
+
+        idx = torch.randperm(self.test_input.shape[0])[:N]
+        base_vecs = self.test_input[idx]
+        # encode - apply distortion - decode
+        with torch.no_grad():
+            codes = self.model.encode_mu(base_vecs.to(device), update_prior=True)
+            ranges = self.model.get_prior_range() # (min, max) for each dimension
         widths = [(M-m)/2 for (m,M) in ranges]
-        distortion_levels = [np.linspace(-w,+w,steps) for w in widths]
+        distortion_levels = [np.linspace(-w*x_scale,w*x_scale,steps) for w in widths]
         ys = []
         for i in range(N):
             # losses is a list of floats
@@ -169,7 +311,7 @@ class ModelVisualiser(object):
 
         return fig
 
-    def do_latent_distortion_multi_dim(self, latent_vector, distortion_levels, original_sample, device=None):
+    def do_latent_distortion_multi_dim(self, latent_vector, distortion_levels, original_sample, device="cpu"):
         """ For each dimension in the original latent vector applies a sliding level of distortion
         Returns tensor of size (num_dimensions) x num_steps - where num_steps is the number of distortion levels
         applied to each dimension"""
@@ -182,15 +324,10 @@ class ModelVisualiser(object):
             # Intervenes in the latent space.
             _vectors[:, i] = dist + _vectors[:,i]
             # Generate the batch of images and computes the loss as MSE distance
-            with torch.no_grad():
-                recons = self.model.decode(torch.tensor(_vectors, dtype=torch.float).to(device), activate=True)
-                # recons has shape stepsx(inout shape)
-            diff = recons - original_sample.to(device) # n_steps x image_dim
-            loss = torch.norm(diff, 1, dim=tuple(range(diff.dim())[1:])) # n_steps x 1
+            _vectors = torch.tensor(_vectors, dtype=torch.float)
+            loss = self.compute_output_distortion(_vectors, original_sample, device=device)
             losses.append(loss)
         return torch.vstack(losses) # D x n_steps
-
-
 
     def do_latent_traversals_multi_dim(self, latent_vector, dimensions, values, device=None):
         """ Creates a tensor where each element is obtained by passing a

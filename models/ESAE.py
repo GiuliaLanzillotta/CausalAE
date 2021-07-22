@@ -40,6 +40,7 @@ class EHybridAE(HybridAE, ABC):
         N = X_hat.shape[0]
         if level==0: factors= torch.ones(N).to(device)
         else:
+            #FIXME: this per-dimension standardisation disrupts inter units relationships?
             means = Z.mean(dim=0, keepdim=True)
             stds = Z.std(dim=0, keepdim=True)
             ZN = (Z - means) / stds

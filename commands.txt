@@ -8,15 +8,65 @@ cp /cluster/scratch/glanzillo/logs/BaseSAE/standardS_MNIST/responses.pkl ./logs/
 cp /cluster/scratch/glanzillo/logs/RSAE/standardS_MNIST/responses.pkl ./logs/RSAE/standardS_MNIST/
 cp /cluster/scratch/glanzillo/logs/BetaVAE/standard_MNIST/responses.pkl ./logs/BetaVAE/standard_MNIST/
 
-
-
 cp /cluster/scratch/glanzillo/logs/VecSAE/standard_SynthVec_standard/responses.pkl ./logs/VecSAE/standard_SynthVec_standard/
 cp /cluster/scratch/glanzillo/logs/VecESAE/standard_SynthVec_standard/responses.pkl ./logs/VecESAE/standard_SynthVec_standard/
 cp /cluster/scratch/glanzillo/logs/VecRSAE/standard_SynthVec_standard/responses.pkl ./logs/VecRSAE/standard_SynthVec_standard/
 cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_standard/responses.pkl ./logs/VecVAE/standard_SynthVec_standard/
 
+** copying scoring results**
+
+cp /cluster/scratch/glanzillo/logs/VecSAE/standard_SynthVec_standard/scoring_noises.pkl ./logs/VecSAE/standard_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecSAE/full_SynthVec_standard/scoring_noises.pkl ./logs/VecSAE/full_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecESAE/standard_SynthVec_standard/scoring_noises.pkl ./logs/VecESAE/standard_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/standard_SynthVec_standard/scoring_noises.pkl ./logs/VecRSAE/standard_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/full_SynthVec_standard/scoring_noises.pkl ./logs/VecRSAE/full_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_standard/scoring_noises.pkl ./logs/VecVAE/standard_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_standard/scoring_noises.pkl ./logs/VecRAE/standard_SynthVec_standard/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_standard/scoring_noises.pkl ./logs/VecAE/standard_SynthVec_standard/
+
+cp /cluster/scratch/glanzillo/logs/VecSAE/standard_SynthVec_discrete/scoring_noises.pkl ./logs/VecSAE/standard_SynthVec_discrete/
+cp /cluster/scratch/glanzillo/logs/VecSAE/full_SynthVec_discrete/scoring_noises.pkl ./logs/VecSAE/full_SynthVec_discrete/
+cp /cluster/scratch/glanzillo/logs/VecESAE/standard_SynthVec_discrete/scoring_noises.pkl ./logs/VecESAE/standard_SynthVec_discrete/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/standard_SynthVec_discrete/scoring_noises.pkl ./logs/VecRSAE/standard_SynthVec_discrete/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/full_SynthVec_discrete/scoring_noises.pkl ./logs/VecRSAE/full_SynthVec_discrete/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_discrete/scoring_noises.pkl ./logs/VecVAE/standard_SynthVec_discrete/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_discrete/scoring_noises.pkl ./logs/VecRAE/standard_SynthVec_discrete/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_discrete/scoring_noises.pkl ./logs/VecAE/standard_SynthVec_discrete/
+
+cp /cluster/scratch/glanzillo/logs/VecSAE/standard_SynthVec_continuous/scoring_noises.pkl ./logs/VecSAE/standard_SynthVec_continuous/
+cp /cluster/scratch/glanzillo/logs/VecSAE/full_SynthVec_continuous/scoring_noises.pkl ./logs/VecSAE/full_SynthVec_continuous/
+cp /cluster/scratch/glanzillo/logs/VecESAE/standard_SynthVec_continuous/scoring_noises.pkl ./logs/VecESAE/standard_SynthVec_continuous/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/standard_SynthVec_continuous/scoring_noises.pkl ./logs/VecRSAE/standard_SynthVec_continuous/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/full_SynthVec_continuous/scoring_noises.pkl ./logs/VecRSAE/full_SynthVec_continuous/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_continuous/scoring_noises.pkl ./logs/VecVAE/standard_SynthVec_continuous/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_continuous/scoring_noises.pkl ./logs/VecRAE/standard_SynthVec_continuous/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_continuous/scoring_noises.pkl ./logs/VecAE/standard_SynthVec_continuous/
+
+cp /cluster/scratch/glanzillo/logs/VecSAE/standard_SynthVec_big/scoring_noises.pkl ./logs/VecSAE/standard_SynthVec_big/
+cp /cluster/scratch/glanzillo/logs/VecSAE/full_SynthVec_big/scoring_noises.pkl ./logs/VecSAE/full_SynthVec_big/
+cp /cluster/scratch/glanzillo/logs/VecESAE/standard_SynthVec_big/scoring_noises.pkl ./logs/VecESAE/standard_SynthVec_big/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/standard_SynthVec_big/scoring_noises.pkl ./logs/VecRSAE/standard_SynthVec_big/
+cp /cluster/scratch/glanzillo/logs/VecRSAE/full_SynthVec_big/scoring_noises.pkl ./logs/VecRSAE/full_SynthVec_big/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_big/scoring_noises.pkl ./logs/VecVAE/standard_SynthVec_big/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_big/scoring_noises.pkl ./logs/VecRAE/standard_SynthVec_big/
+cp /cluster/scratch/glanzillo/logs/VecVAE/standard_SynthVec_big/scoring_noises.pkl ./logs/VecAE/standard_SynthVec_big/
+
 ** copying models **
 cp -r /cluster/scratch/glanzillo/logs/BaseSAE/standardS_MNIST/ ./logs/BaseSAE/
 cp -r /cluster/scratch/glanzillo/logs/ESAE/standardS_MNIST/ ./logs/ESAE/
+cp -r /cluster/scratch/glanzillo/logs/ESAE/standard_MNIST/ ./logs/ESAE/
 cp -r /cluster/scratch/glanzillo/logs/RSAE/standardS_MNIST/ ./logs/RSAE/
 cp -r /cluster/scratch/glanzillo/logs/RAE/standardS_MNIST/ ./logs/RAE/
+cp -r /cluster/scratch/glanzillo/logs/BetaVAE/standardS_MNIST/ ./logs/BetaVAE/
+cp -r /cluster/scratch/glanzillo/logs/BetaVAE/standard_MNIST/ ./logs/BetaVAE/
+
+
+
+** removing models **
+rm -r /cluster/scratch/glanzillo/logs/BaseSAE/standardS_MNIST/
+rm -r /cluster/scratch/glanzillo/logs/ESAE/standardS_MNIST/
+rm -r /cluster/scratch/glanzillo/logs/ESAE/standard_MNIST/
+rm -r /cluster/scratch/glanzillo/logs/RSAE/standardS_MNIST/
+rm -r /cluster/scratch/glanzillo/logs/RAE/standardS_MNIST/
+rm -r /cluster/scratch/glanzillo/logs/BetaVAE/standardS_MNIST/
+rm -r /cluster/scratch/glanzillo/logs/BetaVAE/standard_MNIST/

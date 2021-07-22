@@ -45,6 +45,7 @@ class GenerativeAE(ABC):
     def get_prior_range(self):
         """ returns a range in format [(min, max)] for every dimension that should contain
         most of the data density (905)"""
+        #TODO: change to aggregate posterior range
 
 
 

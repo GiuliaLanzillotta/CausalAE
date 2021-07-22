@@ -44,6 +44,13 @@ bsub -oo "VecRAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" pytho
 bsub -oo "VecRAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRAE --data SynthVec --version standard --data_version big
 bsub -oo "VecRAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecRAE --data SynthVec --version standard --data_version standard
 
+bsub -oo "VecAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecAE --data SynthVec --version standard --data_version discrete
+bsub -oo "VecAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecAE --data SynthVec --version standard --data_version continuous
+bsub -oo "VecAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecAE --data SynthVec --version standard --data_version big
+bsub -oo "VecAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name VecAE --data SynthVec --version standard --data_version standard
+
+
+
 # MNIST EXPERIMENTS -----------------------------------------------
 # standard
 bsub -oo "SAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version standard
@@ -51,6 +58,7 @@ bsub -oo "ESAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python 
 bsub -oo "RSAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data MNIST --version standard
 bsub -oo "VAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data MNIST --version standard
 bsub -oo "RAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data MNIST --version standard
+bsub -oo "AE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data MNIST --version standard
 
 #standard SMALL
 bsub -oo "SAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version standardS
@@ -58,6 +66,15 @@ bsub -oo "ESAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" pytho
 bsub -oo "RSAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data MNIST --version standardS
 bsub -oo "VAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data MNIST --version standardS
 bsub -oo "RAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data MNIST --version standardS
+bsub -oo "AE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data MNIST --version standardS
 
 # unbalanced
 bsub -oo "SAE_U_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version unbalanced
+
+# 3DS
+bsub -oo "SAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data 3DS --version v121
+bsub -oo "ESAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name ESAE --data 3DS --version v121
+bsub -oo "VAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data 3DS --version v121
+bsub -oo "RSAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data 3DS --version v121
+bsub -oo "RAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data 3DS --version v121
+bsub -oo "AE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data 3DS --version v121
