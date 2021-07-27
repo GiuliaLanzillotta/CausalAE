@@ -13,7 +13,7 @@ import glob
 import json
 import time
 from visualisations import ModelVisualiser, SynthVecDataVisualiser
-from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator
+from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, DriftEvaluator
 import pytorch_lightning as pl
 from metrics.responses import compute_response_matrix
 
@@ -23,6 +23,7 @@ from torchsummary import summary
 
 class ModelHandler(object):
     """Offers a series of tools to inspect a given model."""
+    #TODO: add suport for multi-dimensional latent units
     def __init__(self, experiment:pl.LightningModule, **kwargs):
         self.config = experiment.params
         self.experiment = experiment
@@ -35,6 +36,7 @@ class ModelHandler(object):
         self.fidscorer = None
         self._orthogonalityScorer = None
         self._disentanglementScorer = None
+        self._driftScorer = None
         self.device = next(self.model.parameters()).device
         self.send_model_to(self.device)
 
@@ -87,13 +89,29 @@ class ModelHandler(object):
                                                  device=self.device)
             inputs, labels = next(iter(self.dataloader.val))
             #TODO: check whether we want to evaluate prior samples here
-            reconstructions = self.model.generate(inputs, activate=True)
+            reconstructions = self.model.generate(inputs.to(self.device), activate=True)
             try: self.fidscorer.get_activations(inputs, reconstructions) #store activations for current batch
-            except Exception: print("Reached the end of FID scorer buffer")
+            except Exception as e:
+                print("Reached the end of FID scorer buffer")
+                raise(e)
 
         FID_score = self.fidscorer.calculate_fid()
 
         return FID_score
+
+    def initialise_driftScorer(self, **kwargs):
+
+        if self._driftScorer is not None:
+            return
+
+        random_seed = kwargs.get("random_seed",11)
+        independent = kwargs.get("independent",True)
+        drift_norm = kwargs.get("drift_norm", 1)
+        self._driftScorer = DriftEvaluator(self.model, self.dataloader.val, independent=independent,
+                                           drift_norm = drift_norm, device = self.device,
+                                           random_seed=random_seed)
+
+
 
     def latent_responses(self, **kwargs):
         """Computes latent response matrix for the given model plus handles storage
@@ -225,7 +243,8 @@ class VisualModelHandler(ModelHandler):
     """Offers a series of tools to inspect a given model."""
     def plot_model(self, do_originals=False, do_reconstructions=False,
                    do_random_samples=False, do_traversals=False, do_hybrisation=False,
-                   do_loss2distortion=False, **kwargs):
+                   do_loss2distortion=False, do_marginal=False, do_loss2marginal=False,
+                   **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -243,6 +262,10 @@ class VisualModelHandler(ModelHandler):
             plots["hybrids"] = self.visualiser.plot_hybridisation(device=self.device, **kwargs)
         if do_loss2distortion:
             plots["distortion"] = self.visualiser.plot_loss2distortion(device=self.device, **kwargs)
+        if do_marginal:
+            plots["marginal"] = self.visualiser.plot_marginal(device=self.device, **kwargs)
+        if do_loss2marginal:
+            plots["marginal_distortion"] = self.visualiser.plot_loss2marginaldistortion(device=self.device, **kwargs)
 
         return plots
 
@@ -277,17 +300,24 @@ class VectorModelHandler(ModelHandler):
             self.model_visualiser = ModelVisualiser(self.model,
                                                     self.dataloader.test)
 
-        figure = self.model_visualiser.plot_loss2distortion(device=self.device, **kwargs)
-        plots["distortion"] = figure
+        plots["distortion"] = self.visualiser.plot_loss2distortion(device=self.device, **kwargs)
+        plots["marginal"] = self.visualiser.plot_marginal(device=self.device, **kwargs)
+        plots["marginal_distortion"] = self.visualiser.plot_loss2marginaldistortion(device=self.device, **kwargs)
 
         return plots
 
 
 
 if __name__ == '__main__':
-    handler = VisualModelHandler.from_config(model_name="ESAE", model_version="standardS", data="MNIST", verbose=False)
+
+    params = {"model_name":"BetaVAE",
+              "model_version":"standardS",
+              "data" : "MNIST"}
+    handler = VisualModelHandler.from_config(**params)
+    handler.config["logging_params"]["save_dir"] = "./logs"
     handler.load_checkpoint()
-    handler.plot_model(do_originals=False, do_reconstructions=False,
-                       do_random_samples=False, do_traversals=False, do_loss2distortion=True,
-                       figsize=(50,20), nrows=2, ylim=180, xlim=2)
+    res = handler.plot_model(do_originals=False, do_reconstructions=False,
+                             do_random_samples=False, do_traversals=False,
+                             do_hybrisation=True, do_loss2distortion=False,
+                             do_marginal=False, do_loss2marginal=False)
 

@@ -59,8 +59,10 @@ class BaseVisualExperiment(pl.LightningModule):
             logger.add_figure("originals", figure)
 
         if distortion:
-            figure = self.visualiser.plot_loss2distortion(device=self.device)
+            figure = self.visualiser.plot_loss2distortion(device=self.device, **self.params['vis_params'])
             logger.add_figure("Output-Latent distortion plot", figure, global_step=self.global_step)
+            figure = self.visualiser.plot_loss2marginaldistortion(device=self.device, **self.params['vis_params'])
+            logger.add_figure("Marginal distortion", figure, global_step=self.global_step)
 
         if isinstance(self.model, ESAE):
             figures = self.visualiser.plot_samples_controlled_hybridisation(device=self.device)

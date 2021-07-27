@@ -1,3 +1,3 @@
 dataset_name: MNIST
 num_workers: 1
-FID_scoring: False
+FID_scoring: True

@@ -107,24 +107,27 @@ class ModelVisualiser(object):
         - Ni : number of times the
         - Np : size of parents samples set to draw from """
         # extract samples
+        seed = kwargs.get("seed",11)
+        rng = np.random.RandomState(seed)
         all_samples = self.test_input[:1+Np]
         # encode
         with torch.no_grad():
             codes = self.model.encode_mu(all_samples.to(device), update_prior=False)
         M = codes.shape[1]
-        base = codes[0]
-        parents = codes[1:]
+        base_idx = rng.randint(1+Np)
+        base = codes[base_idx].view(1,-1)
+        parents = torch.vstack([codes[:base_idx], codes[base_idx+1:]])
         # hybridise manually with hybrid layer
         try: unit_dim = self.model.unit_dim #SAE case
         except AttributeError: unit_dim=1 #VAE case
         complete_set = []
         for u in range(M//unit_dim):
             # two M dimensional vectors
-            new_vector, parent_idx = HybridLayer.hybridise_from_N(base, parents, [u], unit_dim=unit_dim)
+            new_vector, parent_idx = HybridLayer.hybridise_from_N(base, parents, [u], unit_dim=unit_dim, random_state=rng)
             # 1x(3) grid plotting all the samples together with their parents
             complete_set.append(new_vector.view(1,M))
             complete_set.append(base.view(1,M))
-            complete_set.append(parents[parent_idx])
+            complete_set.append(parents[parent_idx].view(1,M))
 
         # this is a (3*M) long tensor
         complete_set = torch.cat(complete_set, dim=0)
@@ -150,13 +153,13 @@ class ModelVisualiser(object):
 
         _all_codes = []
         for b in range(num_batches):
-            batch = next(iter(self.dataloader))
+            batch, _ = next(iter(self.dataloader))
             with torch.no_grad():
                 codes = self.model.encode_mu(batch.to(device), update_prior=True, integrate=True)
                 _all_codes.append(codes)
         _all_codes = torch.vstack(_all_codes) # (B x num batches) x D
 
-        D, N = _all_codes.shape
+        N, D = _all_codes.shape
         if not pair:
             nrows = 3; ncols = D//nrows +1 if D%nrows!=0 else D//nrows
             fig, ax = plt.subplots(nrows, ncols, sharey=True, figsize=figsize)
@@ -164,7 +167,7 @@ class ModelVisualiser(object):
             for row in range(nrows):
                 for col in range(ncols):
                     if dim==D: break
-                    axi = sns.histplot(codes[:,dim].cpu().numpy(), ax=ax[row,col], kde=True, bins=n_bins, fill=False)
+                    axi = sns.histplot(_all_codes[:,dim].cpu().numpy(), ax=ax[row,col], kde=True, bins=n_bins, fill=False)
                     axi.set(ylabel='Number of observations', xlabel=f'Latent dim {dim}')
                     axi.tick_params(axis="x", labelsize=font_scale)
                     axi.tick_params(axis="y", labelsize=font_scale)
@@ -176,7 +179,7 @@ class ModelVisualiser(object):
         axi = sns.pairplot(pd.DataFrame(_all_codes.cpu().numpy()), diag_kws = {'alpha':0.55, 'bins':200, 'kde':True})
         return fig
 
-    def compute_output_distortion(self, latents, originals, device):
+    def _compute_output_distortion(self, latents, originals, device):
         """Computes loss on the pixel space for the given latents"""
         with torch.no_grad():
             recons = self.model.decode(latents.to(device), activate=True) # N x image_dim
@@ -184,28 +187,26 @@ class ModelVisualiser(object):
             loss = torch.norm(diff, 1, dim=tuple(range(diff.dim())[1:])) # N x 1
         return loss
 
-    def compute_max_loss(self, codes:Tensor, originals:Tensor, eps:float, dim:int, device):
+    def _compute_max_loss(self, codes:Tensor, originals:Tensor, eps:float, dim:int, device):
         """Computes value of maximal loss for an epsilon sized distortion on the dimension dim"""
         altered_codes = codes.clone()
         # positive distortion
         altered_codes[:,dim] += eps
-        losses = self.compute_output_distortion(altered_codes, originals, device)
+        losses = self._compute_output_distortion(altered_codes, originals, device)
         # negative distortion
         altered_codes = codes.clone()
         altered_codes[:,dim] -= eps
-        new_losses = self.compute_output_distortion(altered_codes, originals, device)
+        new_losses = self._compute_output_distortion(altered_codes, originals, device)
         losses = torch.max(torch.stack([losses, new_losses]), dim=0)[0] # N x 1
         return losses # N x 1 tensor
 
-
-    def plot_loss2marginaldistortion(self, device=None, **kwargs):
+    def plot_loss2marginaldistortion(self, device="cpu", **kwargs):
         """Given a fixed distortion size the plot shows the amount of error increase in the output
         given by applying the distortion to the latent space - basically showing the effect of an epsilon-sized L1
         adversarial attack on each latent dimension"""
-        figsize = kwargs.get("figsize",(20,15))
+        figsize = kwargs.get("figsize",(20,30))
         N = kwargs.get("N",50)
-        steps = kwargs.get("steps",21) # odd steps will include 0 in the linspace
-        relative = kwargs.get("relative",True) # whether to print only the difference from the base error or both base and incurred error
+        relative = kwargs.get("relative",False) # whether to print only the difference from the base error or both base and incurred error
         ro = kwargs.get("ro",0.1) # magnitude of distortion (in percentage) - it varies for each dimension depending on its range
         markersize = kwargs.get("markersize",20)
         font_scale = kwargs.get("font_scale",20)
@@ -216,7 +217,7 @@ class ModelVisualiser(object):
         base_vecs = self.test_input[idx]
         # encode - apply distortion - decode
         with torch.no_grad():
-            codes = self.model.encode_mu(base_vecs.to(device), update_prior=True)
+            codes = self.model.encode_mu(base_vecs.to(device), update_prior=True, integrate=True)
             ranges = self.model.get_prior_range() # (min, max) for each dimension
 
         D = len(ranges)
@@ -224,10 +225,10 @@ class ModelVisualiser(object):
         ys = []
         for i in range(D):
             # losses is a list of floats
-            losses = self.compute_max_loss(codes, base_vecs, eps=distortions[i], dim=i, device=device)
+            losses = self._compute_max_loss(codes, base_vecs, eps=distortions[i], dim=i, device=device)
             ys.append(losses)
         ys = torch.stack(ys).cpu().numpy() # D x N
-        initial_loss = self.compute_output_distortion(codes, base_vecs, device).cpu().numpy() # N x 1
+        initial_loss = self._compute_output_distortion(codes, base_vecs, device).cpu().numpy() # N x 1
 
 
         nrows = kwargs.get("nrows", D//3); ncols = D//nrows +1 if D%nrows!=0 else D//nrows
@@ -237,7 +238,7 @@ class ModelVisualiser(object):
         for row in range(nrows):
             for col in range(ncols):
                 if dim==D: break
-                ax[row,col].set_title(f"Latent dimension {dim}")
+                ax[row,col].set_title(f"Distortion of {distortions[dim]:.5f} applied")
                 x = codes[:,dim].cpu().numpy() # N x 1
                 Nlosses = ys[dim,:] # N x 1
                 hues = None
@@ -261,10 +262,11 @@ class ModelVisualiser(object):
 
         return fig
 
+
     def plot_loss2distortion(self, device=None, **kwargs):
         """Plotting a curve measuring the amount of distortion along each dimension for
         multiple starting points"""
-        figsize = kwargs.get("figsize",(20,15))
+        figsize = kwargs.get("figsize",(20,30))
         N = kwargs.get("N",50)
         steps = kwargs.get("steps",21) # odd steps will include 0 in the linspace
         markersize = kwargs.get("markersize",20)
@@ -277,10 +279,10 @@ class ModelVisualiser(object):
         base_vecs = self.test_input[idx]
         # encode - apply distortion - decode
         with torch.no_grad():
-            codes = self.model.encode_mu(base_vecs.to(device), update_prior=True)
+            codes = self.model.encode_mu(base_vecs.to(device), update_prior=True, integrate=True)
             ranges = self.model.get_prior_range() # (min, max) for each dimension
-        widths = [(M-m)/2 for (m,M) in ranges]
-        distortion_levels = [np.linspace(-w*x_scale,w*x_scale,steps) for w in widths]
+        widths = [x_scale*(M-m)/2 for (m,M) in ranges]
+        distortion_levels = [np.linspace(-w,w,steps) for w in widths]
         ys = []
         for i in range(N):
             # losses is a list of floats
@@ -291,6 +293,7 @@ class ModelVisualiser(object):
         D = len(distortion_levels)
         nrows = kwargs.get("nrows", D//3); ncols = D//nrows +1 if D%nrows!=0 else D//nrows
         sns.set_style('darkgrid')
+        print(figsize)
         fig, ax = plt.subplots(nrows, ncols, sharey=True, figsize=figsize)
         dim=0
         for row in range(nrows):
@@ -325,7 +328,7 @@ class ModelVisualiser(object):
             _vectors[:, i] = dist + _vectors[:,i]
             # Generate the batch of images and computes the loss as MSE distance
             _vectors = torch.tensor(_vectors, dtype=torch.float)
-            loss = self.compute_output_distortion(_vectors, original_sample, device=device)
+            loss = self._compute_output_distortion(_vectors, original_sample, device=device)
             losses.append(loss)
         return torch.vstack(losses) # D x n_steps
 

@@ -78,3 +78,5 @@ bsub -oo "VAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python mai
 bsub -oo "RSAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data 3DS --version v121
 bsub -oo "RAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data 3DS --version v121
 bsub -oo "AE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data 3DS --version v121
+
+

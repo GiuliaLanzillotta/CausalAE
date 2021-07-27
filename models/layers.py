@@ -412,7 +412,7 @@ class HybridLayer(nn.Module):
         return noise
 
     @staticmethod
-    def hybridise_from_N(inputs, parents, to_resample:List[int], unit_dim):
+    def hybridise_from_N(inputs, parents, to_resample:List[int], unit_dim, random_state):
         """For each input hybridises N dimensions drawing components from the parents set while
         keeping track of the origin.
         first: whether to resample the first N dimensions or the last ones """
@@ -427,7 +427,7 @@ class HybridLayer(nn.Module):
         for i, chunk in enumerate(chunks):
             if i in to_resample:
                 # num_samples x N one-hot matrix
-                idx = torch.multinomial(torch.ones(available_samples), K, replacement=True).to(chunk.device)
+                idx = torch.Tensor(random_state.choice(range(available_samples), size=K, replace=True)).to(chunk.device).long()
                 parent_idx[:, resampled] = idx
                 new_vectors.append(torch.index_select(parent_chunks[i], 0, idx))
                 resampled+=1

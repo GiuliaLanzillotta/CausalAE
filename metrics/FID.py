@@ -355,10 +355,13 @@ class FIDScorer(object):
         self.dims = dims
         block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
         self.model = InceptionV3([block_idx])
+        self.device=None
 
     def start_new_scoring(self, set_size, device="cpu"):
         print("\nStarting new FID scoring\n")
-        self.model.to(device)
+        if device=="cpu": self.model.cpu()
+        else: self.model.cuda()
+        self.device = device
         self.generated = np.empty((set_size, self.dims))
         self.originals = np.empty((set_size, self.dims))
         self.start_idx = 0
@@ -366,6 +369,10 @@ class FIDScorer(object):
     def get_activations(self, original, fake):
         """ Passes both set of input images through the model and stores internally the result"""
         assert original.shape[0]==fake.shape[0], "Number of generated and original images provided is not the same"
+        if original.shape[1] ==1: # number of channels not equal to 3
+            original = torch.stack([original]*3,dim=1).squeeze(2).to(self.device)
+            fake = torch.stack([fake]*3,dim=1).squeeze(2).to(self.device)
+
         with torch.no_grad():
             fake = self.model(fake)[0]
             original = self.model(original)[0]
