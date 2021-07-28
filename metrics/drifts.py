@@ -67,8 +67,8 @@ class DriftEvaluator(object):
         # shuffling first (it will emulate sampling only if we shuffle)
         shuffled_idx = self.random_state.choice(range(self.N), size=self.N, replace=False)
         codes = codes[shuffled_idx]
-        if self.independent: return self.intervene_independent(codes, latent_dims, values, num_samples)
-        return self.intervene_dependent(codes, latent_dims, values, num_samples, self.device)
+        if self.independent: return self.intervene_independent(codes, latent_dims, values, num_samples), codes
+        return self.intervene_dependent(codes, latent_dims, values, num_samples, self.device), codes
 
     def sample_latent_values(self, codes, dims, n):
         """
@@ -98,7 +98,7 @@ class DriftEvaluator(object):
 
 
     def evaluate_average_intervention_effect(self, latent_dims:List[int], num_batches, num_interventions,
-                                             num_samples, resample_codes=False, norm=True):
+                                             num_samples, resample_codes=False, norm=True, intervention_values=None):
         """ Computes the effect of intervention on one or more latent dimensions averaged over several
         batches of codes and num_interventions distinct latent values.
         Advice:
@@ -109,13 +109,15 @@ class DriftEvaluator(object):
             print("Sampling codes from aggregate posterior...")
             self.sample_codes_pool(num_batches)
         # Now sample a set of values to use in the intervention
-        print("Sampling values for interventions...")
-        latent_values = self.sample_latent_values(self.source, latent_dims, num_interventions) # n x l numpy array
+        if intervention_values is None:
+            print("Sampling values for interventions...")
+            latent_values = self.sample_latent_values(self.source, latent_dims, num_interventions) # n x l numpy array
+        else: latent_values = intervention_values
         # Obtain intervention for each sample
         drifts = []
         print("Sampling from interventional_distribution...")
         for v in latent_values:
-            Bzv = self.intervene_on_latent(self.source, latent_dims, v, num_samples)
+            Bzv, _ = self.intervene_on_latent(self.source, latent_dims, v, num_samples)
             with torch.no_grad():
                 Bzv_hat = self.model.encode_mu(self.model.decode(Bzv.to(self.device), activate=True))
             # drift on the interventional distribution given by do(z_l <- v)
@@ -124,6 +126,61 @@ class DriftEvaluator(object):
         drifts = torch.vstack(drifts) # n x l tensor
         if norm: return torch.linalg.norm(drifts, ord=self.drift_norm, dim=0)
         return drifts, latent_values
+
+
+    def evaluate_effect_on_means(self, latent_dims:List[int], num_batches, num_interventions, num_samples,
+                                 resample_codes=False, intervention_values=None):
+        """ Computes the effect of intervention on one or more latent dimensions on the mean of the latent dimension.
+        Advice:
+        - keep num_interventions high and num_samples low to ...
+        """
+        if self.source is None or self.num_batches!=num_batches or resample_codes:
+            # need to resample the batches of latent codes
+            print("Sampling codes from aggregate posterior...")
+            self.sample_codes_pool(num_batches)
+        # Now sample a set of values to use in the intervention
+        if intervention_values is None:
+            print("Sampling values for interventions...")
+            latent_values = self.sample_latent_values(self.source, latent_dims, num_interventions) # n x l numpy array
+        else: latent_values = intervention_values
+        # Obtain intervention for each sample
+        means = []
+        print("Sampling from interventional_distribution...")
+        for v in latent_values:
+            Bzv, _ = self.intervene_on_latent(self.source, latent_dims, v, num_samples) # n x l
+            with torch.no_grad():
+                Bzv_hat = self.model.encode_mu(self.model.decode(Bzv.to(self.device), activate=True))
+                means.append(Bzv_hat.mean(dim=0)[latent_dims]) # l x 1
+        means = torch.vstack(means) # Ni x l tensor
+        return means, latent_values
+
+    def compute_normalisation_constant(self, dim, num_interventions, num_samples, drifts=False):
+        """ Computes normalisation constant of the dimension 'dim' scoring as the maximum
+        distortion caused by an intervention on any dimension on it.
+        Note: it does not resample codes:assumes that pool of codes has already been sampled"""
+
+        # collecting distortion from every dimension
+        all_distortions = []
+        for d in range(self.D):
+            print(f"Sampling values for interventions on {d}...")
+            latent_values = self.sample_latent_values(self.source, [d], num_interventions) # n x l numpy array
+
+            print(f"Sampling from interventional_distributions from {d}...")
+            distortions = 0.0 # we collect the sum of abolute distortions over the interventional distributions
+            for v in latent_values:
+                Bzv, originals = self.intervene_on_latent(self.source, [d], v, num_samples) # n x D
+                n = Bzv.shape[0]; originals = originals[:n]
+                with torch.no_grad():
+                    originals_hat = self.model.encode_mu(self.model.decode(originals.to(self.device), activate=True))
+                    Bzv_hat = self.model.encode_mu(self.model.decode(Bzv.to(self.device), activate=True))
+
+                if not drifts: distortions += (originals_hat[:,dim].mean() - Bzv_hat[:,dim].mean()).item()
+                else: distortions += self.compute_drift(originals, Bzv_hat, [dim], average=True).item() # 1x1
+            all_distortions.append(distortions/num_interventions) # taking the average
+        all_distortions = np.array(all_distortions)
+        return np.max(all_distortions)
+
+
 
 
 
