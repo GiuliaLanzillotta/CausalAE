@@ -111,6 +111,8 @@ class ModelHandler(object):
                                            drift_norm = drift_norm, device = self.device,
                                            random_seed=random_seed)
 
+    def evaluate_drift(self):
+        pass
 
 
     def latent_responses(self, **kwargs):
