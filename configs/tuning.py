@@ -59,7 +59,7 @@ def get_config(tuning:bool, model_name:str, data:str, version:str, data_version:
         with open(hparams_path, 'r') as file:
             config = yaml.safe_load(file)
             if tuning: config = config_switch[model_name](config)
-            return config
+            #return config
     # BUILDING CONFIG FILE ---
     # loading the standard model config (each model has a standard version config)
     with open(standard_model_path, 'r') as file:

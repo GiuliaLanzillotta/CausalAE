@@ -18,6 +18,8 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
         self.act = nn.Sigmoid()
 
+
+
     def encode(self, inputs: Tensor):
         codes = self.encoder(inputs)
         z, logvar, mu = self.gaussian_latent(codes)

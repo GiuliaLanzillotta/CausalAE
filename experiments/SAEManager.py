@@ -3,9 +3,10 @@ import numpy as np
 import torch
 from torch import Tensor
 from torch import optim
-from models import SAE, ConvAE
+from models import SAE, ConvAE, XSAE
 from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
+from models.AE import XAE
 from visualisations import ModelVisualiser
 import pytorch_lightning as pl
 from metrics import FIDScorer
@@ -66,6 +67,24 @@ class ConvAEXperiment(SAEXperiment):
         BaseVisualExperiment.__init__(self, params, model, loader, verbose=verbose)
         self.loss_type = params["model_params"]["loss_type"]
 
+
+class XAEXperiment(SAEXperiment):
+
+    def __init__(self, params: dict, verbose=True) -> None:
+        loader = DatasetLoader(params["data_params"])
+        dim_in =  loader.data_shape # C, H, W
+        model = XAE(params["model_params"], dim_in)
+        BaseVisualExperiment.__init__(self, params, model, loader, verbose=verbose)
+        self.loss_type = params["model_params"]["loss_type"]
+
+class XSAEXperiment(SAEXperiment):
+
+    def __init__(self, params: dict, verbose=True) -> None:
+        loader = DatasetLoader(params["data_params"])
+        dim_in =  loader.data_shape # C, H, W
+        model = XSAE(params["model_params"], dim_in)
+        BaseVisualExperiment.__init__(self, params, model, loader, verbose=verbose)
+        self.loss_type = params["model_params"]["loss_type"]
 
 class SAEVecExperiment(BaseVecExperiment):
 

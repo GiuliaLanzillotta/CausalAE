@@ -60,6 +60,10 @@ cp -r /cluster/scratch/glanzillo/logs/RAE/standardS_MNIST/ ./logs/RAE/
 cp -r /cluster/scratch/glanzillo/logs/BetaVAE/standardS_MNIST/ ./logs/BetaVAE/
 cp -r /cluster/scratch/glanzillo/logs/BetaVAE/standard_MNIST/ ./logs/BetaVAE/
 
+cp -r /cluster/scratch/glanzillo/logs/BaseSAE/v121_3DS/ ./logs/BaseSAE/
+cp -r /cluster/scratch/glanzillo/logs/AE/v121_3DS/ ./logs/AE/
+cp -r /cluster/scratch/glanzillo/logs/RSAE/v121_3DS/ ./logs/RSAE/
+cp -r /cluster/scratch/glanzillo/logs/RAE/v121_3DS/ ./logs/RAE/
 
 
 ** removing models **

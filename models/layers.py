@@ -435,7 +435,6 @@ class HybridLayer(nn.Module):
         new_vectors = torch.hstack(new_vectors) # KxM
         return new_vectors, parent_idx
 
-
     def controlled_sampling(self, latent_vectors, hybridisation_level:int, num_samples:int=None, use_prior=False):
         """Generates hybrid samples at the desired level
         Hybridisation level: int between 0 and self.max_hybridisation determining how many dimensions get resampled
@@ -675,9 +674,9 @@ class SCMDecoder(nn.Module):
         self.str_trf_modules.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
     def forward(self, x, z):
-        """ Implements forward pass with 2 possible modes:
-        - auto: no hybrid sampling (only the convolution)
-        - hybrid: hybrid sampling included """
+        """ Implements forward pass
+        - z is passed through the structural transform layers
+        - x is modified by z """
         for l in range(len(self.conv_modules)):
             if l<self.hierarchy_depth:
                 z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
@@ -752,6 +751,7 @@ class VecSCM(nn.Module):
 
         for l in range(self.depth):
             dim_in = (l+1)*self.unit_dim
+            #TODO: check number and size of layers here
             self.str_assignments.append(FCBlock(dim_in, [10,10,self.unit_dim], act=act)) #mapping noise + parents to one causal variable
 
         self.str_assignments.apply(lambda m: standard_initialisation(m, kwargs.get("act")))

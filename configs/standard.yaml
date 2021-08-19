@@ -40,15 +40,21 @@ vis_params:
   num_frames: 5
   fpd: 10
   num_points_irs: 10000
-  figsize: (20,30)
+  figsize: [12,18]
 
 eval_params:
   name: "scoring"
   FID: True
   disentanglement: True
   orthogonality: True
-  num_batches: 10
+  latent_responses: True
+  invariances: True
+  # invariances parameters ----
+  mode: 'X'
+  hard: True
+  num_interventions: 50
   num_samples: 100
+  num_batches: 10
 
 
 

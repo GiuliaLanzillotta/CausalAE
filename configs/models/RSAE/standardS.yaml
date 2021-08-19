@@ -18,5 +18,5 @@ model_params:
 
 eval_params:
   name: "scoring"
-  FID: False
+  FID: True
 

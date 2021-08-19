@@ -98,8 +98,10 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, score=True):
     if score:
         print("Scoring the model")
         handler = ModelHandler.from_experiment(experiment)
-        config['eval_params']['FID']=True
-        handler.score_model(save_scores=True, **config['eval_params'])
+        config['eval_params']['FID']=True #TODO: get rid of at some points
+        handler.score_model(save_scores=True,
+                            random_seed=config["logging_params"]["manual_seed"],
+                            **config['eval_params'])
         if config['eval_params'].get("latent_responses",True):
             handler.latent_responses(**config['eval_params'], store=True)
 
@@ -138,17 +140,17 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='BaseSAE')
+                        default='RAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="MNIST")
+                        default="3DS")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="standardS")
+                        default="v121")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",

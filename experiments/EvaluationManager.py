@@ -13,7 +13,7 @@ import glob
 import json
 import time
 from visualisations import ModelVisualiser, SynthVecDataVisualiser
-from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, DriftEvaluator
+from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentInvarianceEvaluator
 import pytorch_lightning as pl
 from metrics.responses import compute_response_matrix
 
@@ -36,7 +36,7 @@ class ModelHandler(object):
         self.fidscorer = None
         self._orthogonalityScorer = None
         self._disentanglementScorer = None
-        self._driftScorer = None
+        self._invarianceScorer = None
         self.device = next(self.model.parameters()).device
         self.send_model_to(self.device)
 
@@ -93,27 +93,82 @@ class ModelHandler(object):
             try: self.fidscorer.get_activations(inputs, reconstructions) #store activations for current batch
             except Exception as e:
                 print("Reached the end of FID scorer buffer")
-                raise(e)
+                continue
+
 
         FID_score = self.fidscorer.calculate_fid()
 
         return FID_score
 
-    def initialise_driftScorer(self, **kwargs):
+    def initialise_invarianceScorer(self, **kwargs):
+        """ Looks in the kwargs for the following keys:
+            - random_seed
+            - num_batches
+            - mode
+            - verbose
+        """
 
-        if self._driftScorer is not None:
+        if self._invarianceScorer is not None:
             return
 
         random_seed = kwargs.get("random_seed",11)
-        independent = kwargs.get("independent",True)
-        drift_norm = kwargs.get("drift_norm", 1)
-        self._driftScorer = DriftEvaluator(self.model, self.dataloader.val, independent=independent,
-                                           drift_norm = drift_norm, device = self.device,
-                                           random_seed=random_seed)
+        num_batches = kwargs.get("num_batches",10)
+        mode = kwargs.get("mode", "X")
+        verbose = kwargs.get("verbose",True)
 
-    def evaluate_drift(self):
-        pass
 
+        self._invarianceScorer = LatentInvarianceEvaluator(self.model, self.dataloader.val, mode = mode,
+                                        device = self.device, random_seed=random_seed, verbose=verbose)
+        # initialising the latent posterior distribution
+        self._invarianceScorer.sample_codes_pool(num_batches)
+
+    def evaluate_invariance(self, **kwargs):
+        """ Evaluate invariance of respose map to intervention of the kind specified in the kwargs
+        kwargs expected keys:
+        - intervention_type: ['noise', ...] - unused for now
+        - hard: whether to perform hard or soft intervention (i.e. resample from the dimension or not)
+        - num_interventions: number of interventions to base the statistics on
+        - num_samples: number of samples for each intervention
+        - store_it: SE (self evident)
+        - load_it: SE
+        + all kwarks for 'initialise_invarianceScorer' function
+        """
+        intervt_type = kwargs.get("intervention_type", "noise") #TODO: include in the code
+        hard = kwargs.get("hard_intervention", False)
+        num_interventions = kwargs.get("num_interventions", 50)
+        samples_per_intervention = kwargs.get("num_samples",50)
+        store_it = kwargs.get("store",False)
+        load_it = kwargs.get("load", False)
+
+        if load_it:
+            print("Loading invariances matrix")
+            path = Path(self.config['logging_params']['save_dir']) / \
+                   self.config['logging_params']['name'] / \
+                   self.config['logging_params']['version'] / ("invariances"+".pkl")
+            if os.path.exists(path):
+                with open(path, 'rb') as f:
+                    return pickle.load(f)
+            print("No matrix found at "+str(path))
+            print("Calculating invariance from scratch.")
+
+        self.initialise_invarianceScorer(**kwargs)
+        D = self.model.latent_size
+        invariances = torch.zeros((D,D))
+        for d in range(D):
+            with torch.no_grad():
+                errors = self._invarianceScorer.noise_invariance(dim=d, n=samples_per_intervention,
+                                                                          m=num_interventions, hard = hard, reduced=False)
+                invariances[d,:] = errors # D x 1
+
+        if store_it:
+            print("Storing invariance evaluation results.")
+            path = Path(self.config['logging_params']['save_dir']) / \
+                   self.config['logging_params']['name'] / \
+                   self.config['logging_params']['version']
+            with open(path/ ("invariances"+".pkl"), 'wb') as o:
+                pickle.dump(invariances, o)
+
+        return invariances
 
     def latent_responses(self, **kwargs):
         """Computes latent response matrix for the given model plus handles storage
@@ -201,7 +256,7 @@ class ModelHandler(object):
         except ValueError:
             print(f"No checkpoint available at "+str(checkpoint_path)+". Cannot load trained weights.")
 
-    def score_model(self, FID=False, disentanglement=False, orthogonality=False,
+    def score_model(self, FID=False, disentanglement=False, orthogonality=False, invariance=False,
                     save_scores=False, **kwargs):
         """Scores the model on the test set in loss and other terms selected"""
         start=time.time()
@@ -213,8 +268,12 @@ class ModelHandler(object):
             disentanglement_scores = self.score_disentanglement(**kwargs)
             scores.update(disentanglement_scores)
         if FID:
-            scores["FID"]= self.score_FID(**kwargs)
+            scores["FID"] = self.score_FID(**kwargs)
+        if invariance:
+            invariances = self.evaluate_invariance(**kwargs)
+            scores["invariance"] = invariances.mean() # minimum score = 1/D , maximum score = 1
         end = time.time()
+
         print("Time elapsed for scoring {:.0f}".format(end-start))
 
         if save_scores:
@@ -246,7 +305,7 @@ class VisualModelHandler(ModelHandler):
     def plot_model(self, do_originals=False, do_reconstructions=False,
                    do_random_samples=False, do_traversals=False, do_hybrisation=False,
                    do_loss2distortion=False, do_marginal=False, do_loss2marginal=False,
-                   **kwargs):
+                   do_invariance=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -268,6 +327,10 @@ class VisualModelHandler(ModelHandler):
             plots["marginal"] = self.visualiser.plot_marginal(device=self.device, **kwargs)
         if do_loss2marginal:
             plots["marginal_distortion"] = self.visualiser.plot_loss2marginaldistortion(device=self.device, **kwargs)
+        if do_invariance:
+            invariances = self.evaluate_invariance(load_it = True, store_it=True, **kwargs)
+            plots["invariances"] = self.visualiser.plot_heatmap(invariances.cpu().numpy(),
+                                            title="Invariances", threshold=0., **kwargs)
 
         return plots
 
@@ -292,7 +355,6 @@ class VectorModelHandler(ModelHandler):
         plots["graph"] = self.data_visualiser.plot_graph()
         plots["noises"] = self.data_visualiser.plot_noises_distributions()
         plots["causes2noises"] = self.data_visualiser.plot_causes2noises()
-
         return plots
 
     def plot_model(self, **kwargs):
@@ -305,6 +367,8 @@ class VectorModelHandler(ModelHandler):
         plots["distortion"] = self.visualiser.plot_loss2distortion(device=self.device, **kwargs)
         plots["marginal"] = self.visualiser.plot_marginal(device=self.device, **kwargs)
         plots["marginal_distortion"] = self.visualiser.plot_loss2marginaldistortion(device=self.device, **kwargs)
+        invariances = self.evaluate_invariance(load_it = True, store_it=True, **kwargs)
+        plots["invariances"] = self.visualiser.plot_heatmap(invariances.cpu().numpy(), title="Invariances", **kwargs)
 
         return plots
 
@@ -318,8 +382,18 @@ if __name__ == '__main__':
     handler = VisualModelHandler.from_config(**params)
     handler.config["logging_params"]["save_dir"] = "./logs"
     handler.load_checkpoint()
-    res = handler.plot_model(do_originals=False, do_reconstructions=False,
-                             do_random_samples=False, do_traversals=False,
-                             do_hybrisation=True, do_loss2distortion=False,
-                             do_marginal=False, do_loss2marginal=False)
+
+    drift_evalutation_params = {
+        "num_batches":10,
+        "num_interventions":50,
+        "num_samples":50,
+        "reduce":"mean"}
+
+    drift_scorer_params = {
+        "random_seed":11,
+        "independent":True,
+        "verbose":True}
+
+    individual_drifts, interventions = handler.evaluate_drift(pairwise=True,
+                                        **drift_evalutation_params, **drift_scorer_params)
 

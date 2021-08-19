@@ -48,7 +48,6 @@ class GenerativeAE(ABC):
         #TODO: change to aggregate posterior range
 
 
-
 class HybridAE(GenerativeAE, nn.Module, ABC):
     """Generalisation of all the generative autoencoder models that adopt hybrid layers
     as stochastic layers"""
@@ -99,14 +98,19 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
         output = self.decode(codes, activate)
         return  output
 
-    def loss_function(self, *args):
-        X_hat = args[0]
-        X = args[1]
+    def pixel_losses(self, X, X_hat):
+        """ Computes both MSE and BCE loss for X and X_hat"""
         # mean over batch of the sum over all other dimensions
         MSE = torch.sum(F.mse_loss(self.act(X_hat), X, reduction="none"),
                         tuple(range(X_hat.dim()))[1:]).mean()
         BCE = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
                         tuple(range(X_hat.dim()))[1:]).mean()
+        return MSE,BCE
+
+    def loss_function(self, *args):
+        X_hat = args[0]
+        X = args[1]
+        MSE,BCE = self.pixel_losses(X,X_hat)
         return BCE, MSE
 
     def get_prior_range(self):

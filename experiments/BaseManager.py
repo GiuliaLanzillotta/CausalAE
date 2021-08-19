@@ -36,7 +36,7 @@ class BaseVisualExperiment(pl.LightningModule):
         print("MODEL SUMMARY")
         summary(self.model.cuda(), (self.loader.data_shape))
 
-    def make_plots(self, hybrids=True, originals=False, distortion=True):
+    def make_plots(self, hybrids=True, originals=False, distortion=False):
         """originals: bool = Whether to plot the originals samples from the test set"""
         logger = self.logger.experiment
         figure = self.visualiser.plot_reconstructions(device=self.device)
@@ -79,7 +79,6 @@ class BaseVisualExperiment(pl.LightningModule):
 
     def test_epoch_end(self, outputs):
         self.make_plots(originals=self.global_step==0)
-
 
     def configure_optimizers(self):
         opt_params = self.params["opt_params"]

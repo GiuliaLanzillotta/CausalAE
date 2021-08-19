@@ -6,6 +6,8 @@ from torch import Tensor
 from torchvision import utils as tvu
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
+
+from metrics import LatentInvarianceEvaluator
 from models import GenerativeAE, ESAE, HybridLayer
 import torchvision
 import seaborn as sns
@@ -162,7 +164,7 @@ class ModelVisualiser(object):
         N, D = _all_codes.shape
         if not pair:
             nrows = 3; ncols = D//nrows +1 if D%nrows!=0 else D//nrows
-            fig, ax = plt.subplots(nrows, ncols, sharey=True, figsize=figsize)
+            fig, ax = plt.subplots(nrows, ncols, sharey="all", figsize=figsize)
             dim=0
             for row in range(nrows):
                 for col in range(ncols):
@@ -179,8 +181,11 @@ class ModelVisualiser(object):
         axi = sns.pairplot(pd.DataFrame(_all_codes.cpu().numpy()), diag_kws = {'alpha':0.55, 'bins':200, 'kde':True})
         return fig
 
+    #TODO: move distortion functions to dedicated module
+
     def _compute_output_distortion(self, latents, originals, device):
-        """Computes loss on the pixel space for the given latents"""
+        """Computes loss on the pixel space for the given latents
+        """
         with torch.no_grad():
             recons = self.model.decode(latents.to(device), activate=True) # N x image_dim
             diff = recons - originals.to(device) # N x image_dim
@@ -200,11 +205,10 @@ class ModelVisualiser(object):
         losses = torch.max(torch.stack([losses, new_losses]), dim=0)[0] # N x 1
         return losses # N x 1 tensor
 
-    def plot_loss2marginaldistortion(self, device="cpu", **kwargs):
+    def plot_loss2marginaldistortion(self, device="cpu", figsize=(12,12), **kwargs):
         """Given a fixed distortion size the plot shows the amount of error increase in the output
         given by applying the distortion to the latent space - basically showing the effect of an epsilon-sized L1
         adversarial attack on each latent dimension"""
-        figsize = kwargs.get("figsize",(20,30))
         N = kwargs.get("N",50)
         relative = kwargs.get("relative",False) # whether to print only the difference from the base error or both base and incurred error
         ro = kwargs.get("ro",0.1) # magnitude of distortion (in percentage) - it varies for each dimension depending on its range
@@ -233,7 +237,7 @@ class ModelVisualiser(object):
 
         nrows = kwargs.get("nrows", D//3); ncols = D//nrows +1 if D%nrows!=0 else D//nrows
         sns.set_style('darkgrid')
-        fig, ax = plt.subplots(nrows, ncols, sharey=True, figsize=figsize)
+        fig, ax = plt.subplots(nrows, ncols, sharey='all', figsize=figsize)
         dim=0
         for row in range(nrows):
             for col in range(ncols):
@@ -261,7 +265,6 @@ class ModelVisualiser(object):
                 dim+=1
 
         return fig
-
 
     def plot_loss2distortion(self, device=None, **kwargs):
         """Plotting a curve measuring the amount of distortion along each dimension for
@@ -293,8 +296,7 @@ class ModelVisualiser(object):
         D = len(distortion_levels)
         nrows = kwargs.get("nrows", D//3); ncols = D//nrows +1 if D%nrows!=0 else D//nrows
         sns.set_style('darkgrid')
-        print(figsize)
-        fig, ax = plt.subplots(nrows, ncols, sharey=True, figsize=figsize)
+        fig, ax = plt.subplots(nrows, ncols, sharey="all", figsize=figsize)
         dim=0
         for row in range(nrows):
             for col in range(ncols):
@@ -393,3 +395,24 @@ class ModelVisualiser(object):
                     Line2D([0], [0], color="b", lw=4),
                     Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
         return figure
+
+    @staticmethod
+    def plot_heatmap(matrix, **kwargs):
+        """kwargs accepted keys:
+        - figsize
+        - thershold
+        - title"""
+
+        figsize = kwargs.get("figsize",(20,30))
+        threshold = kwargs.get("threshold",0.01)
+        title = kwargs.get("title")
+        M_extreme = (matrix.abs() >= threshold)*matrix
+
+        fig = plt.figure(figsize=figsize)
+        sns.set_context('paper', font_scale=1.5)
+        ax = sns.heatmap(M_extreme, linecolor='white', linewidth=2,  cmap="Greens", annot=True)
+        bottom, top = ax.get_ylim()
+        ax.set_ylim(bottom + 0.5, top - 0.5)
+        ax.set_title(title)
+        return fig
+
