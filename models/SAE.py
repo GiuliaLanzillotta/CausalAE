@@ -1,10 +1,11 @@
 # Code for SAE (no attention in the encoder)
 # Paper: https://arxiv.org/abs/2006.07796
-from torch import nn
-from torch import Tensor
 import torch
-from . import ConvNet, SCMDecoder, HybridLayer, FCBlock, FCResidualBlock, GenerativeAE, VecSCMDecoder, VecSCM, HybridAE, CausalAE
-from .utils import act_switch
+from torch import Tensor
+from torch import nn
+
+from . import ConvNet, SCMDecoder, FCBlock, VecSCMDecoder, VecSCM, HybridAE, act_switch
+
 
 class SAE(HybridAE):
 
@@ -47,7 +48,7 @@ class XSAE(HybridAE):
         self.decoder_initial_shape = conv_net.final_shape
         # 1. vecSCM N -> Z (causal block)
         # - mapping the latent code to the new causal space with an SCM-like structure
-        self.caual_block = VecSCM(self.latent_size, self.unit_dim, **params)
+        self.caual_block = VecSCM(self.latent_size, **params)
         # 2. SCM Z + constant -> X (decoder)
         # - keeping the SCM like structure in the decoder
         self.decoder = SCMDecoder(self.decoder_initial_shape, dim_in, depth=params["dec_depth"],**params)
@@ -56,40 +57,10 @@ class XSAE(HybridAE):
         z = self.caual_block(noise)
         # feeding a constant signal into the decoder
         # the output will be built on top of this constant trough the StrTrf layers
-        x = torch.ones(noise.shape[0]+self.decoder_initial_shape).to(noise.device) # batch x latent
+        x = torch.ones((noise.shape[0],)+self.decoder_initial_shape).to(noise.device) # batch x latent
         output = self.decoder(x, z)
         if activate: output = self.act(output)
         return output
-
-
-
-class XCSAE(CausalAE):
-
-    def __init__(self, params: dict, dim_in) -> None:
-        CausalAE.__init__(self, params)
-        self.dim_in = dim_in # C, H, W
-        # Building encoder
-        conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params)
-        fc_net = FCBlock(conv_net.final_dim, [256, 128, self.latent_size], act_switch(params.get("act")))
-        self.encoder = nn.Sequential(conv_net, fc_net) # returns vector of latent_dim size
-        # initialise constant image to be used in decoding (it's going to be an image full of zeros)
-        self.decoder_initial_shape = conv_net.final_shape
-        # 1. vecSCM N -> Z (causal block)
-        # - mapping the latent code to the new causal space with an SCM-like structure
-        self.caual_block = VecSCM(self.latent_size, self.unit_dim, **params)
-        # 2. SCM Z + constant -> X (decoder)
-        # - keeping the SCM like structure in the decoder
-        self.decoder = SCMDecoder(self.decoder_initial_shape, dim_in, depth=params["dec_depth"],**params)
-
-    def decode(self, noise:Tensor, activate:bool):
-        z = self.caual_block(noise)
-        # feeding a constant signal into the decoder
-        # the output will be built on top of this constant trough the StrTrf layers
-        x = torch.ones(noise.shape[0]+self.decoder_initial_shape).to(noise.device) # batch x latent
-        output = self.decoder(x, z)
-        if activate: output = self.act(output)
-        return output
-
 
 
 class VecSAE(HybridAE):

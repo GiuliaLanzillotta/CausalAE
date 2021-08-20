@@ -9,6 +9,9 @@ model_params:
   unit_dim: 2
   norm: 'batch'
   channels: 32
+  # invariance regularisation parameters
+  lamda: 2.0
+  num_samples: 512
 
 vis_params:
   plot_every: 10

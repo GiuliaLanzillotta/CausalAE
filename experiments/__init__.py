@@ -3,17 +3,21 @@ from . import VAEManager
 from . import data
 from .data import DatasetLoader
 from .VAEManager import VAEXperiment, cyclic_beta_schedule, linear_determ_warmup, VAEVecEXperiment
-from .SAEManager import SAEXperiment, SAEVecExperiment, ConvAEXperiment
+from .SAEManager import AEExperiment, SAEVecExperiment
 from .ESAEManager import ESAEXperiment, ESAEVecExperiment
-from .RSAEManager import RSAEXperiment, RegVecExperiment,RAEXperiment
+from .RManager import RegExperiment, RegVecExperiment
 
 
 experiments_switch = {'BetaVAE':VAEXperiment,
-                      'BaseSAE':SAEXperiment,
                       'ESAE': ESAEXperiment,
-                      'RSAE': RSAEXperiment,
-                      'RAE': RAEXperiment,
-                      'AE': ConvAEXperiment,
+                      'AE': AEExperiment,
+                      'BaseSAE':AEExperiment,
+                      'XAE': AEExperiment,
+                      'XSAE': AEExperiment,
+                      'RSAE': RegExperiment,
+                      'RAE': RegExperiment,
+                      'XCAE': RegExperiment,
+                      'XCSAE': RegExperiment,
                       'VecVAE':VAEVecEXperiment,
                       'VecSAE':SAEVecExperiment,
                       'VecESAE':ESAEVecExperiment,

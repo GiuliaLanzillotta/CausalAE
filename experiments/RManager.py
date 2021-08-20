@@ -1,29 +1,39 @@
-"""Experiment manager for the R(egularised)-AE model"""
+"""Experiment manager for the R(egularised)-SAE model"""
 
 
-from models import RAE
-from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
-from experiments.RSAEManager import RSAEXperiment, RegVecExperiment
+from experiments.data import DatasetLoader
+from models import models_switch
 
 
-class RAEXperiment(RSAEXperiment):
+class RegExperiment(BaseVisualExperiment):
+    """
+        Class of experiments for all the models that satisfy these characteristics:
+        - constructor that accepts (params, dim_in)
+        - loss that accepts (*results, X=, lamda=, device=, use_MSE=)
+        - loss dict of 3 terms 'Reconstruction_loss', 'Regularization_loss', 'loss'
+
+    Basically all the models implementing RHybridAE or CausalAE classes
+    """
 
     def __init__(self, params: dict, verbose=True) -> None:
-        super(RAEXperiment, self).__init__(params, verbose)
+        # When initialised the dataset loader will download or load the data from the folder
+        # split in train/test, apply transformations, divide in batches, extract data dimension
         loader = DatasetLoader(params["data_params"])
         dim_in =  loader.data_shape # C, H, W
-        model = RSAE(params["model_params"], dim_in)
-        super(RSAEXperiment, self).__init__(params, model, loader, verbose=verbose)
+        # only models that have
+        model = models_switch[params["model_params"]["name"]](params["model_params"], dim_in)
+        super(RegExperiment, self).__init__(params, model, loader, verbose=verbose)
         self.use_MSE = params["model_params"]["loss_type"] == "MSE"
 
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs, update_prior=True, integrate=False)
-        losses = self.model.loss_function(*results, X = input_imgs,
-                                          lamda = self.model.params["lamda"],
+        losses = self.model.loss_function(*results, X=input_imgs,
                                           device=self.device,
-                                          use_MSE=self.use_MSE)
+                                          use_MSE=self.use_MSE,
+                                          **self.params['model_params'],
+                                          **self.params['opt_params'])
         # Logging
         self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log('REC_loss', losses["Reconstruction_loss"], on_epoch=True)
@@ -37,9 +47,10 @@ class RAEXperiment(RSAEXperiment):
         input_imgs, labels = batch
         results = self.forward(input_imgs, update_prior=True, integrate=True)
         val_losses = self.model.loss_function(*results, X = input_imgs,
-                                              lamda = self.model.params["lamda"],
                                               device=self.device,
-                                              use_MSE=self.use_MSE)
+                                              use_MSE=self.use_MSE,
+                                              **self.params['model_params'],
+                                              **self.params['opt_params'])
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', val_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
         return val_losses
@@ -48,14 +59,15 @@ class RAEXperiment(RSAEXperiment):
         input_imgs, labels = batch
         results = self.forward(input_imgs, update_prior=True, integrate=True)
         test_losses = self.model.loss_function(*results, X = input_imgs,
-                                               lamda = self.model.params["lamda"],
                                                device=self.device,
-                                               use_MSE=self.use_MSE)
+                                               use_MSE=self.use_MSE,
+                                               **self.params['model_params'],
+                                               **self.params['opt_params'])
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
 
 
-class RSAEVecExperiment(BaseVecExperiment):
+class RegVecExperiment(BaseVecExperiment):
 
     def __init__(self, params: dict, verbose=True) -> None:
         super(RegVecExperiment, self).__init__(params, verbose=verbose)
@@ -64,8 +76,9 @@ class RSAEVecExperiment(BaseVecExperiment):
         inputs, labels = batch
         results = self.forward(inputs, update_prior=True, integrate=False)
         losses = self.model.loss_function(*results, X = inputs,
-                                          lamda = self.model.params["lamda"],
-                                          device=self.device)
+                                          device=self.device,
+                                          **self.params['model_params'],
+                                          **self.params['opt_params'])
         # Logging
         self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log('REC_loss', losses["Reconstruction_loss"], on_epoch=True)
@@ -79,8 +92,9 @@ class RSAEVecExperiment(BaseVecExperiment):
         inputs, labels = batch
         results = self.forward(inputs, update_prior=True, integrate=True)
         val_losses = self.model.loss_function(*results, X = inputs,
-                                              lamda = self.model.params["lamda"],
-                                              device=self.device)
+                                              device=self.device,
+                                              **self.params['model_params'],
+                                              **self.params['opt_params'])
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', val_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
         return val_losses
@@ -89,8 +103,9 @@ class RSAEVecExperiment(BaseVecExperiment):
         inputs, labels = batch
         results = self.forward(inputs, update_prior=True, integrate=True)
         test_losses = self.model.loss_function(*results, X = inputs,
-                                               lamda = self.model.params["lamda"],
-                                               device=self.device)
+                                               device=self.device,
+                                               **self.params['model_params'],
+                                               **self.params['opt_params'])
         # Calling self.log will surface up scalars for you in TensorBoard
         self.log('val_loss', test_losses["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
 

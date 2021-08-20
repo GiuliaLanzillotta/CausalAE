@@ -1,22 +1,23 @@
 model_params:
-  name: 'XSAE'
+  name: 'XCAE'
   latent_vecs: 128 # for hybrid sampling
   residual: True
   latent_size: 6
-  enc_depth: 6 #number of convolutional layers in the encoder
-  dec_depth: 6
+  enc_depth: 3 #number of convolutional layers in the encoder
+  dec_depth: 3
   num_pools: 3
-  unit_dim: 1
+  unit_dim: 2
+  norm: 'batch'
   channels: 32
-  loss_type: "MSE"
   # invariance regularisation parameters
   lamda: 2.0
   num_samples: 100
   num_interventions: 20
 
-eval_params:
-  name: "scoring"
-  FID: True
-  mode: 'X'
+vis_params:
+  plot_every: 10
 
+logging_params:
+  score_every: 1000
+  save_dir: "./logs/"
 

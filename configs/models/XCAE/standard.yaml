@@ -1,7 +1,6 @@
 model_params:
-  name: 'XSAE'
+  name: 'XCAE'
   latent_vecs: 128 # for hybrid sampling
-  residual: True
   latent_size: 12
   enc_depth: 12 #number of convolutional layers in the encoder
   dec_depth: 12

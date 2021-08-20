@@ -107,7 +107,7 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
                         tuple(range(X_hat.dim()))[1:]).mean()
         return MSE,BCE
 
-    def loss_function(self, *args):
+    def loss_function(self, *args, **kwargs):
         X_hat = args[0]
         X = args[1]
         MSE,BCE = self.pixel_losses(X,X_hat)

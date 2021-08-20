@@ -4,7 +4,8 @@ from torch import Tensor
 # Code for beta-VAE
 # Paper: https://openreview.net/forum?id=Sy2fzU9gl
 from torch import nn
-from . import ConvNet, UpsampledConvNet, FCBlock, HybridAE, VecSCM, CausalAE
+
+from . import ConvNet, UpsampledConvNet, FCBlock, HybridAE, VecSCM
 from .utils import act_switch
 
 
@@ -43,9 +44,9 @@ class XAE(HybridAE):
         self.decoder_initial_shape = conv_net.final_shape
         # 1. vecSCM N -> Z (causal block)
         # - mapping the latent code to the new causal space with an SCM-like structure
-        self.caual_block = VecSCM(self.latent_size, self.unit_dim, **params)
+        self.caual_block = VecSCM(self.latent_size, **params)
         # 2. SCM Z + constant -> X (decoder)
-        dec_init = FCBlock(self.latent_size, [128, 256, self.decoder_initial_shape], act_switch(params.get("act")))
+        dec_init = FCBlock(self.latent_size, [128, 256, conv_net.final_dim], act_switch(params.get("act")))
         deconv_net = UpsampledConvNet(self.decoder_initial_shape, self.dim_in, depth=params["dec_depth"], **params)
         self.decoder = nn.ModuleList([dec_init, deconv_net])
 
@@ -55,34 +56,6 @@ class XAE(HybridAE):
         x = self.decoder[1](z_init)
         if activate: x = self.act(x)
         return x
-
-class XCAE(CausalAE):
-
-    def __init__(self, params: dict, dim_in) -> None:
-        CausalAE.__init__(self, params)
-        self.dim_in = dim_in # C, H, W
-        # Building encoder
-        conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params)
-        conv_fin = FCBlock(conv_net.final_dim, [256, 128, self.latent_size], act_switch(params.get("act")))
-        self.encoder = nn.Sequential(conv_net, conv_fin) # returns vector of latent_dim size
-        # initialise constant image to be used in decoding (it's going to be an image full of zeros)
-        self.decoder_initial_shape = conv_net.final_shape
-        # 1. vecSCM N -> Z (causal block)
-        # - mapping the latent code to the new causal space with an SCM-like structure
-        self.caual_block = VecSCM(self.latent_size, self.unit_dim, **params)
-        # 2. SCM Z + constant -> X (decoder)
-        dec_init = FCBlock(self.latent_size, [128, 256, self.decoder_initial_shape], act_switch(params.get("act")))
-        deconv_net = UpsampledConvNet(self.decoder_initial_shape, self.dim_in, depth=params["dec_depth"], **params)
-        self.decoder = nn.ModuleList([dec_init, deconv_net])
-
-    def decode(self, noise:Tensor, activate:bool):
-        z = self.caual_block(noise)
-        z_init = self.decoder[0](z).view((-1, )+self.decoder_initial_shape) # reshaping into image format
-        x = self.decoder[1](z_init)
-        if activate: x = self.act(x)
-        return x
-
-
 
 class VecAE(HybridAE):
     """Simply an AE made of fully connected layers"""

@@ -139,6 +139,7 @@ class ModelHandler(object):
         samples_per_intervention = kwargs.get("num_samples",50)
         store_it = kwargs.get("store",False)
         load_it = kwargs.get("load", False)
+        print(f"Scoring model's response map invariance to {intervt_type} interventions.")
 
         if load_it:
             print("Loading invariances matrix")

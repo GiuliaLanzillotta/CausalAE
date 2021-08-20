@@ -8,6 +8,9 @@ model_params:
   unit_dim: 1
   channels: 32
   loss_type: "MSE"
+  # invariance regularisation parameters
+  lamda: 2.0
+  num_samples: 512
 
 eval_params:
   name: "scoring"

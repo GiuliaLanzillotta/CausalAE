@@ -1,12 +1,14 @@
 # Code for beta-VAE
 # Paper: https://openreview.net/forum?id=Sy2fzU9gl
-from torch import nn
-from torch import Tensor
+from abc import ABC
+
 import torch
-from . import ConvNet, TransConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv, VecSCM, VecSCMDecoder
+from torch import Tensor
+from torch import nn
 from torch.nn import functional as F
+
+from . import ConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv
 from .utils import act_switch
-from abc import ABCMeta, abstractmethod, ABC
 
 
 class VAEBase(nn.Module, GenerativeAE, ABC):
@@ -17,8 +19,6 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
         self.latent_size = params["latent_size"]
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
         self.act = nn.Sigmoid()
-
-
 
     def encode(self, inputs: Tensor):
         codes = self.encoder(inputs)
@@ -104,6 +104,11 @@ class VAE(VAEBase):
         out = self.decoder[1](noise)
         if activate: out = self.act(out)
         return out
+
+class XVAE(VAEBase):
+    """ Explicit latent block + VAE """
+    #TODO
+    pass
 
 class VecVAE(VAEBase):
     """Version of VAE model for vector based (not image based) data"""

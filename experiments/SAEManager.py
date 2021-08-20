@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch import Tensor
 from torch import optim
-from models import SAE, ConvAE, XSAE
+from models import SAE, ConvAE, XSAE, models_switch
 from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
 from models.AE import XAE
@@ -15,15 +15,22 @@ from metrics import FIDScorer
 
 
 
-class SAEXperiment(BaseVisualExperiment):
+class AEExperiment(BaseVisualExperiment):
+    """ Manager of standard autoencoder experiments
+    The following conditions have to be verified:
+    - constructor that accepts (params, dim_in)
+    - BCE, MSE = self.model.loss_function(X_hat, input_imgs)
+
+    Basically all models implementing an HybridAE can be managed with this class
+    """
 
     def __init__(self, params: dict, verbose=True) -> None:
         # When initialised the dataset loader will download or load the data from the folder
         # split in train/test, apply transformations, divide in batches, extract data dimension
         loader = DatasetLoader(params["data_params"])
         dim_in =  loader.data_shape # C, H, W
-        model = SAE(params["model_params"], dim_in)
-        super(SAEXperiment, self).__init__(params, model, loader, verbose=verbose)
+        model = models_switch[params["model_params"]["name"]](params["model_params"], dim_in)
+        super(AEExperiment, self).__init__(params, model, loader, verbose=verbose)
         self.loss_type = params["model_params"]["loss_type"]
         assert self.loss_type in ["MSE","BCE"], "Requested loss type not available"
 
@@ -58,33 +65,6 @@ class SAEXperiment(BaseVisualExperiment):
         if self.loss_type=="MSE":return MSE
         return BCE
 
-class ConvAEXperiment(SAEXperiment):
-
-    def __init__(self, params: dict, verbose=True) -> None:
-        loader = DatasetLoader(params["data_params"])
-        dim_in =  loader.data_shape # C, H, W
-        model = ConvAE(params["model_params"], dim_in)
-        BaseVisualExperiment.__init__(self, params, model, loader, verbose=verbose)
-        self.loss_type = params["model_params"]["loss_type"]
-
-
-class XAEXperiment(SAEXperiment):
-
-    def __init__(self, params: dict, verbose=True) -> None:
-        loader = DatasetLoader(params["data_params"])
-        dim_in =  loader.data_shape # C, H, W
-        model = XAE(params["model_params"], dim_in)
-        BaseVisualExperiment.__init__(self, params, model, loader, verbose=verbose)
-        self.loss_type = params["model_params"]["loss_type"]
-
-class XSAEXperiment(SAEXperiment):
-
-    def __init__(self, params: dict, verbose=True) -> None:
-        loader = DatasetLoader(params["data_params"])
-        dim_in =  loader.data_shape # C, H, W
-        model = XSAE(params["model_params"], dim_in)
-        BaseVisualExperiment.__init__(self, params, model, loader, verbose=verbose)
-        self.loss_type = params["model_params"]["loss_type"]
 
 class SAEVecExperiment(BaseVecExperiment):
 

@@ -396,7 +396,7 @@ class HybridLayer(nn.Module):
         self.prior = torch.index_select(all_vecs, 0, idx)
 
 
-    def sample_from_prior(self, input_shape):
+    def sample_from_prior(self, input_shape):#FIXME: use directly num_samples instead of input_shape
         # splitting the prior latent vectors into chunks (one for each noise dimension)
         if self.prior is None: raise ValueError("No samples from the prior have been obtained yet")
         num_samples = input_shape[0]
