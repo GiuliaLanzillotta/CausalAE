@@ -198,6 +198,23 @@ def compute_MMD(fromP:Tensor, fromQ:Tensor, kernel="RBF", **kwargs):
 
     return _MMD
 
+def pixel_losses(X, X_hat, act):
+    """ Computes both MSE and BCE loss for X and X_hat"""
+    # mean over batch of the sum over all other dimensions
+    MSE = torch.sum(F.mse_loss(act(X_hat), X, reduction="none"),
+                    tuple(range(X_hat.dim()))[1:]).mean()
+    BCE = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
+                    tuple(range(X_hat.dim()))[1:]).mean()
+    return MSE,BCE
+
+def KL_multiple_univariate_gaussians(mus_1,mus_2, logvars_1, logvars_2, reduce=False):
+    """KL divergence between multiple tuples of univariate guassians:
+    all input have size mxD"""
+    KL = logvars_1 - logvars_2
+    KL += (logvars_1.exp().pow(2) + (mus_1 -mus_2).pow(2))/(2*logvars_2.exp().pow(2))
+    if reduce: KL = torch.sum(KL, dim=1).mean() # sum over D -> m x 1 -- mean over m -> 1x1
+    return KL
+
 
 if __name__ == '__main__':
     #TESTING

@@ -4,16 +4,17 @@ import torch
 from torch import Tensor
 from torch import nn
 
-from . import ConvNet, SCMDecoder, FCBlock, VecSCMDecoder, VecSCM, HybridAE, act_switch
+from . import ConvNet, SCMDecoder, FCBlock, VecSCMDecoder, VecSCM, HybridAE, act_switch, Xnet
 
 
 class SAE(HybridAE):
 
-    def __init__(self, params: dict, dim_in) -> None:
+    def __init__(self, params: dict) -> None:
         HybridAE.__init__(self, params)
+        dim_in = params['dim_in']
         self.dim_in = dim_in # C, H, W
         # Building encoder
-        conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params)
+        conv_net = ConvNet(depth=params["enc_depth"], **params)
         fc_net = FCBlock(conv_net.final_dim, [256, 128, self.latent_size], act_switch(params.get("act")))
         self.encoder = nn.Sequential(conv_net, fc_net) # returns vector of latent_dim size
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
@@ -33,34 +34,31 @@ class SAE(HybridAE):
         if activate: output = self.act(output)
         return output
 
+    def add_regularisation_terms(self, *args, **kwargs):
+        losses = kwargs.get('losses')
+        return losses
 
 
-class XSAE(HybridAE):
+class XSAE(SAE, Xnet):
 
-    def __init__(self, params: dict, dim_in) -> None:
-        HybridAE.__init__(self, params)
-        self.dim_in = dim_in # C, H, W
-        # Building encoder
-        conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params)
-        fc_net = FCBlock(conv_net.final_dim, [256, 128, self.latent_size], act_switch(params.get("act")))
-        self.encoder = nn.Sequential(conv_net, fc_net) # returns vector of latent_dim size
-        # initialise constant image to be used in decoding (it's going to be an image full of zeros)
-        self.decoder_initial_shape = conv_net.final_shape
-        # 1. vecSCM N -> Z (causal block)
-        # - mapping the latent code to the new causal space with an SCM-like structure
-        self.caual_block = VecSCM(self.latent_size, **params)
-        # 2. SCM Z + constant -> X (decoder)
-        # - keeping the SCM like structure in the decoder
-        self.decoder = SCMDecoder(self.decoder_initial_shape, dim_in, depth=params["dec_depth"],**params)
+    def __init__(self, params: dict) -> None:
+        SAE.__init__(self, params)
+        self.sparsity_on = params.get("sparsity",False)
+        self.caual_block = VecSCM(use_masking = self.sparsity_on, **params)
 
     def decode(self, noise:Tensor, activate:bool):
         z = self.caual_block(noise)
         # feeding a constant signal into the decoder
         # the output will be built on top of this constant trough the StrTrf layers
-        x = torch.ones((noise.shape[0],)+self.decoder_initial_shape).to(noise.device) # batch x latent
-        output = self.decoder(x, z)
+        x = torch.ones(size = noise.shape).to(noise.device) # batch x latent
+        x = self.dec_init(x).view((-1, )+self.decoder_initial_shape) # batch x 512
+        output = self.scm(x, z)
         if activate: output = self.act(output)
         return output
+
+    def add_regularisation_terms(self, *args, **kwargs):
+        return Xnet.add_regularisation_terms(self, *args, **kwargs)
+
 
 
 class VecSAE(HybridAE):

@@ -3,6 +3,7 @@ model_params:
   norm: 'batch'
   act: 'mish'
   loss_type: "BCE"
+  random_seed: 11
 
 opt_params:
   LR: 0.0001

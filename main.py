@@ -12,7 +12,7 @@ import torch
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 
-from experiments import experiments_switch
+from experiments import pick_model_manager
 from experiments.EvaluationManager import VectorModelHandler, VisualModelHandler, ModelHandler
 from configs import get_config
 from pytorch_lightning import Trainer
@@ -82,8 +82,8 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, score=True):
                      **config['trainer_params'])
 
 
+    experiment = pick_model_manager(config['model_params']['name'])(config)
 
-    experiment = experiments_switch[config['model_params']['name']](config)
     if not test:
         print(f"======= Training {config['model_params']['name']} =======")
         runner.fit(experiment)

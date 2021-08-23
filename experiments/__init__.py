@@ -6,21 +6,9 @@ from .VAEManager import VAEXperiment, cyclic_beta_schedule, linear_determ_warmup
 from .SAEManager import AEExperiment, SAEVecExperiment
 from .ESAEManager import ESAEXperiment, ESAEVecExperiment
 from .RManager import RegExperiment, RegVecExperiment
+from .ModelsManager import GenerativeAEExperiment
 
 
-experiments_switch = {'BetaVAE':VAEXperiment,
-                      'ESAE': ESAEXperiment,
-                      'AE': AEExperiment,
-                      'BaseSAE':AEExperiment,
-                      'XAE': AEExperiment,
-                      'XSAE': AEExperiment,
-                      'RSAE': RegExperiment,
-                      'RAE': RegExperiment,
-                      'XCAE': RegExperiment,
-                      'XCSAE': RegExperiment,
-                      'VecVAE':VAEVecEXperiment,
-                      'VecSAE':SAEVecExperiment,
-                      'VecESAE':ESAEVecExperiment,
-                      'VecRSAE':RegVecExperiment,
-                      'VecRAE':RegVecExperiment,
-                      'VecAE': SAEVecExperiment}
+def pick_model_manager(model_name):
+    if 'VAE' in model_name: return VAEXperiment
+    return GenerativeAEExperiment

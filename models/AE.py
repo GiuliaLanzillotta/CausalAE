@@ -5,14 +5,15 @@ from torch import Tensor
 # Paper: https://openreview.net/forum?id=Sy2fzU9gl
 from torch import nn
 
-from . import ConvNet, UpsampledConvNet, FCBlock, HybridAE, VecSCM
+from . import ConvNet, UpsampledConvNet, FCBlock, HybridAE, VecSCM, Xnet
 from .utils import act_switch
 
 
 class ConvAE(HybridAE):
 
-    def __init__(self, params: dict, dim_in) -> None:
+    def __init__(self, params: dict) -> None:
         HybridAE.__init__(self, params)
+        dim_in = params['dim_in']
         self.dim_in = dim_in # C, H, W
         # Building encoder
         conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params)
@@ -31,24 +32,16 @@ class ConvAE(HybridAE):
         if activate: output = self.act(output)
         return output
 
-class XAE(HybridAE):
+    def add_regularisation_terms(self, *args, **kwargs):
+        losses = kwargs.get('losses')
+        return losses
 
-    def __init__(self, params: dict, dim_in) -> None:
-        HybridAE.__init__(self, params)
-        self.dim_in = dim_in # C, H, W
-        # Building encoder
-        conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params)
-        conv_fin = FCBlock(conv_net.final_dim, [256, 128, self.latent_size], act_switch(params.get("act")))
-        self.encoder = nn.Sequential(conv_net, conv_fin) # returns vector of latent_dim size
-        # initialise constant image to be used in decoding (it's going to be an image full of zeros)
-        self.decoder_initial_shape = conv_net.final_shape
-        # 1. vecSCM N -> Z (causal block)
-        # - mapping the latent code to the new causal space with an SCM-like structure
-        self.caual_block = VecSCM(self.latent_size, **params)
-        # 2. SCM Z + constant -> X (decoder)
-        dec_init = FCBlock(self.latent_size, [128, 256, conv_net.final_dim], act_switch(params.get("act")))
-        deconv_net = UpsampledConvNet(self.decoder_initial_shape, self.dim_in, depth=params["dec_depth"], **params)
-        self.decoder = nn.ModuleList([dec_init, deconv_net])
+class XAE(ConvAE, Xnet):
+
+    def __init__(self, params: dict) -> None:
+        super().__init__(params)
+        self.sparsity_on = params.get("sparsity",False)
+        self.caual_block = VecSCM(use_masking = self.sparsity_on, **params)
 
     def decode(self, noise:Tensor, activate:bool):
         z = self.caual_block(noise)
@@ -56,6 +49,10 @@ class XAE(HybridAE):
         x = self.decoder[1](z_init)
         if activate: x = self.act(x)
         return x
+
+    def add_regularisation_terms(self, *args, **kwargs):
+        return Xnet.add_regularisation_terms(self, *args, **kwargs)
+
 
 class VecAE(HybridAE):
     """Simply an AE made of fully connected layers"""

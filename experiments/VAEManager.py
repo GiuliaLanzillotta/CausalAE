@@ -1,6 +1,8 @@
 from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
-from models import VAE
+from experiments.ModelsManager import GenerativeAEExperiment
+from models import VAE, models_switch
+
 
 def cyclic_beta_schedule(initial_beta, iter_num):
     """ Implements cyclic scheduling for beta to solve KL annealing problem
@@ -27,56 +29,28 @@ scheduler_switch = {
     'linear':linear_determ_warmup
 }
 
-class VAEXperiment(BaseVisualExperiment):
+class VAEXperiment(GenerativeAEExperiment):
 
     def __init__(self, params: dict, verbose=True) -> None:
-        loader = DatasetLoader(params["data_params"])
-        dim_in =  loader.data_shape # C, H, W
-        model = VAE(params["model_params"], dim_in)
-        super(VAEXperiment, self).__init__(params, model, loader, verbose=verbose)
-        # Additional initialisations (used in training and validation steps)
+        GenerativeAEExperiment.__init__(self, params, verbose)
         self.KL_weight = max(1.0, self.params["model_params"]["latent_size"]/self.params['data_params']['batch_size']) #this might be too high for the big datasets
         self.beta_scheduler = scheduler_switch[self.params["opt_params"]["beta_schedule"]]
-        self.loss_type = params["model_params"]["loss_type"]
-        assert self.loss_type in ["MSE","BCE"], "Requested loss type not available"
-
 
     def training_step(self, batch, batch_idx):
-        input_imgs, labels = batch
-        results = self.forward(input_imgs)
         KL_weight = self.beta_scheduler(self.KL_weight, self.global_step) # decaying the KL term
-        train_loss = self.model.loss_function(*results,
-                                              X = input_imgs,
-                                              KL_weight =  KL_weight,
-                                              use_MSE=self.loss_type=="MSE")
-        # Logging
-        self.log('train_loss', train_loss["loss"], prog_bar=True, on_epoch=True, on_step=True)
-        self.log_dict({key: val.item() for key, val in train_loss.items()})
-        self.log('beta', KL_weight*self.model.beta, prog_bar=True)
-        if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
-            figure = self.visualiser.plot_training_gradients()
-            self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
-
-        return train_loss["loss"]
-
+        self.params['model_params']['KL_weight'] = KL_weight
+        return GenerativeAEExperiment.training_step(self, batch, batch_idx)
 
     def validation_step(self, batch, batch_idx):
-        input_imgs, labels = batch
-        results = self.forward(input_imgs)
-        KL_weight = self.beta_scheduler(self.KL_weight, self.global_step)# decaying the KL term
-        val_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = KL_weight,
-                                            use_MSE=self.loss_type=="MSE")
-        # Calling self.log will surface up scalars for you in TensorBoard
-        self.log('val_loss', val_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        return val_loss
+        KL_weight = self.beta_scheduler(self.KL_weight, self.global_step) # decaying the KL term
+        self.params['model_params']['KL_weight'] = KL_weight
+        return GenerativeAEExperiment.validation_step(self, batch, batch_idx)
 
     def test_step(self, batch, batch_idx):
-        input_imgs, labels = batch
-        results = self.forward(input_imgs)#
-        test_loss = self.model.loss_function(*results, X = input_imgs, KL_weight = self.KL_weight,
-                                             use_MSE=self.loss_type=="MSE")# no decay in KL weight
-        # Calling self.log will surface up scalars for you in TensorBoard
-        self.log('test_loss', test_loss["loss"], prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        KL_weight = self.beta_scheduler(self.KL_weight, self.global_step) # decaying the KL term
+        self.params['model_params']['KL_weight'] = KL_weight
+        return GenerativeAEExperiment.test_step(self, batch, batch_idx)
+
 
 
 class VAEVecEXperiment(BaseVecExperiment):

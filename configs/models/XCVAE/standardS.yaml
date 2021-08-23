@@ -1,0 +1,26 @@
+model_params:
+  name: 'XCVAE'
+  beta: 4.0
+  latent_size: 6
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
+  num_pools: 3
+  unit_dim: 1
+  channels: 32
+  gaussian_init: 'xavier' #other option: 'normal'
+  loss_type: "MSE"
+  # invariance regularisation parameters
+  lamda: 2.0
+  num_samples: 100
+  num_interventions: 20
+
+
+opt_params:
+  KL_decay: 1.0
+  beta_schedule: 'cyclic'
+
+eval_params:
+  name: "scoring"
+  mode: 'X'
+
+

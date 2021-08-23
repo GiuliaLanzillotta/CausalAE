@@ -7,9 +7,8 @@ model_params:
   num_pools: 3
   unit_dim: 1
   channels: 32
-  # invariance regularisation parameters
-  lamda: 2.0
-  num_samples: 512
+  # regularisation parameters
+  sparsity_lamda: 2.0
 
 eval_params:
   name: "scoring"

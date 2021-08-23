@@ -1,15 +1,8 @@
 # SAE experiment manager 
-import numpy as np
-import torch
-from torch import Tensor
-from torch import optim
-from models import SAE, ConvAE, XSAE, models_switch
-from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
-from models.AE import XAE
-from visualisations import ModelVisualiser
-import pytorch_lightning as pl
-from metrics import FIDScorer
+from experiments.data import DatasetLoader
+from models import models_switch
+
 
 # Warmup schemes that should mimic the beta ones for the partial sampling
 
@@ -37,7 +30,7 @@ class AEExperiment(BaseVisualExperiment):
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
         X_hat = self.forward(input_imgs, update_prior=True, integrate=False)
-        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
+        BCE, MSE = self.model.loss_function(X_hat, X=input_imgs)# Logging
         self.log('BCE', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
@@ -49,7 +42,7 @@ class AEExperiment(BaseVisualExperiment):
     def validation_step(self, batch, batch_idx):
         input_imgs, labels = batch
         X_hat = self.forward(input_imgs, update_prior=True, integrate=True)
-        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
+        BCE, MSE = self.model.loss_function(X_hat, X=input_imgs)# Logging
         self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
@@ -59,7 +52,7 @@ class AEExperiment(BaseVisualExperiment):
     def test_step(self, batch, batch_idx):
         input_imgs, labels = batch
         X_hat = self.forward(input_imgs, update_prior=True, integrate=True)
-        BCE, MSE = self.model.loss_function(X_hat, input_imgs)# Logging
+        BCE, MSE = self.model.loss_function(X_hat, X=input_imgs)# Logging
         self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)
         if self.loss_type=="MSE":return MSE
@@ -74,7 +67,7 @@ class SAEVecExperiment(BaseVecExperiment):
     def training_step(self, batch, batch_idx):
         inputs, labels = batch
         X_hat = self.forward(inputs, update_prior=True, integrate=False)
-        BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
+        BCE, MSE = self.model.loss_function(X_hat, X=inputs)# Logging
         self.log('MSE', MSE, prog_bar=True, on_epoch=True, on_step=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
             figure = self.model_visualiser.plot_training_gradients()
@@ -84,7 +77,7 @@ class SAEVecExperiment(BaseVecExperiment):
     def validation_step(self, batch, batch_idx):
         inputs, labels = batch
         X_hat = self.forward(inputs, update_prior=True, integrate=True)
-        BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
+        BCE, MSE = self.model.loss_function(X_hat, X=inputs)# Logging
         self.log('BCE_valid', BCE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('MSE_valid', MSE, prog_bar=True, on_epoch=True, on_step=True)
         self.log('val_loss', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
@@ -93,7 +86,7 @@ class SAEVecExperiment(BaseVecExperiment):
     def test_step(self, batch, batch_idx):
         inputs, labels = batch
         X_hat = self.forward(inputs, update_prior=True, integrate=True)
-        BCE, MSE = self.model.loss_function(X_hat, inputs)# Logging
+        BCE, MSE = self.model.loss_function(X_hat, X=inputs)# Logging
         self.log('BCE_test', BCE, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.log('MSE_test', MSE, prog_bar=True,logger=True, on_step=True, on_epoch=True)
         return MSE

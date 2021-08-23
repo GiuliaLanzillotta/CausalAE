@@ -30,32 +30,24 @@ class RHybridAE(HybridAE, ABC):
     def generate(self, x: Tensor, activate:bool) -> Tensor:
         return self.forward(x, activate, update_prior=True, integrate=True)[0]
 
-    def loss_function(self, *args, **kwargs):
-        X_hat = args[0]
-        Z = args[1]
-        X = kwargs["X"]
-        lamda = kwargs.get('lamda')
+    def add_regularisation_terms(self, *args, **kwargs):
+        """ Takes as input the losses dictionary containing the reconstruction
+        loss and adds all the regularisation terms to it"""
+        lamda = kwargs.get('lamda_MMD',2.0)
         device = kwargs.get('device','cpu')
-        use_MSE = kwargs.get('use_MSE',True)
-
-        if use_MSE:
-            # mean over batch of the sum over all other dimensions
-            L_rec = torch.sum(F.mse_loss(self.act(X_hat), X, reduction="none"),
-                            tuple(range(X_hat.dim()))[1:]).mean()
-        else:
-            L_rec = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
-                        tuple(range(X_hat.dim()))[1:]).mean()
-
+        losses = kwargs.get('losses')
+        Z = args[1]
         Z_prior = self.hybrid_layer.sample_from_prior(Z.shape)
         L_reg = utils.compute_MMD(Z,Z_prior, kernel=self.kernel_type, **self.params, device=device)
-        loss = L_rec + lamda*L_reg
-        return{'loss': loss, 'Reconstruction_loss':L_rec, 'Regularization_loss':L_reg}
+        losses['Regularization_loss'] = L_reg
+        losses['loss'] += lamda*L_reg
+        return losses
 
 
 class RSAE(RHybridAE, SAE):
     """Regularised version of the SAE"""
-    def __init__(self, params:dict, dim_in) -> None:
-        SAE.__init__(self, params, dim_in)
+    def __init__(self, params:dict) -> None:
+        SAE.__init__(self, params)
         self.kernel_type = params["MMD_kernel"]
 
     def decode(self, noise:Tensor, activate:bool):
@@ -92,8 +84,8 @@ class VecRSAE(RHybridAE):
 
 class RAE(RHybridAE, ConvAE):
     """Regularised version of the ConvAE"""
-    def __init__(self, params:dict, dim_in) -> None:
-        ConvAE.__init__(self, params, dim_in)
+    def __init__(self, params:dict) -> None:
+        ConvAE.__init__(self, params)
         self.kernel_type = params["MMD_kernel"]
 
     def decode(self, noise:Tensor, activate:bool):

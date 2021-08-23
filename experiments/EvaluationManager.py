@@ -2,7 +2,7 @@
 import pickle
 
 import torch
-from experiments import experiments_switch
+from experiments import pick_model_manager
 from models import VAEBase, SAE, models_switch
 from models.BASE import GenerativeAE
 from pathlib import Path
@@ -48,7 +48,7 @@ class ModelHandler(object):
     def from_config(cls, model_name:str, model_version:str, data:str, data_version="", **kwargs):
         config = get_config(tuning=False, model_name=model_name, data=data,
                                  version=model_version, data_version=data_version)
-        experiment = experiments_switch[model_name](config, verbose=kwargs.get("verbose"))
+        experiment = pick_model_manager(model_name)(config, verbose=kwargs.get("verbose"))
         return cls(experiment, **kwargs)
 
     def score_disentanglement(self, **kwargs):
@@ -157,8 +157,9 @@ class ModelHandler(object):
         invariances = torch.zeros((D,D))
         for d in range(D):
             with torch.no_grad():
-                errors = self._invarianceScorer.noise_invariance(dim=d, n=samples_per_intervention,
-                                                                          m=num_interventions, hard = hard, reduced=False)
+                errors = self._invarianceScorer.noise_invariance(dim=d, num_samples=samples_per_intervention,
+                                                                 num_interventions=num_interventions,
+                                                                 device=self.device)
                 invariances[d,:] = errors # D x 1
 
         if store_it:

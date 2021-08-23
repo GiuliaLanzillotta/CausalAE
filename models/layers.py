@@ -1,5 +1,5 @@
 # Implementation of useful layers
-from typing import List
+from typing import List, Any, Union
 
 import torch
 from torch import nn
@@ -727,12 +727,10 @@ class VecSCMDecoder(nn.Module):
                 x = self.str_trf_modules[l](x, z_i)
         return x
 
-
-
 class VecSCM(nn.Module):
     """ Implements SCM layer only with fully connected layers, thus not moving to
     the image space. Given input U of size (N) returns output X of same size."""
-    def __init__(self, dim_in, unit_dim, **kwargs):
+    def __init__(self, latent_size, unit_dim, **kwargs):
         """
         @latent_size:int = size of the noise vector in input (obtained by hybrid/parametric sampling)
         @unit_dim:int = dimension of one "noise unit"- not necessarily 1
@@ -741,17 +739,21 @@ class VecSCM(nn.Module):
 
         """
         super().__init__()
-        assert dim_in%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
-        self.depth = dim_in//unit_dim
-        self.dim_in = dim_in
+        assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
+        self.depth = latent_size//unit_dim
+        self.dim_in = latent_size
         self.unit_dim = unit_dim
+        self.use_masking = kwargs.get("use_masking",False)
 
         self.str_assignments = nn.ModuleList([])
+        if self.use_masking: self.masks = []
         act = act_switch(kwargs.get("act"))
 
         for l in range(self.depth):
-            dim_in = (l+1)*self.unit_dim
-            #TODO: check number and size of layers here
+            dim_in: int = (l+1)*self.unit_dim
+            #TODO: check number and size of layers here ---why?
+            if self.use_masking and l>0: #excluding first node from sparsity penalty (no causal parents to prune away)
+                self.masks.append(torch.nn.Parameter(torch.ones(l*self.unit_dim)))
             self.str_assignments.append(FCBlock(dim_in, [10,10,self.unit_dim], act=act)) #mapping noise + parents to one causal variable
 
         self.str_assignments.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
@@ -764,9 +766,21 @@ class VecSCM(nn.Module):
         for l in range(self.depth):
             #extract noise
             z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
-            inputs = torch.hstack([z_i, x[:,:l*self.unit_dim]])
+            parents = x[:,:l*self.unit_dim]
+            if self.use_masking and l>0: parents = self.masks[l-1]*parents # no effect if the masks are kept to one
+            inputs = torch.hstack([z_i, parents])
             x[:,l*self.unit_dim:(l+1)*self.unit_dim] = self.str_assignments[l](inputs)
         return x
+
+    def masks_sparsity_penalty(self):
+        """Computes sparsity level of input masks """
+        sparsity_penalty = 0.
+        for mask in self.masks:
+            sparsity_penalty += torch.linalg.norm(mask, ord=1)
+        return sparsity_penalty
+
+class MaskedVecSCM(nn.Module):
+    """VecSCM with additional masking on the inputs (to be used to impose sparsity in the inputs of the SCM)"""
 
 
 

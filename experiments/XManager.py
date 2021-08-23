@@ -1,19 +1,18 @@
-"""Experiment manager for the R(egularised)-SAE model"""
-
+"""Manager of models with explicit causal structure in the latent space (X-class)"""
+from typing import List
 
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
 from experiments.data import DatasetLoader
 from models import models_switch
 
 
-class RegExperiment(BaseVisualExperiment):
+class XExperiment(BaseVisualExperiment):
     """
         Class of experiments for all the models that satisfy these characteristics:
         - constructor that accepts (params, dim_in)
         - loss that accepts (*results, X=, lamda=, device=, use_MSE=)
-        - loss dict of 3 terms 'Reconstruction_loss', 'Regularization_loss', 'loss'
 
-    Basically all the models implementing RHybridAE or CausalAE classes
+    Basically all the models implementing X- classes
     """
 
     def __init__(self, params: dict, verbose=True) -> None:
@@ -23,18 +22,23 @@ class RegExperiment(BaseVisualExperiment):
         dim_in =  loader.data_shape # C, H, W
         # only models that have
         model = models_switch[params["model_params"]["name"]](params["model_params"], dim_in)
-        super(RegExperiment, self).__init__(params, model, loader, verbose=verbose)
+        super(XExperiment, self).__init__(params, model, loader, verbose=verbose)
         self.use_MSE = params["model_params"]["loss_type"] == "MSE"
 
     def training_step(self, batch, batch_idx):
         input_imgs, labels = batch
         results = self.forward(input_imgs, update_prior=True, integrate=False)
+        if not isinstance(results, List): results = [results]
         losses = self.model.loss_function(*results,
                                           X=input_imgs,
                                           device=self.device,
                                           use_MSE=self.use_MSE,
                                           **self.params['model_params'],
                                           **self.params['opt_params'])
+        if self.model.sparsity_on:
+            sparsity_penalty = self.model.caual_block.masks_sparsity_penalty()
+            losses['sparsity_penalty'] = sparsity_penalty
+            losses['loss'] += sparsity_penalty
         # Logging
         self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log_dict({key: val.item() for key, val in losses.items()})

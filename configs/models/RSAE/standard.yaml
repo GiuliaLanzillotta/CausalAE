@@ -12,7 +12,8 @@ model_params:
   MMD_kernel: "RBF" #or IMQ or cat
   #"strict": False
   #"hierarchy": False
-  lamda: 2.0
+  lamda_MMD: 2.0
+
 
 
 eval_params:

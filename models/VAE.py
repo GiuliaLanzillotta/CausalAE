@@ -5,22 +5,23 @@ from abc import ABC
 import torch
 from torch import Tensor
 from torch import nn
+from models import utils, Xnet
 from torch.nn import functional as F
 
-from . import ConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv
-from .utils import act_switch
+from . import ConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv, \
+    VecSCM
+from .utils import act_switch, KL_multiple_univariate_gaussians
 
 
 class VAEBase(nn.Module, GenerativeAE, ABC):
 
     def __init__(self, params):
-        super().__init__()
+        super(VAEBase, self).__init__()
         self.params = params
         self.latent_size = params["latent_size"]
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
-        self.act = nn.Sigmoid()
 
-    def encode(self, inputs: Tensor):
+    def encode(self, inputs: Tensor, **kwargs):
         codes = self.encoder(inputs)
         z, logvar, mu = self.gaussian_latent(codes)
         return [z, mu, logvar]
@@ -34,11 +35,11 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
         if activate: out = self.act(out)
         return out
 
-    def sample_noise_from_prior(self, num_samples:int):
+    def sample_noise_from_prior(self, num_samples: int, **kwargs):
         return self.gaussian_latent.sample_standard(num_samples)
 
     def sample_noise_from_posterior(self, inputs: Tensor):
-        #TODO: change here
+        #TODO: change here --- why?
         return self.encode(inputs)[0]
 
     def generate(self, x: Tensor, activate:bool) -> Tensor:
@@ -50,26 +51,24 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
         z, mu, logvar = self.encode(inputs)
         return  [self.decode(z, activate), mu, logvar]
 
-    def loss_function(self, *args, **kwargs) -> dict:
-        X_hat = args[0]
+    def add_regularisation_terms(self, *args, **kwargs):
+        """ Takes as input the losses dictionary containing the reconstruction
+        loss and adds all the regularisation terms to it"""
         mu = args[1]
         log_var = args[2]
         X = kwargs["X"]
-        #  In this context it makes sense to normalise β by latent z size
-        # m and input x size n in order to compare its different values
-        # across different latent layer sizes and different datasets
+        device = kwargs.get('device')
+        losses = kwargs.get('losses')
+        """In this context it makes sense to normalise β by latent z size
+        m and input x size n in order to compare its different values
+        across different latent layer sizes and different datasets"""
         KL_weight = kwargs["KL_weight"] # usually weight = M/N
-        use_MSE = kwargs.get("use_MSE",True)
-        # ELBO = reconstruction term + prior-matching term
-        # Note: for both losses we take the average over the batch and sum over the other dimensions
-        BCE = torch.sum(F.binary_cross_entropy_with_logits(X_hat, X, reduction="none"),
-                        tuple(range(X_hat.dim()))[1:]).mean() #sum over all dimensions except the first one (batch)
-        MSE = torch.sum(F.mse_loss(self.act(X_hat), X, reduction="none"),
-                        tuple(range(X_hat.dim()))[1:]).mean()
-        recons_loss = MSE if use_MSE else BCE
-        KL_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), 1).mean()
-        loss = recons_loss + self.beta * KL_weight * KL_loss
-        return {'loss': loss, 'Reconstruction_loss':recons_loss, 'KL':KL_loss, 'MSE':MSE, 'BCE':BCE}
+        KL_loss = KL_multiple_univariate_gaussians(mu, torch.zeros_like(mu).to(device),
+                                                   log_var, torch.ones_like(log_var).to(device),
+                                                   reduce=True)
+        losses['KL']= KL_loss
+        losses['loss'] += self.beta * KL_weight * KL_loss
+        return losses
 
     def get_prior_range(self):
         """ returns a range in format [(min, max)] for every dimension that should contain
@@ -77,15 +76,14 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
 
         return self.gaussian_latent.prior_range
 
-
 class VAE(VAEBase):
 
-    def __init__(self, params: dict, dim_in) -> None:
-        super().__init__(params)
+    def __init__(self, params: dict) -> None:
+        super(VAE, self).__init__(params)
         self.beta = params["beta"]
         self.dittadi_v = params["dittadi"] # boolean flag determining whether or not to use Dittadi convolutional structure
-        self.dim_in = dim_in # C, H, W
-        # Building encoder
+        dim_in = params['dim_in']
+        self.dim_in = dim_in # C, H, W        # Building encoder
         conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params) if not self.dittadi_v \
             else DittadiConvNet(self.latent_size)
         if not self.dittadi_v:
@@ -105,10 +103,25 @@ class VAE(VAEBase):
         if activate: out = self.act(out)
         return out
 
-class XVAE(VAEBase):
+class XVAE(VAE, Xnet):
     """ Explicit latent block + VAE """
-    #TODO
-    pass
+    def __init__(self, params: dict) -> None:
+        VAE.__init__(self, params)
+        self.sparsity_on = params.get("sparsity",False)
+        self.caual_block = VecSCM(use_masking = self.sparsity_on, **params)
+
+    def decode(self, noise:Tensor, activate:bool) -> Tensor: #overriding parent class implementation to inser reshaping
+        Z = self.caual_block(noise)
+        out_init = self.decoder[0](Z).view((-1, )+self.decoder_initial_shape) # reshaping into image format
+        out = self.decoder[1](out_init)
+        if activate: out = self.act(out)
+        return out
+
+    def add_regularisation_terms(self, *args, **kwargs):
+        losses = VAE.add_regularisation_terms(*args, **kwargs)
+        kwargs['losses'] = losses
+        losses = Xnet.add_regularisation_terms(*args, **kwargs)
+        return losses
 
 class VecVAE(VAEBase):
     """Version of VAE model for vector based (not image based) data"""

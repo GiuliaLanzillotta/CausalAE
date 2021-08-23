@@ -1,15 +1,14 @@
 model_params:
-  name: 'BetaVAE'
-  residual: True
-  latent_size: 12
-  enc_depth: 12 #number of convolutional layers in the encoder
-  dec_depth: 12
-  num_pools: 3
-  channels: 32
-  dittadi: False
-  gaussian_init: 'xavier' #other option: 'normal'
+  name: 'XVAE'
   beta: 4.0
-
+  latent_size: 6
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
+  num_pools: 3
+  unit_dim: 1
+  channels: 32
+  gaussian_init: 'xavier' #other option: 'normal'
+  loss_type: "MSE"
 
 
 opt_params:
@@ -18,4 +17,7 @@ opt_params:
 
 eval_params:
   name: "scoring"
-  FID: False
+  FID: True
+  mode: 'X'
+
+

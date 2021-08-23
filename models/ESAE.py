@@ -1,5 +1,7 @@
 #Code for E(quivariant)SAE experiment
 #Experiment number one on SAE independence
+from typing import List
+
 import numpy as np
 from torch import nn
 from torch import Tensor
@@ -66,7 +68,7 @@ class EHybridAE(HybridAE, ABC):
         output = self.decode(codes, activate)
         return  output
 
-    def forward(self, inputs: Tensor, activate:bool=False, update_prior=False, integrate=False) -> list:
+    def forward(self, inputs: Tensor, activate:bool=False, update_prior=False, integrate=False) -> List:
         codes = self.encode(inputs)
         self.hybrid_layer.update_prior(codes, integrate=integrate)
 
@@ -108,8 +110,8 @@ class EHybridAE(HybridAE, ABC):
 
 class ESAE(EHybridAE, SAE):
     """Equivariant version of the SAE"""
-    def __init__(self, params:dict, dim_in) -> None:
-        SAE.__init__(self, params, dim_in)
+    def __init__(self, params:dict) -> None:
+        SAE.__init__(self, params)
         self.max_hybridisation_level = self.latent_size//self.unit_dim
         # M = number of hybrid samples to be drawn during forward pass
         # note that the minimum number of hybrid samoles coincides with the

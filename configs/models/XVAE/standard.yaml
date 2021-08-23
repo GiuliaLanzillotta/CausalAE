@@ -1,17 +1,19 @@
 model_params:
-  name: 'XCAE'
-  latent_vecs: 128 # for hybrid sampling
+  name: 'XVAE'
   latent_size: 12
   enc_depth: 12 #number of convolutional layers in the encoder
   dec_depth: 12
   num_pools: 3
   unit_dim: 1
   channels: 32
-  # regularisation parameters
+  gaussian_init: 'xavier' #other option: 'normal'
+  #regularisation parameters
+  beta: 4.0
   sparsity_lamda: 2.0
-  invariance_lamda: 2.0
-  num_samples: 100
-  num_interventions: 20
+
+opt_params:
+  KL_decay: 1.0
+  beta_schedule: 'linear'
 
 eval_params:
   name: "scoring"
