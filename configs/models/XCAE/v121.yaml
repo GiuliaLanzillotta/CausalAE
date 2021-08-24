@@ -10,8 +10,6 @@ model_params:
   loss_type: "MSE"
   # invariance regularisation parameters
   lamda: 2.0
-  num_samples: 100
-  num_interventions: 20
 
 eval_params:
   name: "scoring"

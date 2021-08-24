@@ -15,8 +15,9 @@ from .utils import KL_multiple_univariate_gaussians
 class CausalNet(GenerativeAE, ABC):
     """ Superclass of all causal networks, i.e. networks that admit causal training."""
 
-    def initialise_causal_net(self, random_seed):
-        self.random_state = np.random.RandomState(random_seed)
+    def __init__(self, params):
+        super().__init__(params)
+        self.random_state = np.random.RandomState(params['random_seed'])
 
     @abstractmethod
     def compute_errors_from_responses(self, R, R_prime):
@@ -30,8 +31,8 @@ class CausalNet(GenerativeAE, ABC):
             - device - SE
         """
         device = kwargs.get('device','cpu')
-        num_samples = kwargs.get('num_samples', 100)
-        num_interventions = kwargs.get('num_interventions', 20)
+        num_samples = kwargs.get('num_samples', 10)
+        num_interventions = kwargs.get('num_interventions', 10)
 
         with torch.no_grad():
             prior_samples = self.sample_noise_from_prior(num_samples, ).to(device)
@@ -49,12 +50,11 @@ class CausalNet(GenerativeAE, ABC):
             hybrid_posterior = LatentInvarianceEvaluator.posterior_distribution(posterior_samples, self.random_state, d)
             for i in range(num_interventions):
                 prior_samples_prime = LatentInvarianceEvaluator.noise_intervention(prior_samples, d, hard=True, sampling_fun=hybrid_posterior)
-                outputs = self.decode(prior_samples_prime.to(device), activate=True)
-                with torch.no_grad():  #FIXME
-                    responses_prime = self.encode(outputs)
+                responses_prime = self.encode(self.decode(prior_samples_prime.to(device), activate=True))
                 #FIXME: multi-dimensional units to be considered
                 error = self.compute_errors_from_responses(responses, responses_prime)
-                errors += (error/error.max()) # D x 1
+                #note: for training we only sum the errors without normalisation --> score not interpretable
+                errors += error # D x 1
             # sum all the errors on non intervened-on dimensions
             invariance_sum += (torch.sum(errors[:d]) + torch.sum(errors[d+1:]))/(num_interventions*self.latent_size) # averaging
 
@@ -76,77 +76,73 @@ class CausalAE(CausalNet, ABC):
     """Causally trained version of the HybridAE: simply adds a regularisation term
     to the reconstruction objective."""
 
+    def __init__(self, params):
+        super(CausalAE, self).__init__(params)
+
     def compute_errors_from_responses(self, R, R_prime):
         """
         R, R_prime: Tensors of dimension m x D
         Returns: Dx1 torch tensor of errors (e_i^{j,k})"""
         return LatentInvarianceEvaluator.compute_absolute_errors(R,R_prime)
 
-class XCSAE(XSAE, CausalAE):
+class XCSAE(CausalAE, XSAE):
 
     def __init__(self, params: dict) -> None:
-        XSAE.__init__(self, params)
-        CausalAE.initialise_causal_net(self, params['random_seed'])
-
-        #CausalAE.__init__(self, params)
-        #XSAE.__init__(self, params, dim_in)
+        super(XCSAE, self).__init__(params)
 
     def decode(self, noise:Tensor, activate:bool):
         return XSAE.decode(self, noise, activate)
 
     def add_regularisation_terms(self, *args, **kwargs):
-        losses = CausalAE.add_regularisation_terms(*args, **kwargs)
+        losses = CausalAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
-        losses = XSAE.add_regularisation_terms(*args, **kwargs)
+        losses = XSAE.add_regularisation_terms(self, *args, **kwargs)
         return losses
 
-class XCAE(XAE, CausalAE):
+class XCAE(CausalAE, XAE):
 
     def __init__(self, params: dict) -> None:
-        XAE.__init__(self, params)
+        super(XCAE, self).__init__(params)
 
     def decode(self, noise:Tensor, activate:bool):
         return XAE.decode(self, noise, activate)
 
     def add_regularisation_terms(self, *args, **kwargs):
-        losses = CausalAE.add_regularisation_terms(*args, **kwargs)
+        losses = CausalAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
-        losses = XAE.add_regularisation_terms(*args, **kwargs)
+        losses = XAE.add_regularisation_terms(self, *args, **kwargs)
         return losses
 
 
-class CausalVAE(VAE, CausalNet, ABC):
+class CausalVAE(CausalNet, VAE, ABC):
     """ Causally trained version on VAE network - i.e. any net that implements VAEBase"""
     def __init__(self, params:dict):
-        VAE.__init__(self, params)
-        self.random_state = np.random.RandomState(params["random_seed"])
+        super(CausalVAE, self).__init__(params)
 
     def compute_errors_from_responses(self, R:List[Tensor], R_prime:List[Tensor]):
         return LatentInvarianceEvaluator.compute_distributional_errors(R, R_prime)
 
     def add_regularisation_terms(self, *args, **kwargs):
-        losses = VAE.add_regularisation_terms(*args, **kwargs)
+        losses = VAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
-        losses = CausalNet.add_regularisation_terms(*args, **kwargs)
+        losses = CausalNet.add_regularisation_terms(self, *args, **kwargs)
         return losses
 
 class XCVAE(CausalVAE, Xnet):
     """ XVAE net augmented with causal training """
 
     def __init__(self, params: dict) -> None:
-        CausalVAE.__init__(self, params)
-        self.sparsity_on = params.get("sparsity",False)
-        self.caual_block = VecSCM(use_masking = self.sparsity_on, **params)
+        super(XCVAE, self).__init__(params)
 
     def decode(self, noise:Tensor, activate:bool):
-        Z = self.caual_block(noise)
+        Z = self.causal_block(noise, masks_temperature=self.tau)
         out_init = self.decoder[0](Z).view((-1, )+self.decoder_initial_shape) # reshaping into image format
         out = self.decoder[1](out_init)
         if activate: out = self.act(out)
         return out
 
     def add_regularisation_terms(self, *args, **kwargs):
-        losses = CausalVAE.add_regularisation_terms(*args, **kwargs)
+        losses = CausalVAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
-        losses = Xnet.add_regularisation_terms(*args, **kwargs)
+        losses = Xnet.add_regularisation_terms(self, *args, **kwargs)
         return losses

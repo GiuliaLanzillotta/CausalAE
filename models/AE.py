@@ -12,7 +12,7 @@ from .utils import act_switch
 class ConvAE(HybridAE):
 
     def __init__(self, params: dict) -> None:
-        HybridAE.__init__(self, params)
+        super(ConvAE, self).__init__(params)
         dim_in = params['dim_in']
         self.dim_in = dim_in # C, H, W
         # Building encoder
@@ -39,12 +39,10 @@ class ConvAE(HybridAE):
 class XAE(ConvAE, Xnet):
 
     def __init__(self, params: dict) -> None:
-        super().__init__(params)
-        self.sparsity_on = params.get("sparsity",False)
-        self.caual_block = VecSCM(use_masking = self.sparsity_on, **params)
+        super(XAE, self).__init__(params)
 
     def decode(self, noise:Tensor, activate:bool):
-        z = self.caual_block(noise)
+        z = self.causal_block(noise, self.tau)
         z_init = self.decoder[0](z).view((-1, )+self.decoder_initial_shape) # reshaping into image format
         x = self.decoder[1](z_init)
         if activate: x = self.act(x)

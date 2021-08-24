@@ -10,7 +10,7 @@ from . import ConvNet, SCMDecoder, FCBlock, VecSCMDecoder, VecSCM, HybridAE, act
 class SAE(HybridAE):
 
     def __init__(self, params: dict) -> None:
-        HybridAE.__init__(self, params)
+        super(SAE, self).__init__(params)
         dim_in = params['dim_in']
         self.dim_in = dim_in # C, H, W
         # Building encoder
@@ -42,9 +42,7 @@ class SAE(HybridAE):
 class XSAE(SAE, Xnet):
 
     def __init__(self, params: dict) -> None:
-        SAE.__init__(self, params)
-        self.sparsity_on = params.get("sparsity",False)
-        self.caual_block = VecSCM(use_masking = self.sparsity_on, **params)
+        super(XSAE, self).__init__(params)
 
     def decode(self, noise:Tensor, activate:bool):
         z = self.caual_block(noise)

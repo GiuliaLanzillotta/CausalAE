@@ -2,32 +2,7 @@ from experiments.data import DatasetLoader
 from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
 from experiments.ModelsManager import GenerativeAEExperiment
 from models import VAE, models_switch
-
-
-def cyclic_beta_schedule(initial_beta, iter_num):
-    """ Implements cyclic scheduling for beta to solve KL annealing problem
-    - initial_beta: the original value for beta to take
-    - iter_num: number of current iteration
-    Idea taken from: https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/"""
-    cycle_len = 10000 # 10k iterations to complete one cycle
-    relative_iter = iter_num%cycle_len
-    weight = min(((2*relative_iter)/cycle_len),1.0) #half of the cycle constant at the maximum value
-    return initial_beta*weight
-
-def linear_determ_warmup(initial_beta, iter_num):
-    """ Implements linear deterministich warm-up for beta to solve KL annealing problem
-    - initial_beta: the original value for beta to take
-    - iter_num: number of current iteration
-    Taken from (Bowman et al.,2015; Sønderby et al., 2016)
-    """
-    warmup_time = 10000
-    weight = min((iter_num/warmup_time),1.0)
-    return weight*initial_beta
-
-scheduler_switch = {
-    'cyclic':cyclic_beta_schedule,
-    'linear':linear_determ_warmup
-}
+from .utils import scheduler_switch
 
 class VAEXperiment(GenerativeAEExperiment):
 

@@ -18,7 +18,7 @@ class EHybridAE(HybridAE, ABC):
     Defines levels of hybrid sampling and integrates hybridisation into forward pass"""
     @abstractmethod
     def __init__(self, params:dict):
-        HybridAE.__init__(self, params)
+        super(EHybridAE, self).__init__(params)
 
     def sample_noise_controlled(self, latent_vecs: Tensor, level:int):
         noise = self.hybrid_layer.controlled_sampling(latent_vecs, level, use_prior=False)
@@ -68,7 +68,9 @@ class EHybridAE(HybridAE, ABC):
         output = self.decode(codes, activate)
         return  output
 
-    def forward(self, inputs: Tensor, activate:bool=False, update_prior=False, integrate=False) -> List:
+    def forward(self, inputs: Tensor, **kwargs) -> List:
+        activate = kwargs.get('activate',False)
+        integrate = kwargs.get('integrate',True)
         codes = self.encode(inputs)
         self.hybrid_layer.update_prior(codes, integrate=integrate)
 
@@ -111,7 +113,7 @@ class EHybridAE(HybridAE, ABC):
 class ESAE(EHybridAE, SAE):
     """Equivariant version of the SAE"""
     def __init__(self, params:dict) -> None:
-        SAE.__init__(self, params)
+        super(ESAE, self).__init__(params)
         self.max_hybridisation_level = self.latent_size//self.unit_dim
         # M = number of hybrid samples to be drawn during forward pass
         # note that the minimum number of hybrid samoles coincides with the

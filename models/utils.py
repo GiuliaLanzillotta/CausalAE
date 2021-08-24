@@ -5,6 +5,7 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 from torch import Tensor
+from torch.distributions import Gumbel
 from torchvision.transforms import Normalize
 
 
@@ -214,6 +215,15 @@ def KL_multiple_univariate_gaussians(mus_1,mus_2, logvars_1, logvars_2, reduce=F
     KL += (logvars_1.exp().pow(2) + (mus_1 -mus_2).pow(2))/(2*logvars_2.exp().pow(2))
     if reduce: KL = torch.sum(KL, dim=1).mean() # sum over D -> m x 1 -- mean over m -> 1x1
     return KL
+
+def gumbel_trick(logits:Tensor, tau:float, device:str):
+    """
+    logits: dx1 weigth vector parametrising the log probabilities of sampling from a Bernoulli
+    tau:temperature parameter for the softmax
+    Returns: a dx1 tensor with values sampled according to the gumbel-softmax distribution on the logits"""
+    with torch.no_grad: gumbel_noise = Gumbel(0,1).sample(logits.shape).to(device)
+    noised_logits = (logits + gumbel_noise)/tau
+    return noised_logits
 
 
 if __name__ == '__main__':

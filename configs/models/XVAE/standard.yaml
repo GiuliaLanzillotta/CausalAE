@@ -10,6 +10,8 @@ model_params:
   #regularisation parameters
   beta: 4.0
   sparsity_lamda: 2.0
+  sparsity: True
+
 
 opt_params:
   KL_decay: 1.0

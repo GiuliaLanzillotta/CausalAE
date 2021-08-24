@@ -9,10 +9,6 @@ model_params:
   channels: 32
   gaussian_init: 'xavier' #other option: 'normal'
   loss_type: "MSE"
-  # invariance regularisation parameters
-  lamda: 2.0
-  num_samples: 100
-  num_interventions: 20
 
 
 opt_params:

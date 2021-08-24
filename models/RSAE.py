@@ -15,20 +15,23 @@ class RHybridAE(HybridAE, ABC):
     to the reconstruction objective."""
     @abstractmethod
     def __init__(self, params:dict):
-        HybridAE.__init__(self, params)
+        super(RHybridAE, self).__init__(params)
 
     @abstractmethod
     def decode(self, noise:Tensor, activate:bool):
         raise NotImplementedError
 
-    def forward(self, inputs: Tensor, activate:bool=False, update_prior:bool=False, integrate=True) -> list:
+    def forward(self, inputs: Tensor, **kwargs) -> list:
+        activate = kwargs.get('activate',False)
+        update_prior = kwargs.get('update_prior',False)
+        integrate = kwargs.get('integrate',True)
         codes = self.encode(inputs)
         if update_prior: self.hybrid_layer.update_prior(codes, integrate=integrate)
         output = self.decode(codes, activate)
         return  [output, codes]
 
     def generate(self, x: Tensor, activate:bool) -> Tensor:
-        return self.forward(x, activate, update_prior=True, integrate=True)[0]
+        return self.forward(x, activate=activate, update_prior=True, integrate=True)[0]
 
     def add_regularisation_terms(self, *args, **kwargs):
         """ Takes as input the losses dictionary containing the reconstruction
@@ -47,7 +50,7 @@ class RHybridAE(HybridAE, ABC):
 class RSAE(RHybridAE, SAE):
     """Regularised version of the SAE"""
     def __init__(self, params:dict) -> None:
-        SAE.__init__(self, params)
+        super(RSAE, self).__init__(params)
         self.kernel_type = params["MMD_kernel"]
 
     def decode(self, noise:Tensor, activate:bool):
@@ -85,7 +88,7 @@ class VecRSAE(RHybridAE):
 class RAE(RHybridAE, ConvAE):
     """Regularised version of the ConvAE"""
     def __init__(self, params:dict) -> None:
-        ConvAE.__init__(self, params)
+        super(RAE, self).__init__(params)
         self.kernel_type = params["MMD_kernel"]
 
     def decode(self, noise:Tensor, activate:bool):

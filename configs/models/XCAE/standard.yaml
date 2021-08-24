@@ -10,11 +10,16 @@ model_params:
   # regularisation parameters
   sparsity_lamda: 2.0
   invariance_lamda: 2.0
-  num_samples: 100
-  num_interventions: 20
+  num_samples: 10
+  num_interventions: 10
+  sparsity: True
+
 
 eval_params:
   name: "scoring"
   FID: True
   latent_responses: True
   mode: 'X'
+
+opt_params:
+  inv_lamda_schedule: 'linear'

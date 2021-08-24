@@ -17,6 +17,9 @@ class GenerativeAE(ABC):
 
     latent_size = None
     act = nn.Sigmoid()
+    
+    def __init__(self):
+        super(GenerativeAE, self).__init__()
 
     @abstractmethod
     def encode(self, inputs:Tensor, **kwargs) -> Tensor:
@@ -58,6 +61,11 @@ class GenerativeAE(ABC):
         loss and adds all the regularisation terms to it"""
         raise NotImplementedError
 
+    @abstractmethod
+    def forward(self,  inputs: Tensor, **kwargs)-> List[Tensor]:
+        """Implements forward pass through the model"""
+        raise NotImplementedError
+
     def loss_function(self, *args, **kwargs):
         """General loss function for standard AE
         Computes reconstruction error internally and
@@ -79,11 +87,11 @@ class GenerativeAE(ABC):
         return losses
 
 
-class HybridAE(GenerativeAE, nn.Module, ABC):
+class HybridAE(nn.Module, GenerativeAE, ABC):
     """Generalisation of all the generative autoencoder models that adopt hybrid layers
     as stochastic layers"""
     def __init__(self, params: dict):
-        nn.Module.__init__(self)
+        super(HybridAE, self).__init__(params)
         self.params = params
         self.latent_size = params["latent_size"]
         self.unit_dim = params["unit_dim"]
@@ -138,9 +146,12 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
     def generate(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
-        return self.forward(x, activate, update_prior=True, integrate=True)[0]
+        return self.forward(x,activate=activate, update_prior=True, integrate=True)[0]
 
-    def forward(self, inputs: Tensor, activate:bool=False, update_prior:bool=False, integrate=True) -> List[Tensor]:
+    def forward(self, inputs: Tensor, **kwargs)-> List[Tensor]:
+        activate = kwargs.get('activate',False)
+        update_prior = kwargs.get('update_prior',False)
+        integrate = kwargs.get('integrate',True)
         codes = self.encode(inputs)
         if update_prior: self.hybrid_layer.update_prior(codes, integrate=integrate)
         output = self.decode(codes, activate)
@@ -152,10 +163,14 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
         return self.hybrid_layer.prior_range
 
 
-class Xnet():
+class Xnet(nn.Module):
     """AE with explicit causal block"""
-    causal_block = None
-    sparsity_on = None
+
+    def __init__(self, params):
+        super(Xnet, self).__init__()
+        self.sparsity_on = params.get("sparsity",False)
+        self.causal_block = VecSCM(use_masking = self.sparsity_on, **params)
+        self.tau = 0.5
 
     def add_regularisation_terms(self, *args, **kwargs):
         """ Takes as input the losses dictionary containing the reconstruction

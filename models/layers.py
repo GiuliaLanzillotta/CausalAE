@@ -6,8 +6,9 @@ from torch import nn
 from torch import Tensor
 import numpy as np
 from torch.autograd import Variable
+from torch.distributions import Gumbel
 
-from .utils import Mish, act_switch, norm_switch, standard_initialisation
+from .utils import Mish, act_switch, norm_switch, standard_initialisation, gumbel_trick
 
 class FCResidualBlock(nn.Module):
     """ Implements residual fully connected block with adaptive average pooling """
@@ -744,6 +745,9 @@ class VecSCM(nn.Module):
         self.dim_in = latent_size
         self.unit_dim = unit_dim
         self.use_masking = kwargs.get("use_masking",False)
+        if self.use_masking:
+            self.gumbel = Gumbel(0,1)
+            self.act = nn.Sigmoid()
 
         self.str_assignments = nn.ModuleList([])
         if self.use_masking: self.masks = []
@@ -753,12 +757,12 @@ class VecSCM(nn.Module):
             dim_in: int = (l+1)*self.unit_dim
             #TODO: check number and size of layers here ---why?
             if self.use_masking and l>0: #excluding first node from sparsity penalty (no causal parents to prune away)
-                self.masks.append(torch.nn.Parameter(torch.ones(l*self.unit_dim)))
+                self.masks.append(torch.nn.Parameter(torch.randn(l*self.unit_dim)))
             self.str_assignments.append(FCBlock(dim_in, [10,10,self.unit_dim], act=act)) #mapping noise + parents to one causal variable
 
         self.str_assignments.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
-    def forward(self, z):
+    def forward(self, z, masks_temperature=0.001):
         """ Implements through the scm.
         The input consists in only a noise vector (z), which is passed through the structural assignments layers.
          """
@@ -766,8 +770,11 @@ class VecSCM(nn.Module):
         for l in range(self.depth):
             #extract noise
             z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
-            parents = x[:,:l*self.unit_dim]
-            if self.use_masking and l>0: parents = self.masks[l-1]*parents # no effect if the masks are kept to one
+            parents = x[:,:l*self.unit_dim].clone().detach()
+            if self.use_masking and l>0:
+                with torch.no_grad(): gumbel_noise = self.gumbel.sample(parents.shape)
+                sharpened_masks = self.act((self.masks[l-1] + gumbel_noise).to(parents.device)/masks_temperature)
+                parents = sharpened_masks*parents # no effect if the masks are kept to one
             inputs = torch.hstack([z_i, parents])
             x[:,l*self.unit_dim:(l+1)*self.unit_dim] = self.str_assignments[l](inputs)
         return x

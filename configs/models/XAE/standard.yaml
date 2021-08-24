@@ -9,6 +9,7 @@ model_params:
   channels: 32
   # regularisation parameters
   sparsity_lamda: 2.0
+  sparsity: True
 
 eval_params:
   name: "scoring"

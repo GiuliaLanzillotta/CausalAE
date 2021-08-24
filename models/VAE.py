@@ -16,7 +16,7 @@ from .utils import act_switch, KL_multiple_univariate_gaussians
 class VAEBase(nn.Module, GenerativeAE, ABC):
 
     def __init__(self, params):
-        super(VAEBase, self).__init__()
+        super(VAEBase, self).__init__(params)
         self.params = params
         self.latent_size = params["latent_size"]
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
@@ -45,9 +45,10 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
     def generate(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
-        return self.forward(x, activate)[0]
+        return self.forward(x, activate=activate)[0]
 
-    def forward(self, inputs: Tensor, activate:bool=False) -> list:
+    def forward(self, inputs: Tensor, **kwargs) -> list:
+        activate= kwargs.get('activate',False)
         z, mu, logvar = self.encode(inputs)
         return  [self.decode(z, activate), mu, logvar]
 
@@ -81,10 +82,10 @@ class VAE(VAEBase):
     def __init__(self, params: dict) -> None:
         super(VAE, self).__init__(params)
         self.beta = params["beta"]
-        self.dittadi_v = params["dittadi"] # boolean flag determining whether or not to use Dittadi convolutional structure
+        self.dittadi_v = params.get('dittadi',False) # boolean flag determining whether or not to use Dittadi convolutional structure
         dim_in = params['dim_in']
         self.dim_in = dim_in # C, H, W        # Building encoder
-        conv_net = ConvNet(dim_in, depth=params["enc_depth"], **params) if not self.dittadi_v \
+        conv_net = ConvNet(depth=params["enc_depth"], **params) if not self.dittadi_v \
             else DittadiConvNet(self.latent_size)
         if not self.dittadi_v:
             fc_enc = FCBlock(conv_net.final_dim, [128, 64, self.latent_size], act_switch(params["act"]))
@@ -106,21 +107,19 @@ class VAE(VAEBase):
 class XVAE(VAE, Xnet):
     """ Explicit latent block + VAE """
     def __init__(self, params: dict) -> None:
-        VAE.__init__(self, params)
-        self.sparsity_on = params.get("sparsity",False)
-        self.caual_block = VecSCM(use_masking = self.sparsity_on, **params)
+        super(XVAE, self).__init__(params)
 
     def decode(self, noise:Tensor, activate:bool) -> Tensor: #overriding parent class implementation to inser reshaping
-        Z = self.caual_block(noise)
+        Z = self.causal_block(noise, masks_temperature=self.tau)
         out_init = self.decoder[0](Z).view((-1, )+self.decoder_initial_shape) # reshaping into image format
         out = self.decoder[1](out_init)
         if activate: out = self.act(out)
         return out
 
     def add_regularisation_terms(self, *args, **kwargs):
-        losses = VAE.add_regularisation_terms(*args, **kwargs)
+        losses = VAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
-        losses = Xnet.add_regularisation_terms(*args, **kwargs)
+        losses = Xnet.add_regularisation_terms(self, *args, **kwargs)
         return losses
 
 class VecVAE(VAEBase):
