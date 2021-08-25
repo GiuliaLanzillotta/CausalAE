@@ -124,15 +124,13 @@ class HybridAE(nn.Module, GenerativeAE, ABC):
         noise = self.hybrid_layer(codes).to(codes.device)
         return noise
 
-    def sample_noise_from_prior(self, num_samples: int, **kwargs):
-        """Equivalent to total hybridisation: every point is hybridised at the maximum level"""
-        uniform = kwargs.get('uniform',False)
-        if not uniform: return self.hybrid_layer.sample_from_prior((num_samples,))
-        # compute extremes of uniform distribution over the latent space using the stored codes
-        lows = torch.min(self.hybrid_layer.prior, dim=0).values
-        highs = torch.min(self.hybrid_layer.prior, dim=0).values
-        uniform = Uniform(lows, highs)
-        return uniform.sample([num_samples])
+    def sample_noise_from_prior(self, num_samples: int, mode='hybrid', **kwargs):
+        """Equivalent to total hybridisation: every point is hybridised at the maximum level
+        3 modes supported: posterior/hybrid/uniform"""
+        if mode=='posterior': return self.hybrid_layer.prior[:num_samples]
+        if mode=='hybrid': return self.hybrid_layer.sample_from_prior((num_samples,))
+        if mode=='uniform': return self.hybrid_layer.sample_uniformly_in_support(num_samples)
+        raise NotImplementedError('Requested sampling mode not implemented')
 
     def sample_noise_from_posterior(self, inputs: Tensor):
         """Posterior distribution of a standard autoencoder is given by the set of all samples"""
@@ -170,7 +168,7 @@ class Xnet(nn.Module):
         super(Xnet, self).__init__()
         self.sparsity_on = params.get("sparsity",False)
         self.causal_block = VecSCM(use_masking = self.sparsity_on, **params)
-        self.tau = 0.5
+        self.tau = 1.0
 
     def add_regularisation_terms(self, *args, **kwargs):
         """ Takes as input the losses dictionary containing the reconstruction

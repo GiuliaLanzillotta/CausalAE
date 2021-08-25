@@ -208,11 +208,11 @@ def pixel_losses(X, X_hat, act):
                     tuple(range(X_hat.dim()))[1:]).mean()
     return MSE,BCE
 
-def KL_multiple_univariate_gaussians(mus_1,mus_2, logvars_1, logvars_2, reduce=False):
+def KL_multiple_univariate_gaussians(mus_1, mus_2, logvars_1, logvars_2, reduce=False):
     """KL divergence between multiple tuples of univariate guassians:
     all input have size mxD"""
-    KL = logvars_1 - logvars_2
-    KL += (logvars_1.exp().pow(2) + (mus_1 -mus_2).pow(2))/(2*logvars_2.exp().pow(2))
+    KL = (logvars_2 - logvars_1) - 0.5
+    KL += (logvars_1.exp().pow(2) + (mus_1 - mus_2).pow(2))/(2*(logvars_2.exp().pow(2)))
     if reduce: KL = torch.sum(KL, dim=1).mean() # sum over D -> m x 1 -- mean over m -> 1x1
     return KL
 

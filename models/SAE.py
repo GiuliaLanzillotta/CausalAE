@@ -45,7 +45,7 @@ class XSAE(SAE, Xnet):
         super(XSAE, self).__init__(params)
 
     def decode(self, noise:Tensor, activate:bool):
-        z = self.caual_block(noise)
+        z = self.causal_block(noise, self.tau)
         # feeding a constant signal into the decoder
         # the output will be built on top of this constant trough the StrTrf layers
         x = torch.ones(size = noise.shape).to(noise.device) # batch x latent

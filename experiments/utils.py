@@ -30,8 +30,8 @@ scheduler_switch = {
 def temperature_exponential_annealing(iter_num):
     """Annealing schedule fot temperature used in Gumbel softmax distribution as
     suggested in https://arxiv.org/pdf/1611.01144.pdf """
-    r = 10e-2
-    tau = min(0.5, np.exp(-r*iter_num))
+    r = 10e-3
+    tau = max(min(1.0, np.exp(-r*iter_num)),0.01)
     return tau
 
 class SchedulersManager():

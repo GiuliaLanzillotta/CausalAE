@@ -26,3 +26,6 @@ eval_params:
   FID: True
   latent_responses: True
   mode: 'X'
+
+vis_params:
+  plot_every: 5 # hugher frequency for slower training

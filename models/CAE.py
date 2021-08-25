@@ -20,7 +20,7 @@ class CausalNet(GenerativeAE, ABC):
         self.random_state = np.random.RandomState(params['random_seed'])
 
     @abstractmethod
-    def compute_errors_from_responses(self, R, R_prime):
+    def compute_errors_from_responses(self, R, R_prime, **kwargs):
         """Returns: Dx1 torch tensor of errors (e_i^{j,k})"""
         raise NotImplementedError
 
@@ -35,30 +35,38 @@ class CausalNet(GenerativeAE, ABC):
         num_interventions = kwargs.get('num_interventions', 10)
 
         with torch.no_grad():
-            prior_samples = self.sample_noise_from_prior(num_samples, ).to(device)
+            prior_samples = self.sample_noise_from_prior(num_samples, mode='posterior').to(device)
             #FIXME: aggregate posterior estimate instead of using only one batch updating it
             posterior_samples = self.sample_noise_from_posterior(inputs).to(device)
             # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
-            responses = self.encode(self.decode(prior_samples, activate=True))
+            responses = self.encode(self.decode(prior_samples, activate=True)) # n x d
 
-        #TODO: parallelise to make faster
 
-        invariance_sum = 0.
-
+        all_prior_samples = []
         for d in range(self.latent_size):
-            errors = torch.zeros(self.latent_size, dtype=torch.float).to(device)
             hybrid_posterior = LatentInvarianceEvaluator.posterior_distribution(posterior_samples, self.random_state, d)
-            for i in range(num_interventions):
-                prior_samples_prime = LatentInvarianceEvaluator.noise_intervention(prior_samples, d, hard=True, sampling_fun=hybrid_posterior)
-                responses_prime = self.encode(self.decode(prior_samples_prime.to(device), activate=True))
-                #FIXME: multi-dimensional units to be considered
-                error = self.compute_errors_from_responses(responses, responses_prime)
-                #note: for training we only sum the errors without normalisation --> score not interpretable
-                errors += error # D x 1
-            # sum all the errors on non intervened-on dimensions
-            invariance_sum += (torch.sum(errors[:d]) + torch.sum(errors[d+1:]))/(num_interventions*self.latent_size) # averaging
-
-        return invariance_sum
+            prior_samples_prime = LatentInvarianceEvaluator.noise_intervention(prior_samples, d, num_interventions=num_interventions,
+                                                                               hard=True, sampling_fun=hybrid_posterior) # (mxn) x d
+            all_prior_samples.append(prior_samples_prime)
+        all_prior_samples = torch.vstack(all_prior_samples)# (dxnxm) x d
+        responses_prime = self.encode(self.decode(all_prior_samples.to(device), activate=True))
+        #FIXME: multi-dimensional units to be considered
+        try: responses_expanded = responses.repeat(num_interventions * self.latent_size, 1)
+        except AttributeError:
+            # variational case
+            Ns, mus_1, logvars_1 = responses
+            responses_expanded = [Ns.repeat(num_interventions * self.latent_size, 1),
+                                  mus_1.repeat(num_interventions * self.latent_size, 1),
+                                  logvars_1.repeat(num_interventions * self.latent_size, 1)]
+        errors = self.compute_errors_from_responses(responses_expanded, responses_prime,
+                                complete_shape=(self.latent_size, num_interventions, -1, self.latent_size))
+        # errors have shape ( d x n x d ) -> the m dimension is reduced in the response computation
+        #note: for training we only sum the errors without normalisation --> score not interpretable
+        # sum all the errors on non intervened-on dimensions
+        invariance = torch.sum(errors, dim=1)/(num_interventions*num_samples)
+        invariance = invariance*(1.0 - torch.eye(self.latent_size).to(device)) # zeroing out self invariance scores (we don't want any dimension to be invariant to itself)
+        invariance = torch.sum(invariance)/self.latent_size
+        return invariance
 
     def add_regularisation_terms(self, *args, **kwargs):
         """ Takes as input the losses dictionary containing the reconstruction
@@ -79,11 +87,14 @@ class CausalAE(CausalNet, ABC):
     def __init__(self, params):
         super(CausalAE, self).__init__(params)
 
-    def compute_errors_from_responses(self, R, R_prime):
+    def compute_errors_from_responses(self, R, R_prime, **kwargs):
         """
         R, R_prime: Tensors of dimension m x D
         Returns: Dx1 torch tensor of errors (e_i^{j,k})"""
-        return LatentInvarianceEvaluator.compute_absolute_errors(R,R_prime)
+        complete_shape = kwargs.get('complete_shape')
+        return LatentInvarianceEvaluator.compute_absolute_errors(R.view(complete_shape),
+                                                                 R_prime.view(complete_shape),
+                                                                 reduce_dim=2)
 
 class XCSAE(CausalAE, XSAE):
 
@@ -119,8 +130,11 @@ class CausalVAE(CausalNet, VAE, ABC):
     def __init__(self, params:dict):
         super(CausalVAE, self).__init__(params)
 
-    def compute_errors_from_responses(self, R:List[Tensor], R_prime:List[Tensor]):
-        return LatentInvarianceEvaluator.compute_distributional_errors(R, R_prime)
+    def compute_errors_from_responses(self, R: List[Tensor], R_prime: List[Tensor], **kwargs):
+        errors =  LatentInvarianceEvaluator.compute_distributional_errors(R, R_prime, **kwargs) # (dxnxm) x d
+        reduced = errors.view(kwargs.get('complete_shape')).mean(dim=2)
+        return reduced
+
 
     def add_regularisation_terms(self, *args, **kwargs):
         losses = VAE.add_regularisation_terms(self, *args, **kwargs)

@@ -23,3 +23,7 @@ eval_params:
 
 opt_params:
   inv_lamda_schedule: 'linear'
+
+
+vis_params:
+  plot_every: 5 # hugher frequency for slower training

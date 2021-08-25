@@ -99,3 +99,12 @@ bsub -oo "XCAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" pytho
 bsub -oo "XCSAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardS
 bsub -oo "XVAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python main.py --name XVAE --data MNIST --version standardS
 bsub -oo "XCVAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python main.py --name XCVAE --data MNIST --version standardS
+
+
+# 3DS
+bsub -oo "XAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XAE --data 3DS --version v121
+bsub -oo "XSAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XSAE --data 3DS --version v121
+bsub -oo "XCAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data 3DS --version v121
+bsub -oo "XCSAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data 3DS --version v121
+bsub -oo "XVAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python main.py --name XVAE --data 3DS --version v121
+bsub -oo "XCVAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python main.py --name XCVAE --data 3DS --version v121

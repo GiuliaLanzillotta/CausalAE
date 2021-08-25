@@ -140,7 +140,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='XVAE')
+                        default='XCVAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",

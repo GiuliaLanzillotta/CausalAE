@@ -6,6 +6,7 @@ from .ESAE import ESAE, VecESAE, EHybridAE
 from .AE import ConvAE, VecAE, XAE
 from .RSAE import RSAE, VecRSAE, RHybridAE, RAE, VecRAE
 from .CAE import CausalAE, XCSAE, XCAE, XCVAE
+from .utils import KL_multiple_univariate_gaussians
 
 models_switch = {"BetaVAE":VAE,
                  "BaseSAE":SAE,

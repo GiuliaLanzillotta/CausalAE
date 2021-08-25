@@ -31,6 +31,7 @@ class ModelHandler(object):
         self.dataloader = self.experiment.loader
         self.model.eval()
         model_name = self.config["model_params"]["name"]
+        self.model_name = model_name
         print(model_name+ " model hanlder loaded.")
         self.visualiser = None
         self.fidscorer = None
@@ -207,6 +208,19 @@ class ModelHandler(object):
 
         return matrix
 
+    def causal_block_graph(self, **kwargs):
+        """Only for explicit causal block models (X-classes)"""
+        assert 'X' in self.model_name, "The causal block graph is only defined for models with causal blocks in the latent space"
+        # initialise adjacency matrix (which will then be filled with masks values)
+        # orientation: from-to ('from' on the rows, 'to' on the columns)
+        A = torch.zeros((self.model.latent_size, self.model.latent_size)).to(self.device)
+
+        for i,mask in enumerate(self.model.causal_block.masks):
+            A[:i,i+1]=mask
+
+        return A
+
+
     def send_model_to(self, device:str):
         if device=="cpu": self.model.cpu()
         else: self.model.cuda()
@@ -307,7 +321,7 @@ class VisualModelHandler(ModelHandler):
     def plot_model(self, do_originals=False, do_reconstructions=False,
                    do_random_samples=False, do_traversals=False, do_hybrisation=False,
                    do_loss2distortion=False, do_marginal=False, do_loss2marginal=False,
-                   do_invariance=False, **kwargs):
+                   do_invariance=False, do_latent_block=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -333,7 +347,12 @@ class VisualModelHandler(ModelHandler):
             invariances = self.evaluate_invariance(load_it = True, store_it=True, **kwargs)
             plots["invariances"] = self.visualiser.plot_heatmap(invariances.cpu().numpy(),
                                             title="Invariances", threshold=0., **kwargs)
-
+        if do_latent_block:
+            # plotting latent block adjacency matrix
+            A = self.causal_block_graph(**kwargs)
+            plots['causal_block_graph'] = self.visualiser.plot_heatmap(A.cpu().numpy(),
+                                                                       title="Causal block adjacency matrix",
+                                                                       threshold=10e-1, **kwargs)
         return plots
 
 

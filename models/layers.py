@@ -6,7 +6,7 @@ from torch import nn
 from torch import Tensor
 import numpy as np
 from torch.autograd import Variable
-from torch.distributions import Gumbel
+from torch.distributions import Gumbel, Uniform
 
 from .utils import Mish, act_switch, norm_switch, standard_initialisation, gumbel_trick
 
@@ -489,6 +489,13 @@ class HybridLayer(nn.Module):
         output = self.sample_from_prior(inputs.shape)
         return output
 
+    def sample_uniformly_in_support(self, num_samples:int):
+        """uniform samples inside the range of the hybrid distribution"""
+        lows = torch.min(self.prior, dim=0).values # dx1
+        highs = torch.max(self.prior, dim=0).values #dx1
+        uniform = Uniform(lows, highs)
+        return uniform.sample([num_samples])
+
     @property
     def prior_range(self):
         """ returns a range in format [(min, max)] for every dimension that should contain
@@ -750,7 +757,7 @@ class VecSCM(nn.Module):
             self.act = nn.Sigmoid()
 
         self.str_assignments = nn.ModuleList([])
-        if self.use_masking: self.masks = []
+        if self.use_masking: self.masks = nn.ParameterList([])
         act = act_switch(kwargs.get("act"))
 
         for l in range(self.depth):
@@ -762,7 +769,7 @@ class VecSCM(nn.Module):
 
         self.str_assignments.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
-    def forward(self, z, masks_temperature=0.001):
+    def forward(self, z, masks_temperature=0.5):
         """ Implements through the scm.
         The input consists in only a noise vector (z), which is passed through the structural assignments layers.
          """
@@ -772,8 +779,8 @@ class VecSCM(nn.Module):
             z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
             parents = x[:,:l*self.unit_dim].clone().detach()
             if self.use_masking and l>0:
-                with torch.no_grad(): gumbel_noise = self.gumbel.sample(parents.shape)
-                sharpened_masks = self.act((self.masks[l-1] + gumbel_noise).to(parents.device)/masks_temperature)
+                with torch.no_grad(): gumbel_noise = self.gumbel.sample(parents.shape).to(parents.device)
+                sharpened_masks = self.act((self.masks[l-1] + gumbel_noise)/masks_temperature)
                 parents = sharpened_masks*parents # no effect if the masks are kept to one
             inputs = torch.hstack([z_i, parents])
             x[:,l*self.unit_dim:(l+1)*self.unit_dim] = self.str_assignments[l](inputs)

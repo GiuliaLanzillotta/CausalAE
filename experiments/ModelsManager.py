@@ -13,6 +13,7 @@ class GenerativeAEExperiment(BaseVisualExperiment):
     The following conditions have to be verified:
     Basically all models implementing a GenerativeAE can be managed with this class
     """
+    scheduler_manager: SchedulersManager
 
     def __init__(self, params: dict, verbose=True) -> None:
         # When initialised the dataset loader will download or load the data from the folder
@@ -33,6 +34,8 @@ class GenerativeAEExperiment(BaseVisualExperiment):
         input_imgs, labels = batch
         if self.global_step%self.scheduler_step == 0:
             self.scheduler_manager.update_weights(model=self.model, step_num=self.global_step)
+            try: self.log('tau', self.model.tau)
+            except Exception as e: pass
             self.params['model_params'].update(self.scheduler_manager.weights)
         results = self.forward(input_imgs, update_prior=True, integrate=False)
         losses = self.model.loss_function(*results,

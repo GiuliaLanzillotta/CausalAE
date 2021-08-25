@@ -65,9 +65,9 @@ class VAEBase(nn.Module, GenerativeAE, ABC):
         across different latent layer sizes and different datasets"""
         KL_weight = kwargs["KL_weight"] # usually weight = M/N
         KL_loss = KL_multiple_univariate_gaussians(mu, torch.zeros_like(mu).to(device),
-                                                   log_var, torch.ones_like(log_var).to(device),
+                                                   log_var, torch.zeros_like(log_var).to(device),
                                                    reduce=True)
-        losses['KL']= KL_loss
+        losses['KL'] = KL_loss
         losses['loss'] += self.beta * KL_weight * KL_loss
         return losses
 
@@ -93,7 +93,7 @@ class VAE(VAEBase):
 
         self.encoder = conv_net if self.dittadi_v else nn.Sequential(conv_net, fc_enc)
         self.decoder_initial_shape = conv_net.final_shape
-        deconv_net = UpsampledConvNet(self.decoder_initial_shape, self.dim_in, depth=params["dec_depth"], **params) \
+        deconv_net = UpsampledConvNet(self.decoder_initial_shape, final_shape=self.dim_in, depth=params["dec_depth"], **params) \
             if not self.dittadi_v else DittadiUpsampledConv(self.latent_size)
         self.decoder = deconv_net if self.dittadi_v else nn.ModuleList([fc_dec, deconv_net])
 

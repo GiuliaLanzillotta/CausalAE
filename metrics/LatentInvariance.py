@@ -91,14 +91,20 @@ class LatentInvarianceEvaluator(object):
         pass
 
     @staticmethod
-    def noise_intervention(noise, dim:int, hard=True, sampling_fun=None):
+    def noise_intervention(noise, dim:int, num_interventions:int, hard=True, sampling_fun=None):
         """ Computes hard/soft intervention on the noise variables (i.e. variables that
          are assumed to be independent) """
-        if type(noise) == np.ndarray: noise = noise.copy()
+        device = noise.device
+        m,d = noise.shape
+        if type(noise) == np.ndarray: noise = torch.from_numpy(noise.copy())
         elif type(noise) == torch.Tensor: noise = noise.clone()
-        if hard: noise[:,dim] = sampling_fun()
-        else: noise[:, dim] = sampling_fun(noise.shape[0])
-        return noise
+        # noise has shape m x d
+        # we want it to have shape n x m x d
+        noise = torch.tile(noise,(num_interventions, 1,1))
+        if hard: intv = sampling_fun(num_interventions).repeat(m) # same intervention value for all m samples
+        else: intv = sampling_fun(m*num_interventions)
+        noise[:,:,dim] = intv.view(m, num_interventions).permute(1,0)
+        return noise.view(-1, d) # (mxn) x d
 
     @staticmethod
     def posterior_distribution(codes, random_seed, dim:int):
@@ -139,16 +145,16 @@ class LatentInvarianceEvaluator(object):
         return 1. - invariance_total_error
 
     @staticmethod
-    def compute_absolute_errors(R, R_prime):
+    def compute_absolute_errors(R, R_prime, reduce_dim:int=0):
         """
         R, R_prime: Tensors of dimension m x D
         Returns: Dx1 torch tensor of errors (e_i^{j,k})"""
         m = R.shape[0]
-        error = torch.linalg.norm((R-R_prime), ord=2, dim=0)/m # D x 1
+        error = torch.linalg.norm((R-R_prime), ord=2, dim=reduce_dim)/m # D x 1
         return error
 
     @staticmethod
-    def compute_distributional_errors(R:List[Tensor], R_prime:List[Tensor]):
+    def compute_distributional_errors(R:List[Tensor], R_prime:List[Tensor], **kwargs):
         """
             R, R_prime: list of tensors of size (D,D, D), with batch size m  -> parametrising Gaussian
             Returns: Dx1 torch tensor of errors (e_i^{j,k})
@@ -156,9 +162,9 @@ class LatentInvarianceEvaluator(object):
         """
         _, mus_1, logvars_1 = R
         _, mus_2, logvars_2 = R_prime
-        all_KLs = KL_multiple_univariate_gaussians(mus_1, mus_2, logvars_1, logvars_2, reduce=False)
+        error = KL_multiple_univariate_gaussians(mus_1, mus_2, logvars_1, logvars_2, reduce=False) # same shape as mus/logvars
         # all_KLs has shape m x D
-        error = all_KLs.mean(dim=0) # D x 1
+        #if kwargs.get('reduce',False): error = error.mean(dim=0) # D x 1
         return error
 
     def noise_invariance(self, dim:int, **kwargs):
