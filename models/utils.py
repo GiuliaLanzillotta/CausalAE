@@ -212,9 +212,20 @@ def KL_multiple_univariate_gaussians(mus_1, mus_2, logvars_1, logvars_2, reduce=
     """KL divergence between multiple tuples of univariate guassians:
     all input have size mxD"""
     KL = (logvars_2 - logvars_1) - 0.5
-    KL += (logvars_1.exp().pow(2) + (mus_1 - mus_2).pow(2))/(2*(logvars_2.exp().pow(2)))
+    numr = logvars_1.exp().pow(2) + (mus_1 - mus_2).pow(2)
+    denm = 2*(logvars_2.exp().pow(2))
+    KL += torch.div(numr,denm)
     if reduce: KL = torch.sum(KL, dim=1).mean() # sum over D -> m x 1 -- mean over m -> 1x1
     return KL
+
+def distribution_parameter_distance(mus_1, mus_2, logvars_1, logvars_2, reduce=False):
+    """Measures distance between two distributions parametrised by mean and variance as
+    the distance of their parameters"""
+    mu_dist = (mus_1 - mus_2).pow(2)
+    logvars_dists = (logvars_1.exp() - logvars_2.exp()).pow(2)
+    distance = (mu_dist + logvars_dists).pow(0.5)
+    if reduce: distance = torch.sum(distance, dim=1).mean()
+    return distance
 
 def gumbel_trick(logits:Tensor, tau:float, device:str):
     """

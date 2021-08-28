@@ -740,11 +740,16 @@ class VecSCM(nn.Module):
     the image space. Given input U of size (N) returns output X of same size."""
     def __init__(self, latent_size, unit_dim, **kwargs):
         """
+        An implementation of an SCM in its most general form
+        Each structural assignment is parametrised by a fully connected block of 3 layers
+
         @latent_size:int = size of the noise vector in input (obtained by hybrid/parametric sampling)
         @unit_dim:int = dimension of one "noise unit"- not necessarily 1
+        @out_unit_dim:int = dimension of one "causal unit"- //
         # the noise will be processed one unit at a time -> the noise vector is
         # split in units during the forward pass
 
+        note: dimensionality of the output can be different from dimensionality of the input
         """
         super().__init__()
         assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
@@ -779,9 +784,9 @@ class VecSCM(nn.Module):
             z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
             parents = x[:,:l*self.unit_dim].clone().detach()
             if self.use_masking and l>0:
-                with torch.no_grad(): gumbel_noise = self.gumbel.sample(parents.shape).to(parents.device)
-                sharpened_masks = self.act((self.masks[l-1] + gumbel_noise)/masks_temperature)
-                parents = sharpened_masks*parents # no effect if the masks are kept to one
+                #with torch.no_grad(): gumbel_noise = self.gumbel.sample(parents.shape).to(parents.device)
+                #sharpened_masks = self.act((self.masks[l-1] + gumbel_noise)/masks_temperature)
+                parents = self.masks[l-1]*parents # no effect if the masks are kept to one
             inputs = torch.hstack([z_i, parents])
             x[:,l*self.unit_dim:(l+1)*self.unit_dim] = self.str_assignments[l](inputs)
         return x

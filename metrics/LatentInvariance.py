@@ -11,7 +11,7 @@ import numpy as np
 from torch.distributions import distribution, Normal, Uniform
 from datasets.utils import gen_bar_updater
 from models.BASE import GenerativeAE
-from models.utils import KL_multiple_univariate_gaussians
+from models.utils import KL_multiple_univariate_gaussians, distribution_parameter_distance
 
 
 class LatentInvarianceEvaluator(object):
@@ -32,15 +32,17 @@ class LatentInvarianceEvaluator(object):
         self.verbose = verbose
         self.variational = isinstance(self.model, VAEBase)
 
-    def sample_codes_pool(self, num_batches):
-        """ Creates memory storage of latent codes"""
+    def sample_codes_pool(self, num_batches, device):
+        """ Creates memory storage of latent codes by sampling from the posterior distribution.
+        Approximation of the aggregate posterior distribution. """
         updater = gen_bar_updater()
         source = []
         for i in range(num_batches):
             with torch.no_grad():
                 observations, _ = next(iter(self.dataloader))
                 #TODO: make sure this encode works (we only want the sample and not the parameters of the distribution)
-                codes = self.model.encode(observations.to(self.device))
+                # maybe sample from posterior here
+                codes = self.model.sample_noise_from_posterior(observations.to(device))
                 if self.variational: codes = codes[0]
                 source.append(codes)
                 updater(i+1, 1, num_batches)
@@ -91,7 +93,19 @@ class LatentInvarianceEvaluator(object):
         pass
 
     @staticmethod
-    def noise_intervention(noise, dim:int, num_interventions:int, hard=True, sampling_fun=None):
+    def noise_intervention(noise, dim:int, hard=True, sampling_fun=None):
+        """ Computes hard/soft intervention on the noise variables (i.e. variables that
+         are assumed to be independent) """
+        m,_ = noise.shape
+        if type(noise) == np.ndarray: noise = torch.from_numpy(noise.copy())
+        elif type(noise) == torch.Tensor: noise = noise.clone()
+        if hard: intv = sampling_fun() # only one value
+        else: intv = sampling_fun(m)
+        noise[:,dim] = intv
+        return noise
+
+    @staticmethod
+    def noise_multi_intervention(noise, unit:int, unit_dim:int, num_interventions:int, hard=True, sampling_fun=None):
         """ Computes hard/soft intervention on the noise variables (i.e. variables that
          are assumed to be independent) """
         device = noise.device
@@ -102,16 +116,16 @@ class LatentInvarianceEvaluator(object):
         # we want it to have shape n x m x d
         noise = torch.tile(noise,(num_interventions, 1,1))
         if hard: intv = sampling_fun(num_interventions).repeat(m) # same intervention value for all m samples
-        else: intv = sampling_fun(m*num_interventions)
-        noise[:,:,dim] = intv.view(m, num_interventions).permute(1,0)
+        else: intv = sampling_fun(m*num_interventions) # (mxn) x D_u
+        noise[:,:,unit*unit_dim:(unit+1)*unit_dim] = intv.view(m, num_interventions, unit_dim).permute(1,0,2)
         return noise.view(-1, d) # (mxn) x d
 
     @staticmethod
-    def posterior_distribution(codes, random_seed, dim:int):
+    def posterior_distribution(codes, random_seed, unit_num:int, unit_dim:int):
         """Obtain posterior distribution over specific dimension"""
         def sampling_fun(size=1):
             idx = random_seed.choice(range(codes.shape[0]), size=size, replace=True) # replace=True --> iid samples
-            return codes[idx, dim]
+            return codes[idx, unit_num*unit_dim:(unit_num+1)*unit_dim] # m x u_d
         return sampling_fun
 
     @staticmethod
@@ -145,12 +159,15 @@ class LatentInvarianceEvaluator(object):
         return 1. - invariance_total_error
 
     @staticmethod
-    def compute_absolute_errors(R, R_prime, reduce_dim:int=0):
+    def compute_absolute_errors(R, R_prime, reduce_dim:int=0, unit_dim:int=1):
         """
         R, R_prime: Tensors of dimension m x D
         Returns: Dx1 torch tensor of errors (e_i^{j,k})"""
         m = R.shape[0]
-        error = torch.linalg.norm((R-R_prime), ord=2, dim=reduce_dim)/m # D x 1
+        delta = R-R_prime
+        # reshaping to extract the single units
+        delta = delta.view(m,-1,unit_dim)
+        error = torch.linalg.norm(delta, ord=2, dim=[reduce_dim,2])/m # num_units x 1
         return error
 
     @staticmethod
@@ -162,29 +179,30 @@ class LatentInvarianceEvaluator(object):
         """
         _, mus_1, logvars_1 = R
         _, mus_2, logvars_2 = R_prime
-        error = KL_multiple_univariate_gaussians(mus_1, mus_2, logvars_1, logvars_2, reduce=False) # same shape as mus/logvars
-        # all_KLs has shape m x D
-        #if kwargs.get('reduce',False): error = error.mean(dim=0) # D x 1
+        do_KL = kwargs.get('do_KL', True)
+        if do_KL:
+            error = KL_multiple_univariate_gaussians(mus_1, mus_2, logvars_1, logvars_2, reduce=kwargs.get('reduce',False))
+        else:
+            error = distribution_parameter_distance(mus_1, mus_2, logvars_1, logvars_2, reduce=kwargs.get('reduce',False))
         return error
 
-    def noise_invariance(self, dim:int, **kwargs):
+    def noise_invariance(self, dim:int, num_samples:int, **kwargs):
         """ Evaluates invariance of response map to interventions on the noise variable dim
         kwargs accepted keys:
             - num_samples -> number of samples for each intervention
             - num_interventions -> number of interventions to use to compute invariance score
             - device - SE
             - uniform: if desired sampling from uniform for deterministic models
+            - mode: prior sampling mode (for non variational models): hybrid/uniform/posterior
         """
 
         device = kwargs.get('device','cpu')
-        num_samples = kwargs.get('num_samples', 100)
         num_interventions = kwargs.get('num_interventions', 20)
 
 
         assert self.source is not None, "Initialise the Evaluator first"
 
         prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs).to(device)
-        #FIXME: aggregate posterior estimate instead of using only one batch updating it
         posterior_samples = self.source
         responses = self.model.encode(self.model.decode(prior_samples, activate=True))
 
@@ -193,15 +211,16 @@ class LatentInvarianceEvaluator(object):
 
         for intervention_idx in range(num_interventions):
 
-            prior_samples_prime = LatentInvarianceEvaluator.noise_intervention(prior_samples, dim, hard=True, sampling_fun=hybrid_posterior)
-            responses_prime = self.model.encode(self.model.decode(prior_samples_prime.to(device), activate=True))
+            prior_samples_prime = self.noise_intervention(prior_samples, dim, hard=True, sampling_fun=hybrid_posterior)
+            responses_prime = self.model.encode(self.model.decode(prior_samples_prime.to(device), activate=True)) # m x d
 
             #FIXME: multi-dimensional units to be considered
-            if self.variational: error = self.compute_distributional_errors(responses, responses_prime)
-            else: error = self.compute_absolute_errors(responses, responses_prime)
-            errors += (error/error.max()) # D x 1
+            if self.variational: error = self.compute_distributional_errors(responses, responses_prime, reduce=True)
+            else: error = self.compute_absolute_errors(responses, responses_prime, reduce_dim=0)
+            errors += (error/error[dim]) # D x 1
 
-        return errors/num_interventions
+
+        return errors/num_interventions # average error over interventions
 
 
 

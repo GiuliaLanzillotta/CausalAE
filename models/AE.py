@@ -9,7 +9,7 @@ from . import ConvNet, UpsampledConvNet, FCBlock, HybridAE, VecSCM, Xnet
 from .utils import act_switch
 
 
-class ConvAE(HybridAE):
+class ConvAE(HybridAE, nn.Module):
 
     def __init__(self, params: dict) -> None:
         super(ConvAE, self).__init__(params)

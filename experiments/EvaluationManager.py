@@ -49,7 +49,7 @@ class ModelHandler(object):
     def from_config(cls, model_name:str, model_version:str, data:str, data_version="", **kwargs):
         config = get_config(tuning=False, model_name=model_name, data=data,
                                  version=model_version, data_version=data_version)
-        experiment = pick_model_manager(model_name)(config, verbose=kwargs.get("verbose"))
+        experiment = pick_model_manager(model_name)(params = config, verbose=kwargs.get("verbose"))
         return cls(experiment, **kwargs)
 
     def score_disentanglement(self, **kwargs):
@@ -121,7 +121,7 @@ class ModelHandler(object):
         self._invarianceScorer = LatentInvarianceEvaluator(self.model, self.dataloader.val, mode = mode,
                                         device = self.device, random_seed=random_seed, verbose=verbose)
         # initialising the latent posterior distribution
-        self._invarianceScorer.sample_codes_pool(num_batches)
+        self._invarianceScorer.sample_codes_pool(num_batches, self.device)
 
     def evaluate_invariance(self, **kwargs):
         """ Evaluate invariance of respose map to intervention of the kind specified in the kwargs
@@ -157,11 +157,15 @@ class ModelHandler(object):
         D = self.model.latent_size
         invariances = torch.zeros((D,D))
         for d in range(D):
+            print(f"Intervening on {d} ...")
             with torch.no_grad():
+                # intervention on d
                 errors = self._invarianceScorer.noise_invariance(dim=d, num_samples=samples_per_intervention,
                                                                  num_interventions=num_interventions,
                                                                  device=self.device)
                 invariances[d,:] = errors # D x 1
+
+        invariances = 1.0 - invariances
 
         if store_it:
             print("Storing invariance evaluation results.")
@@ -216,7 +220,7 @@ class ModelHandler(object):
         A = torch.zeros((self.model.latent_size, self.model.latent_size)).to(self.device)
 
         for i,mask in enumerate(self.model.causal_block.masks):
-            A[:i,i+1]=mask
+            A[:i+1,i+1]=mask
 
         return A
 
@@ -397,24 +401,18 @@ class VectorModelHandler(ModelHandler):
 
 if __name__ == '__main__':
 
-    params = {"model_name":"BetaVAE",
+    params = {"model_name":"XAE",
               "model_version":"standardS",
               "data" : "MNIST"}
+
+    # load handler
     handler = VisualModelHandler.from_config(**params)
     handler.config["logging_params"]["save_dir"] = "./logs"
     handler.load_checkpoint()
 
-    drift_evalutation_params = {
-        "num_batches":10,
-        "num_interventions":50,
-        "num_samples":50,
-        "reduce":"mean"}
-
-    drift_scorer_params = {
-        "random_seed":11,
-        "independent":True,
-        "verbose":True}
-
-    individual_drifts, interventions = handler.evaluate_drift(pairwise=True,
-                                        **drift_evalutation_params, **drift_scorer_params)
-
+    figure_params = {"figsize":(20,30), "nrows":3, "N":100, "markersize":10, "font_scale":10}
+    A = handler.causal_block_graph()
+    fig = handler.visualiser.plot_heatmap(A.cpu().numpy(),
+                                      title="Causal block adjacency matrix",
+                                      threshold=10e-1,
+                                      **figure_params)

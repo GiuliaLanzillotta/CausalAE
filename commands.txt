@@ -66,6 +66,11 @@ cp -r /cluster/scratch/glanzillo/logs/RSAE/v121_3DS/ ./logs/RSAE/
 cp -r /cluster/scratch/glanzillo/logs/RAE/v121_3DS/ ./logs/RAE/
 
 
+cp -r /cluster/scratch/glanzillo/logs/XVAE/ ./logs/
+cp -r /cluster/scratch/glanzillo/logs/XSAE/ ./logs/
+cp -r /cluster/scratch/glanzillo/logs/XAE/ ./logs/
+
+
 ** removing models **
 rm -r /cluster/scratch/glanzillo/logs/BaseSAE/standardS_MNIST/
 rm -r /cluster/scratch/glanzillo/logs/ESAE/standardS_MNIST/

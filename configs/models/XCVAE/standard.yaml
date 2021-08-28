@@ -10,7 +10,7 @@ model_params:
   gaussian_init: 'xavier' #other option: 'normal'
   # invariance regularisation parameters
   sparsity_lamda: 2.0
-  invariance_lamda: 2.0
+  invariance_lamda: 1.0
   num_samples: 10
   num_interventions: 10
   sparsity: True

@@ -1,0 +1,5 @@
+model_params:
+  name: 'XAE'
+  latent_size: 24
+  unit_dim: 3
+  # basically using distinct variables

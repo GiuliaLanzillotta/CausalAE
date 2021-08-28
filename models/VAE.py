@@ -13,12 +13,13 @@ from . import ConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, D
 from .utils import act_switch, KL_multiple_univariate_gaussians
 
 
-class VAEBase(nn.Module, GenerativeAE, ABC):
+class VAEBase(GenerativeAE, nn.Module, ABC):
 
     def __init__(self, params):
         super(VAEBase, self).__init__(params)
         self.params = params
         self.latent_size = params["latent_size"]
+        self.unit_dim = params.get('unit_dim',1)
         self.gaussian_latent = GaussianLayer(self.latent_size, self.latent_size, params["gaussian_init"])
 
     def encode(self, inputs: Tensor, **kwargs):

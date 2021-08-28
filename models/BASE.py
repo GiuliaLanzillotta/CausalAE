@@ -18,7 +18,7 @@ class GenerativeAE(ABC):
     latent_size = None
     act = nn.Sigmoid()
     
-    def __init__(self):
+    def __init__(self, params):
         super(GenerativeAE, self).__init__()
 
     @abstractmethod
@@ -87,7 +87,7 @@ class GenerativeAE(ABC):
         return losses
 
 
-class HybridAE(nn.Module, GenerativeAE, ABC):
+class HybridAE(GenerativeAE, nn.Module, ABC):
     """Generalisation of all the generative autoencoder models that adopt hybrid layers
     as stochastic layers"""
     def __init__(self, params: dict):
@@ -161,11 +161,11 @@ class HybridAE(nn.Module, GenerativeAE, ABC):
         return self.hybrid_layer.prior_range
 
 
-class Xnet(nn.Module):
+class Xnet(GenerativeAE, ABC):
     """AE with explicit causal block"""
 
     def __init__(self, params):
-        super(Xnet, self).__init__()
+        super(Xnet, self).__init__(params)
         self.sparsity_on = params.get("sparsity",False)
         self.causal_block = VecSCM(use_masking = self.sparsity_on, **params)
         self.tau = 1.0

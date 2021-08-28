@@ -9,6 +9,9 @@ model_params:
   channels: 64
   loss_type: "MSE"
   gaussian_init: 'xavier' #other option: 'normal'
+  num_samples: 5
+  num_interventions: 10
+  do_KL: True
 
 
 opt_params:
