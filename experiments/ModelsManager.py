@@ -37,6 +37,7 @@ class GenerativeAEExperiment(BaseVisualExperiment):
             try: self.log('tau', self.model.tau)
             except Exception as e: pass
             self.params['model_params'].update(self.scheduler_manager.weights)
+            self.log_dict(self.scheduler_manager.weights, prog_bar=True)
         results = self.forward(input_imgs, update_prior=True, integrate=False)
         losses = self.model.loss_function(*results,
                                           X=input_imgs,

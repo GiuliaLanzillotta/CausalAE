@@ -61,7 +61,6 @@ class CausalNet(GenerativeAE, ABC):
             all_prior_samples.append(prior_samples_prime)
         all_prior_samples = torch.vstack(all_prior_samples)# (dxnxm) x d
         responses_prime = self.encode(self.decode(all_prior_samples.to(device), activate=True))
-        #FIXME: multi-dimensional units to be considered
         try: responses_expanded = responses.repeat(num_interventions * num_units, 1)
         except AttributeError:
             # variational case
@@ -70,7 +69,8 @@ class CausalNet(GenerativeAE, ABC):
                                   mus_1.repeat(num_interventions * num_units, 1),
                                   logvars_1.repeat(num_interventions * num_units, 1)]
         errors = self.compute_errors_from_responses(responses_expanded, responses_prime,
-                        complete_shape=(num_units, num_interventions, -1, self.latent_size))
+                        complete_shape=(num_units, num_interventions, -1, self.latent_size),
+                        unit_dim=self.unit_dim)
         # errors have shape ( u x n x u ) -> the m dimension is reduced in the response computation
         #note: for training we only sum the errors without normalisation --> score not interpretable
         # sum all the errors on non intervened-on dimensions

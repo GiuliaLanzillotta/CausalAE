@@ -221,9 +221,9 @@ def KL_multiple_univariate_gaussians(mus_1, mus_2, logvars_1, logvars_2, reduce=
 def distribution_parameter_distance(mus_1, mus_2, logvars_1, logvars_2, reduce=False):
     """Measures distance between two distributions parametrised by mean and variance as
     the distance of their parameters"""
-    mu_dist = (mus_1 - mus_2).pow(2)
-    logvars_dists = (logvars_1.exp() - logvars_2.exp()).pow(2)
-    distance = (mu_dist + logvars_dists).pow(0.5)
+    mu_dist = (mus_1 - mus_2).abs()
+    logvars_dists = (logvars_1 - logvars_2).abs()
+    distance = (mu_dist + logvars_dists)
     if reduce: distance = torch.sum(distance, dim=1).mean()
     return distance
 

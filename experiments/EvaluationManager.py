@@ -91,10 +91,11 @@ class ModelHandler(object):
             inputs, labels = next(iter(self.dataloader.val))
             #TODO: check whether we want to evaluate prior samples here
             reconstructions = self.model.generate(inputs.to(self.device), activate=True)
-            try: self.fidscorer.get_activations(inputs, reconstructions) #store activations for current batch
+            try: self.fidscorer.get_activations(inputs.to(self.device), reconstructions) #store activations for current batch
             except Exception as e:
                 print("Reached the end of FID scorer buffer")
-                continue
+                print(e)
+                pass
 
 
         FID_score = self.fidscorer.calculate_fid()
@@ -155,15 +156,17 @@ class ModelHandler(object):
 
         self.initialise_invarianceScorer(**kwargs)
         D = self.model.latent_size
-        invariances = torch.zeros((D,D))
-        for d in range(D):
-            print(f"Intervening on {d} ...")
+        U = self.model.unit_dim
+        num_units = D//U
+        invariances = torch.zeros((num_units,num_units))
+        for u in range(num_units):
+            print(f"Intervening on {u} ...")
             with torch.no_grad():
                 # intervention on d
-                errors = self._invarianceScorer.noise_invariance(dim=d, num_samples=samples_per_intervention,
+                errors = self._invarianceScorer.noise_invariance(unit=u, unit_dim=U, num_samples=samples_per_intervention,
                                                                  num_interventions=num_interventions,
                                                                  device=self.device)
-                invariances[d,:] = errors # D x 1
+                invariances[u,:] = errors # D x 1
 
         invariances = 1.0 - invariances
 

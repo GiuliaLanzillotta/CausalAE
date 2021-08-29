@@ -5,7 +5,7 @@ model_params:
   enc_depth: 3 #number of convolutional layers in the encoder
   dec_depth: 3
   num_pools: 3
-  unit_dim: 2
+  unit_dim: 1
   norm: 'batch'
   channels: 32
   gaussian_init: 'xavier' #other option: 'normal'
