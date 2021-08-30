@@ -37,7 +37,7 @@ class DatasetLoader:
             train_set = MNIST(data_folder,
                                 train=True,
                                 download=True,
-                                transform=transform)
+                                transform=transform); dataset = train_set
             test_set = MNIST(data_folder,
                                train=False,
                                download=True,
@@ -52,7 +52,7 @@ class DatasetLoader:
             train_set = FashionMNIST(data_folder,
                                      train=True,
                                      download=True,
-                                     transform=transform)
+                                     transform=transform); dataset = train_set
             test_set = FashionMNIST(data_folder,
                                     train=False,
                                     download=True,
@@ -66,7 +66,7 @@ class DatasetLoader:
             train_set = CIFAR10(data_folder,
                                 train=True,
                                 download=True,
-                                transform=transform)
+                                transform=transform); dataset = train_set
             test_set = CIFAR10(data_folder,
                                train=False,
                                download=True,
@@ -80,7 +80,7 @@ class DatasetLoader:
             train_set = SVHN(data_folder,
                              split='train',
                              download=True,
-                             transform=transform)
+                             transform=transform); dataset = train_set
             test_set = SVHN(data_folder,
                             split='test',
                             download=True,
@@ -99,7 +99,7 @@ class DatasetLoader:
             train_set = CelebA(data_folder,
                                split='train',
                                download=True,
-                               transform=transform)
+                               transform=transform); dataset = train_set
             valid_set = CelebA(data_folder,
                               split='valid',
                               download=True,
@@ -118,7 +118,7 @@ class DatasetLoader:
                 transform = transforms.Compose([transform, AdditiveNoise()])
             cluster_data_folder = '/cluster/scratch/glanzillo/robot_finger_datasets/'
             standard_set = RFD(cluster_data_folder,
-                            transform=transform)
+                            transform=transform); dataset = standard_set
             heldout_set = RFD(cluster_data_folder,
                               heldout_colors=True,
                               transform=transform)
@@ -186,7 +186,7 @@ class DatasetLoader:
             if args["add_noise"]:
                 transform = AdditiveNoise()
             data_folder = './datasets/robot_finger_datasets/'
-            train_set = RFDh5(data_folder, transform=transform)
+            train_set = RFDh5(data_folder, transform=transform); dataset = train_set
             test_set = RFDh5(data_folder, test=True, transform=transform)
             heldout_set = RFDh5(data_folder, heldout_colors=True, transform=transform)
             real_set = RFDh5(data_folder, real=True, transform=transform)
@@ -214,6 +214,7 @@ class DatasetLoader:
                                 noise=args["noise"],
                                 verbose=False,
                                 seed=args["seed"])
+            dataset = train_set
             test_set =SynthVec(data_folder,
                                name=args["experiment_name"],
                                num_factors = args["num_factors"],
@@ -261,7 +262,8 @@ class DatasetLoader:
 
         #TODO: check this does not affect test set
         #FIXME
-        self.data_shape = next(iter(self.test))[0].shape[1:]
+        try: self.data_shape = dataset.shape
+        except Exception as e: self.data_shape = next(iter(self.test))[0].shape[1:]
         self.img_size = self.data_shape[1:]
         self.color_ch = self.data_shape[0]
 

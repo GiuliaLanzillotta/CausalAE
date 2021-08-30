@@ -97,7 +97,6 @@ class ModelHandler(object):
                 print(e)
                 pass
 
-
         FID_score = self.fidscorer.calculate_fid()
 
         return FID_score
@@ -282,6 +281,8 @@ class ModelHandler(object):
     def score_model(self, FID=False, disentanglement=False, orthogonality=False, invariance=False,
                     save_scores=False, **kwargs):
         """Scores the model on the test set in loss and other terms selected"""
+        self.device = next(self.model.parameters()).device
+        self.send_model_to(self.device)
         start=time.time()
         scores = {}
         if orthogonality:

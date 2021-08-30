@@ -19,15 +19,19 @@ class BaseVisualExperiment(pl.LightningModule):
         # split in train/test, apply transformations, divide in batches, extract data dimension
         self.loader = loader
         self.model = model
+        self.visualiser = None
         if verbose: self.print_model()
-        self.visualiser = ModelVisualiser(self.model,
-                                          self.loader.test,
-                                          **params["vis_params"])
         self.val_every = self.params["trainer_params"]["val_check_interval"]
         self.plot_every = self.params['vis_params']['plot_every']
         self.log_every = self.params['logging_params']['log_every']
         self.num_FID_steps = len(self.val_dataloader())//20 # basically take 5% of the batches available
         self.num_val_steps = 0 #counts number of validation steps done
+
+    def init_visualiser(self):
+        """Initialise manager visualiser"""
+        self.visualiser = ModelVisualiser(self.model,
+                                          self.loader.test,
+                                          **self.params["vis_params"])
 
     def forward(self, inputs: Tensor, **kwargs) -> Tensor:
         return self.model(inputs, **kwargs)
@@ -38,6 +42,7 @@ class BaseVisualExperiment(pl.LightningModule):
 
     def make_plots(self, hybrids=True, originals=False, distortion=False):
         """originals: bool = Whether to plot the originals samples from the test set"""
+        if self.visualiser is None:self.init_visualiser()
         logger = self.logger.experiment
         figure = self.visualiser.plot_reconstructions(device=self.device)
         logger.add_figure("reconstructions", figure, global_step=self.global_step)
