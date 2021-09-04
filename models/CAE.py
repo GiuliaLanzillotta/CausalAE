@@ -41,7 +41,7 @@ class CausalNet(GenerativeAE, ABC):
         prior_mode = kwargs.get('prior_mode','posterior')
 
         with torch.no_grad():
-            prior_samples = self.sample_noise_from_prior(num_samples, mode=prior_mode).to(device)
+            prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode).to(device)
             #Note that we're using only the available batch to approximaate the aggregate posterior estimate
             posterior_samples = self.sample_noise_from_posterior(inputs).to(device)
             # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
@@ -55,8 +55,7 @@ class CausalNet(GenerativeAE, ABC):
                                                                                 self.random_state,
                                                                                 u, self.unit_dim)
             prior_samples_prime = LatentInvarianceEvaluator.noise_multi_intervention(prior_samples, u, self.unit_dim,
-                                                                                     num_interventions=num_interventions,
-                                                                                     hard=True,
+                                                                                     num_interventions=num_interventions, hard=True,
                                                                                      sampling_fun=hybrid_posterior) # m x n x d
             all_prior_samples.append(prior_samples_prime)
         all_prior_samples = torch.vstack(all_prior_samples)# (dxnxm) x d
@@ -70,7 +69,7 @@ class CausalNet(GenerativeAE, ABC):
                                   logvars_1.repeat(num_interventions * num_units, 1)]
         errors = self.compute_errors_from_responses(responses_expanded, responses_prime,
                         complete_shape=(num_units, num_interventions, -1, self.latent_size),
-                        unit_dim=self.unit_dim)
+                        unit_dim=self.unit_dim, **kwargs)
         # errors have shape ( u x n x u ) -> the m dimension is reduced in the response computation
         #note: for training we only sum the errors without normalisation --> score not interpretable
         # sum all the errors on non intervened-on dimensions

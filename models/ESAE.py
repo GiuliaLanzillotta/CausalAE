@@ -59,7 +59,7 @@ class EHybridAE(HybridAE, ABC):
         total_cost = torch.matmul(distance.to(device), factors)/N
         return total_cost
 
-    def generate(self, x: Tensor, activate:bool) -> Tensor:
+    def reconstruct(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
         inputs = x.view((-1, )+self.dim_in) # just making sure

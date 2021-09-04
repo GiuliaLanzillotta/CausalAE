@@ -377,8 +377,9 @@ class HybridLayer(nn.Module):
         self.hierarchical_weights = torch.Tensor(range(1,self.max_hybridisation_level+1))/sum(range(1,self.max_hybridisation_level+1))
 
     def initialise_prior(self, latent_vectors):
+        latent_vectors = latent_vectors.detach()
+        input_size = latent_vectors.shape[0]
         # randomly selecting latent vectors for the prior from the batch
-        input_size = latent_vectors.detach().shape[0]
         idx = torch.randperm(input_size).to(latent_vectors.device) #shuffling indices
         if input_size>self.N:
             idx = idx[:self.N]
@@ -392,7 +393,8 @@ class HybridLayer(nn.Module):
         # increment prior pool by integrating it with the new vectors and sample
         # from that
         all_vecs = torch.vstack([self.prior, latent_vectors])
-        all_vecs_size = all_vecs.detach().shape[0]
+        all_vecs.detach()
+        all_vecs_size = all_vecs.shape[0]
         idx = torch.randperm(all_vecs_size).to(latent_vectors.device)[:self.N]
         self.prior = torch.index_select(all_vecs, 0, idx)
 
@@ -418,6 +420,7 @@ class HybridLayer(nn.Module):
         keeping track of the origin.
         first: whether to resample the first N dimensions or the last ones """
         # obtain list of dimensions to resample
+        inputs = inputs.detach(); parents=parents.detach()
         K, M = inputs.shape
         available_samples = parents.shape[0]
         chunks = torch.split(inputs, unit_dim, dim=1)
@@ -442,11 +445,12 @@ class HybridLayer(nn.Module):
         use_prior: if True the sampling base is the prior set (which usually is a subset of the latent set)"""
         if hybridisation_level==0:
             #TODO: adjust for num_samples here
-            if not use_prior: return latent_vectors
+            if not use_prior: return latent_vectors.detach()
             return self.prior
         if use_prior and self.prior is None: raise ValueError("use_prior set to True and prior not initialised")
         if hybridisation_level > self.max_hybridisation_level: raise ValueError("Hybridisation level too high")
         if not use_prior:
+            latent_vectors = latent_vectors.detach()
             available_samples = latent_vectors.shape[0]
             chunks = torch.split(latent_vectors, self.unit_dim, dim=1)
         if use_prior:
@@ -486,15 +490,17 @@ class HybridLayer(nn.Module):
     def forward(self, inputs):
         """Performs hybrid sampling on the latent space"""
         self.initialise_prior(inputs)
-        output = self.sample_from_prior(inputs.shape)
+        with torch.no_grad(): output = self.sample_from_prior(inputs.shape)
         return output
 
     def sample_uniformly_in_support(self, num_samples:int):
         """uniform samples inside the range of the hybrid distribution"""
-        lows = torch.min(self.prior, dim=0).values # dx1
-        highs = torch.max(self.prior, dim=0).values #dx1
-        uniform = Uniform(lows, highs)
-        return uniform.sample([num_samples])
+        with torch.no_grad():
+            lows = torch.min(self.prior, dim=0).values # dx1
+            highs = torch.max(self.prior, dim=0).values #dx1
+            uniform = Uniform(lows, highs)
+            samples = uniform.sample([num_samples])
+        return samples
 
     @property
     def prior_range(self):
@@ -757,6 +763,8 @@ class VecSCM(nn.Module):
         self.dim_in = latent_size
         self.unit_dim = unit_dim
         self.use_masking = kwargs.get("use_masking",False)
+        self.track_parents_gradients = kwargs.get("parents_with_grad",False)
+        self.use_Gumbel = kwargs.get("gumbel",False)
         if self.use_masking:
             self.gumbel = Gumbel(0,1)
             self.act = nn.Sigmoid()
@@ -769,7 +777,7 @@ class VecSCM(nn.Module):
             dim_in: int = (l+1)*self.unit_dim
             #TODO: check number and size of layers here ---why?
             if self.use_masking and l>0: #excluding first node from sparsity penalty (no causal parents to prune away)
-                self.masks.append(torch.nn.Parameter(torch.randn(l*self.unit_dim)))
+                self.masks.append(torch.nn.Parameter(torch.randn(l)))
             self.str_assignments.append(FCBlock(dim_in, [10,10,self.unit_dim], act=act)) #mapping noise + parents to one causal variable
 
         self.str_assignments.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
@@ -778,24 +786,34 @@ class VecSCM(nn.Module):
         """ Implements through the scm.
         The input consists in only a noise vector (z), which is passed through the structural assignments layers.
          """
-        x = torch.zeros_like(z) # causal variables
+        causal_vars = []
         for l in range(self.depth):
             #extract noise
             z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
-            parents = x[:,:l*self.unit_dim].clone().detach()
-            if self.use_masking and l>0:
-                #with torch.no_grad(): gumbel_noise = self.gumbel.sample(parents.shape).to(parents.device)
-                #sharpened_masks = self.act((self.masks[l-1] + gumbel_noise)/masks_temperature)
-                parents = self.masks[l-1]*parents # no effect if the masks are kept to one
-            inputs = torch.hstack([z_i, parents])
-            x[:,l*self.unit_dim:(l+1)*self.unit_dim] = self.str_assignments[l](inputs)
+            if l>0:
+                parents = torch.hstack(causal_vars)
+                if not self.track_parents_gradients: parents = parents.detach().clone()
+                if self.use_masking and l>0:
+                    if self.use_Gumbel:
+                        with torch.no_grad(): gumbel_noise = self.gumbel.sample([l]).to(parents.device)
+                        mask = self.act((self.masks[l-1] + gumbel_noise)/masks_temperature)
+                    else: mask = self.masks[l-1]
+                    # mask dimension = num_units in parents
+                    mask = mask.repeat_interleave(self.unit_dim)
+                    parents = mask*parents # no effect if the masks are kept to one
+                inputs = torch.hstack([z_i, parents])
+            else: inputs = z_i # l=0, first variable has no parents
+            causal_vars.append(self.str_assignments[l](inputs)) # unit_size x 1
+        x = torch.hstack(causal_vars)
         return x
 
     def masks_sparsity_penalty(self):
         """Computes sparsity level of input masks """
         sparsity_penalty = 0.
         for mask in self.masks:
-            sparsity_penalty += torch.linalg.norm(mask, ord=1)
+            if not self.use_Gumbel:
+                sparsity_penalty += torch.linalg.norm(mask, ord=1)
+            else: sparsity_penalty += torch.linalg.norm(self.act(mask), ord=1)
         return sparsity_penalty
 
 class MaskedVecSCM(nn.Module):

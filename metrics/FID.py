@@ -369,7 +369,7 @@ class FIDScorer(object):
     def get_activations(self, original, fake):
         """ Passes both set of input images through the model and stores internally the result"""
         assert original.shape[0]==fake.shape[0], "Number of generated and original images provided is not the same"
-        if original.shape[1] ==1: # number of channels not equal to 3
+        if original.shape[1] == 1: # number of channels not equal to 3
             # TODO: simply use 'repeat' here
             original = torch.stack([original]*3,dim=1).squeeze(2).to(self.device)
             fake = torch.stack([fake]*3,dim=1).squeeze(2).to(self.device)

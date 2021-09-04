@@ -2,22 +2,18 @@
 import pickle
 
 import torch
-from experiments import pick_model_manager
-from models import VAEBase, SAE, models_switch
-from models.BASE import GenerativeAE
+from experiments import pick_model_manager, get_causal_block_graph
 from pathlib import Path
 from configs import get_config
 from experiments.data import DatasetLoader
 import os
 import glob
-import json
 import time
 from visualisations import ModelVisualiser, SynthVecDataVisualiser
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentInvarianceEvaluator
 import pytorch_lightning as pl
 from metrics.responses import compute_response_matrix
 
-from torchsummary import summary
 
 """ Evaluation toolbox for GenerativeAE models"""
 
@@ -80,22 +76,24 @@ class ModelHandler(object):
     def score_FID(self, **kwargs):
         """Scoring the model reconstraction quality with FID"""
         num_FID_steps = kwargs.get("num_FID_steps",10)
+        generation = kwargs.get('generation',False)
+
 
         if self.fidscorer is None:
             self.fidscorer = FIDScorer()
 
         for idx in range(num_FID_steps):
             if idx==0:
-                self.fidscorer.start_new_scoring(self.config['data_params']['batch_size']*num_FID_steps,
-                                                 device=self.device)
+                self.fidscorer.start_new_scoring(self.config['data_params']['batch_size']*num_FID_steps, device=self.device)
             inputs, labels = next(iter(self.dataloader.val))
-            #TODO: check whether we want to evaluate prior samples here
-            reconstructions = self.model.generate(inputs.to(self.device), activate=True)
-            try: self.fidscorer.get_activations(inputs.to(self.device), reconstructions) #store activations for current batch
+            if generation:
+                kwargs.pop('num_samples', None)
+                fake_input = self.model.generate(num_samples=inputs.shape[0], activate=True, device=self.device, **kwargs)
+            else: fake_input = self.model.reconstruct(inputs.to(self.device), activate=True)
+            try: self.fidscorer.get_activations(inputs.to(self.device), fake_input) #store activations for current batch
             except Exception as e:
                 print("Reached the end of FID scorer buffer")
-                print(e)
-                pass
+                raise(e)
 
         FID_score = self.fidscorer.calculate_fid()
 
@@ -157,17 +155,22 @@ class ModelHandler(object):
         D = self.model.latent_size
         U = self.model.unit_dim
         num_units = D//U
-        invariances = torch.zeros((num_units,num_units))
+        invariances = torch.zeros((num_units,num_units), requires_grad=False).to(self.device)
+        std_devs = torch.zeros((num_units), requires_grad=False).to(self.device)
+        #TODO: record standard deviations
         for u in range(num_units):
             print(f"Intervening on {u} ...")
             with torch.no_grad():
                 # intervention on d
-                errors = self._invarianceScorer.noise_invariance(unit=u, unit_dim=U, num_samples=samples_per_intervention,
-                                                                 num_interventions=num_interventions,
-                                                                 device=self.device)
-                invariances[u,:] = errors # D x 1
+                errors, std_dev = self._invarianceScorer.noise_invariance(unit=u, unit_dim=U, num_samples=samples_per_intervention,
+                                                                             num_interventions=num_interventions,
+                                                                             device=self.device)
+                #note: errors and std_dev both have shape num_units x 1
+                invariances[u,:] = errors
+                std_devs +=std_dev
 
         invariances = 1.0 - invariances
+        std_devs /= num_units #taking the average
 
         if store_it:
             print("Storing invariance evaluation results.")
@@ -177,7 +180,7 @@ class ModelHandler(object):
             with open(path/ ("invariances"+".pkl"), 'wb') as o:
                 pickle.dump(invariances, o)
 
-        return invariances
+        return invariances, std_devs
 
     def latent_responses(self, **kwargs):
         """Computes latent response matrix for the given model plus handles storage
@@ -213,19 +216,6 @@ class ModelHandler(object):
                 pickle.dump(matrix, o)
 
         return matrix
-
-    def causal_block_graph(self, **kwargs):
-        """Only for explicit causal block models (X-classes)"""
-        assert 'X' in self.model_name, "The causal block graph is only defined for models with causal blocks in the latent space"
-        # initialise adjacency matrix (which will then be filled with masks values)
-        # orientation: from-to ('from' on the rows, 'to' on the columns)
-        A = torch.zeros((self.model.latent_size, self.model.latent_size)).to(self.device)
-
-        for i,mask in enumerate(self.model.causal_block.masks):
-            A[:i+1,i+1]=mask
-
-        return A
-
 
     def send_model_to(self, device:str):
         if device=="cpu": self.model.cpu()
@@ -292,9 +282,11 @@ class ModelHandler(object):
             disentanglement_scores = self.score_disentanglement(**kwargs)
             scores.update(disentanglement_scores)
         if FID:
-            scores["FID"] = self.score_FID(**kwargs)
+            scores["FID_rec"] = self.score_FID(generation=False, **kwargs)
+            scores["FID_gen"] = self.score_FID(generation=True, **kwargs)
+
         if invariance:
-            invariances = self.evaluate_invariance(**kwargs)
+            invariances, _ = self.evaluate_invariance(**kwargs)
             scores["invariance"] = invariances.mean() # minimum score = 1/D , maximum score = 1
         end = time.time()
 
@@ -352,12 +344,16 @@ class VisualModelHandler(ModelHandler):
         if do_loss2marginal:
             plots["marginal_distortion"] = self.visualiser.plot_loss2marginaldistortion(device=self.device, **kwargs)
         if do_invariance:
-            invariances = self.evaluate_invariance(load_it = True, store_it=True, **kwargs)
+            invariances, std_devs = self.evaluate_invariance(load_it = True, store_it=True, **kwargs)
             plots["invariances"] = self.visualiser.plot_heatmap(invariances.cpu().numpy(),
-                                            title="Invariances", threshold=0., **kwargs)
+                                                                title="Invariances", threshold=0., **kwargs)
+            plots["std_devs"] = self.visualiser.plot_heatmap(std_devs.cpu().numpy(),
+                                                             title="Standard Deviation of Responses marginals",
+                                                             threshold=0., **kwargs)
+
         if do_latent_block:
             # plotting latent block adjacency matrix
-            A = self.causal_block_graph(**kwargs)
+            A = get_causal_block_graph(self.model, self.model_name, self.device, **kwargs)
             plots['causal_block_graph'] = self.visualiser.plot_heatmap(A.cpu().numpy(),
                                                                        title="Causal block adjacency matrix",
                                                                        threshold=10e-1, **kwargs)

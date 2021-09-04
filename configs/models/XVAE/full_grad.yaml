@@ -1,25 +1,23 @@
 model_params:
   name: 'XVAE'
-  latent_size: 12
-  enc_depth: 12 #number of convolutional layers in the encoder
-  dec_depth: 12
+  beta: 4.0
+  latent_size: 6
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
   num_pools: 3
   unit_dim: 1
   channels: 32
   gaussian_init: 'xavier' #other option: 'normal'
-  #regularisation parameters
-  beta: 4.0
-  sparsity_lamda: 2.0
-  sparsity: True
-
+  loss_type: "MSE"
+  # parameters for the causal latent block
+  parents_with_grad: True
+  gumbel: True
 
 opt_params:
   KL_decay: 1.0
   beta_schedule: 'linear'
-  weight_decay: 1.0
 
 eval_params:
   name: "scoring"
   FID: True
-  latent_responses: True
   mode: 'X'

@@ -30,7 +30,7 @@ class RHybridAE(HybridAE, ABC):
         output = self.decode(codes, activate)
         return  [output, codes]
 
-    def generate(self, x: Tensor, activate:bool) -> Tensor:
+    def reconstruct(self, x: Tensor, activate:bool) -> Tensor:
         return self.forward(x, activate=activate, update_prior=True, integrate=True)[0]
 
     def add_regularisation_terms(self, *args, **kwargs):

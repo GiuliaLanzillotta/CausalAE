@@ -18,3 +18,7 @@ eval_params:
   FID: True
   latent_responses: True
   mode: 'X'
+
+
+opt_params:
+  weight_decay: 1.0

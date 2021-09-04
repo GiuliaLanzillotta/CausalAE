@@ -43,10 +43,16 @@ class VAEBase(GenerativeAE, nn.Module, ABC):
         #TODO: change here --- why?
         return self.encode(inputs)[0]
 
-    def generate(self, x: Tensor, activate:bool) -> Tensor:
+    def reconstruct(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
         return self.forward(x, activate=activate)[0]
+
+    def generate(self, num_samples:int, activate: bool, **kwargs) -> Tensor:
+        device = kwargs.get('device','cpu')
+        noise = self.sample_noise_from_prior(num_samples, **kwargs).to(device)
+        outputs = self.decode(noise, activate=activate)
+        return outputs
 
     def forward(self, inputs: Tensor, **kwargs) -> list:
         activate= kwargs.get('activate',False)

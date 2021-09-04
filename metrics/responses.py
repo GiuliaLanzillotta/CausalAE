@@ -55,7 +55,9 @@ def compute_response_matrix(dataloader:DataLoader,
             if scaling: # normalise the dimension responses by its standard deviation
                 # if the response is higher than 1 the dimension affects others
                 # if it's less than 1 the dimension is not used
-                matrix[d,:]/=torch.pow(torch.std(matrix[d,:]),2)
+                #FIXME sd of the errors instead of responses
+                # standardise by column
+                matrix[d,:]/=torch.std(matrix[d,:])
 
         matrix = torch.sqrt(matrix)
 

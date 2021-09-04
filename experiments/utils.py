@@ -1,6 +1,18 @@
 """Set of utilities for experimetns managers"""
 import numpy as np
+import torch
 
+def get_causal_block_graph(model, model_name, device, **kwargs):
+    """Only for explicit causal block models (X-classes)"""
+    assert 'X' in model_name, "The causal block graph is only defined for models with causal blocks in the latent space"
+    # initialise adjacency matrix (which will then be filled with masks values)
+    # orientation: from-to ('from' on the rows, 'to' on the columns)
+    num_units = model.latent_size//model.unit_dim
+    A = torch.zeros((num_units, num_units), requires_grad=False).to(device)
+
+    for i,mask in enumerate(model.causal_block.masks):
+        A[:i+1,i+1]=mask.detach()
+    return A
 
 def cyclic_beta_schedule(initial_beta, iter_num):
     """ Implements cyclic scheduling for beta to solve KL annealing problem

@@ -182,7 +182,9 @@ class LatentInvarianceEvaluator(object):
         if do_KL:
             error = KL_multiple_univariate_gaussians(mus_1, mus_2, logvars_1, logvars_2, reduce=kwargs.get('reduce',False))
         else:
-            error = distribution_parameter_distance(mus_1, mus_2, logvars_1, logvars_2, reduce=kwargs.get('reduce',False))
+            error = distribution_parameter_distance(mus_1, mus_2, logvars_1, logvars_2,
+                                                    reduce=kwargs.get('reduce',False),
+                                                    ignore_variance=kwargs.get('ignore_variance',False))
         return error
 
     def noise_invariance(self, unit:int, unit_dim:int, num_samples:int, **kwargs):
@@ -202,23 +204,29 @@ class LatentInvarianceEvaluator(object):
         assert self.source is not None, "Initialise the Evaluator first"
 
         prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs).to(device)
+        # extract approximate standard deviations for each latent unit
+        num_units = self.model.latent_size//unit_dim
         posterior_samples = self.source
         responses = self.model.encode(self.model.decode(prior_samples, activate=True))
+        std_dev = torch.std(responses.view(-1, num_units, unit_dim), dim=[0,2]) # num_units x 1
 
-        errors = torch.zeros(self.model.latent_size, dtype=torch.float).to(device)
+        errors = torch.zeros(num_units, dtype=torch.float).to(device)
         hybrid_posterior = self.posterior_distribution(posterior_samples, self.random_state, unit, unit_dim)
 
         for intervention_idx in range(num_interventions):
-
             prior_samples_prime = self.noise_intervention(prior_samples, unit, unit_dim, hard=True, sampling_fun=hybrid_posterior)
             responses_prime = self.model.encode(self.model.decode(prior_samples_prime.to(device), activate=True)) # m x d
-            # using KL at evaluation time
-            if self.variational: error = self.compute_distributional_errors(responses, responses_prime, reduce=True, do_KL=True)
+            # we're ignoring the variance to make the results from VAE comparable with results from Hybrid models
+            if self.variational: error = self.compute_distributional_errors(responses, responses_prime, reduce=False,
+                                                                            do_KL=False, ignore_variance=True).sum(dim=0) # D x 1
             else: error = self.compute_absolute_errors(responses, responses_prime, reduce_dim=0, unit_dim=unit_dim)
-            errors += (error/error[unit]) # D x 1
 
+            # normalisation across spaces -> perfect invariance (i.e. 1.0) only obtained if the different spaces have same scale
+            intervention_magnitude = torch.linalg.norm((prior_samples_prime-prior_samples)[unit*unit_dim:(unit+1)*unit_dim], ord=2, dim=1).mean() # mean over samples of the delta
+            errors += (error/(intervention_magnitude + 10e-5)) # D x 1
 
-        return errors/num_interventions # average error over interventions
+        #TODO: take the meadian instead of mean when averaging over interventions
+        return errors/num_interventions, std_dev # average error over interventions
 
 
 

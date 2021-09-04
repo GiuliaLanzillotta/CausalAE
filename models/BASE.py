@@ -45,7 +45,12 @@ class GenerativeAE(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def generate(self, inputs:Tensor, activate:bool) -> Tensor:
+    def generate(self, num_samples:int, activate:bool, **kwargs) -> Tensor:
+        """Generates new samples by sampling noise from prior and decoding the noise"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def reconstruct(self, inputs:Tensor, activate:bool) -> Tensor:
         """ generates output from input"""
         raise NotImplementedError
 
@@ -103,7 +108,8 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
         codes = self.encoder(inputs)
         _update_prior = kwargs.get("update_prior", False)
         _integrate = kwargs.get("integrate", False)
-        if _update_prior: self.hybrid_layer.update_prior(codes, integrate=_integrate)
+        if _update_prior:
+            with torch.no_grad(): self.hybrid_layer.update_prior(codes, integrate=_integrate)
         return codes
 
     def encode_mu(self, inputs:Tensor, **kwargs) -> Tensor:
@@ -111,7 +117,8 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
         codes =  self.encode(inputs)
         _update_prior = kwargs.get("update_prior", False)
         _integrate = kwargs.get("integrate", False)
-        if _update_prior: self.hybrid_layer.update_prior(codes, integrate=_integrate)
+        if _update_prior:
+            with torch.no_grad():self.hybrid_layer.update_prior(codes, integrate=_integrate)
         return codes
 
     def sample_hybrid(self, num_samples:int=None, inputs:Tensor=None):
@@ -124,12 +131,13 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
         noise = self.hybrid_layer(codes).to(codes.device)
         return noise
 
-    def sample_noise_from_prior(self, num_samples: int, mode='hybrid', **kwargs):
+    def sample_noise_from_prior(self, num_samples: int, prior_mode='hybrid', **kwargs):
         """Equivalent to total hybridisation: every point is hybridised at the maximum level
         3 modes supported: posterior/hybrid/uniform"""
-        if mode=='posterior': return self.hybrid_layer.prior[:num_samples]
-        if mode=='hybrid': return self.hybrid_layer.sample_from_prior((num_samples,))
-        if mode=='uniform': return self.hybrid_layer.sample_uniformly_in_support(num_samples)
+        with torch.no_grad():
+            if prior_mode=='posterior': return self.hybrid_layer.prior[:num_samples]
+            if prior_mode=='hybrid': return self.hybrid_layer.sample_from_prior((num_samples,))
+            if prior_mode=='uniform': return self.hybrid_layer.sample_uniformly_in_support(num_samples)
         raise NotImplementedError('Requested sampling mode not implemented')
 
     def sample_noise_from_posterior(self, inputs: Tensor):
@@ -137,11 +145,17 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
         self.encode(inputs, update_prior=True, integrate=True)
         return self.hybrid_layer.prior
 
+    def generate(self, num_samples:int, activate: bool, **kwargs) -> Tensor:
+        device = kwargs.get('device','cpu')
+        noise = self.sample_noise_from_prior(num_samples, **kwargs).to(device)
+        outputs = self.decode(noise, activate=activate)
+        return outputs
+
     @abstractmethod
     def decode(self, noise:Tensor, activate:bool):
         raise NotImplementedError
 
-    def generate(self, x: Tensor, activate:bool) -> Tensor:
+    def reconstruct(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
         the net"""
         return self.forward(x,activate=activate, update_prior=True, integrate=True)[0]

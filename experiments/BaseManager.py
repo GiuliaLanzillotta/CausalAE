@@ -1,14 +1,12 @@
 # SAE experiment manager
-import numpy as np
-import torch
 from torch import Tensor
 from torch import optim
 from models import ESAE, models_switch
 from experiments.data import DatasetLoader
 from visualisations import ModelVisualiser, SynthVecDataVisualiser
 import pytorch_lightning as pl
-from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator
 from torchsummary import summary
+from experiments import get_causal_block_graph
 
 class BaseVisualExperiment(pl.LightningModule):
 
@@ -40,7 +38,7 @@ class BaseVisualExperiment(pl.LightningModule):
         print("MODEL SUMMARY")
         summary(self.model.cuda(), (self.loader.data_shape))
 
-    def make_plots(self, hybrids=True, originals=False, distortion=False):
+    def make_plots(self, hybrids=True, originals=False, distortion=False, latent_block=False):
         """originals: bool = Whether to plot the originals samples from the test set"""
         if self.visualiser is None:self.init_visualiser()
         logger = self.logger.experiment
@@ -74,12 +72,18 @@ class BaseVisualExperiment(pl.LightningModule):
             for l,figure in enumerate(figures):
                 logger.add_figure(f"prior_samples_hybridisation_level_{l}", figure, global_step=self.global_step)
 
+        if latent_block:
+            # plotting latent block adjacency matrix
+            A = get_causal_block_graph(self.model, self.params["model_params"]["name"], self.device)
+            figure = self.visualiser.plot_heatmap(A.cpu(), title="Causal block adjacency matrix", threshold=0.0, figsize=(6,6))
+            logger.add_figure("Causal block adjacency matrix", figure, global_step=self.global_step)
+
     def validation_epoch_end(self, outputs):
         # Logging hyperparameters
         # Visualisation
         if self.num_val_steps%self.plot_every==0 or \
                 self.global_step==self.params["trainer_params"]["max_steps"]:
-            self.make_plots(originals=self.global_step==0)
+            self.make_plots(originals=self.global_step==0, hybrids=True, latent_block=True)
         self.num_val_steps+=1
 
     def test_epoch_end(self, outputs):

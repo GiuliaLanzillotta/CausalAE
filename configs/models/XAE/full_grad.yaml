@@ -1,0 +1,23 @@
+model_params:
+  name: 'XAE'
+  latent_vecs: 128 # for hybrid sampling
+  latent_size: 6
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
+  num_pools: 3
+  unit_dim: 1
+  channels: 32
+  loss_type: "MSE"
+  # invariance regularisation parameters
+  lamda: 2.0
+  num_samples: 200
+  # parameters for the causal latent block
+  parents_with_grad: True
+  gumbel: True
+
+eval_params:
+  name: "scoring"
+  FID: True
+  mode: 'X'
+
+

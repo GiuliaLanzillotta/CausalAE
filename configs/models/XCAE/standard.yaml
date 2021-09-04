@@ -23,6 +23,7 @@ eval_params:
 
 opt_params:
   inv_lamda_schedule: 'linear'
+  weight_decay: 1.0
 
 
 vis_params:

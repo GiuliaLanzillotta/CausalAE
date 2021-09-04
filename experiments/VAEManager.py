@@ -1,7 +1,6 @@
 from experiments.data import DatasetLoader
-from experiments.BaseManager import BaseVisualExperiment, BaseVecExperiment
+from experiments.BaseManager import  BaseVecExperiment
 from experiments.ModelsManager import GenerativeAEExperiment
-from models import VAE, models_switch
 from .utils import scheduler_switch
 
 class VAEXperiment(GenerativeAEExperiment):

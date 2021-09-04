@@ -20,6 +20,7 @@ opt_params:
   KL_decay: 1.0
   beta_schedule: 'linear'
   inv_lamda_schedule: 'linear'
+  weight_decay: 1.0
 
 eval_params:
   name: "scoring"
