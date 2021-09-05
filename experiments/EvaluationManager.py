@@ -166,9 +166,11 @@ class ModelHandler(object):
                                                                           num_samples=samples_per_intervention,
                                                                           num_interventions=num_interventions,
                                                                           device=self.device)
-                invariances[u,:] = errors; std_devs += std_dev
+                invariances[u,:] = errors;
+                std_devs += std_dev
 
-        invariances = 1.0 - invariances
+        std_devs/=num_units
+        invariances = 1.0 - invariances/std_devs[1]
 
         if store_it:
             print("Storing invariance evaluation results.")
@@ -178,7 +180,7 @@ class ModelHandler(object):
             with open(path/ ("invariances"+".pkl"), 'wb') as o:
                 pickle.dump(invariances, o)
 
-        return invariances, std_devs/num_units
+        return invariances, std_devs
 
     def latent_responses(self, **kwargs):
         """Computes latent response matrix for the given model plus handles storage

@@ -14,6 +14,7 @@ model_params:
   num_samples: 10
   num_interventions: 10
   sparsity: True
+  do_KL: False
 
 
 opt_params:

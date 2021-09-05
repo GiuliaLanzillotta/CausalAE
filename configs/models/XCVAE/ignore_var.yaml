@@ -12,6 +12,7 @@ model_params:
   num_samples: 200
   # parameters for the causal latent block
   ignore_variance: True
+  do_KL: False
 
 opt_params:
   KL_decay: 1.0
