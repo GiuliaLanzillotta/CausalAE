@@ -25,10 +25,9 @@ def compute_response_matrix(dataloader:DataLoader,
 
         for i in range(num_batches):
             observations, _ = next(iter(dataloader))
-            #TODO: support for stochastic decoders
-            codes = model.encode_mu(observations.to(device)) # samples from posterior
+            codes = model.encode_mu(observations.to(device)).detach() # samples from posterior
             originals.append(codes)
-            original_responses.append(compute_response(codes, model, device))
+            original_responses.append(compute_response(codes, model, device).detach())
             updater(i+1, 1, num_batches)
         all_originals = torch.vstack(originals); N, D = all_originals.shape # this will constitute the base for the aggregate posterior
         B = originals[0].shape[0]
@@ -55,9 +54,7 @@ def compute_response_matrix(dataloader:DataLoader,
             if scaling: # normalise the dimension responses by its standard deviation
                 # if the response is higher than 1 the dimension affects others
                 # if it's less than 1 the dimension is not used
-                #FIXME sd of the errors instead of responses
-                # standardise by column
-                matrix[d,:]/=torch.std(matrix[d,:])
+                matrix[d,:]/=torch.var(all_originals[:,d]) #std deviation computed from the marginal aggregate posterior
 
         matrix = torch.sqrt(matrix)
 

@@ -9,6 +9,7 @@ from experiments.data import DatasetLoader
 import os
 import glob
 import time
+import copy
 from visualisations import ModelVisualiser, SynthVecDataVisualiser
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentInvarianceEvaluator
 import pytorch_lightning as pl
@@ -77,7 +78,7 @@ class ModelHandler(object):
         """Scoring the model reconstraction quality with FID"""
         num_FID_steps = kwargs.get("num_FID_steps",10)
         generation = kwargs.get('generation',False)
-
+        kwargs = copy.deepcopy(kwargs) # need this to make modifications to the dictionary possible without hurting the rest of the program
 
         if self.fidscorer is None:
             self.fidscorer = FIDScorer()
@@ -156,21 +157,18 @@ class ModelHandler(object):
         U = self.model.unit_dim
         num_units = D//U
         invariances = torch.zeros((num_units,num_units), requires_grad=False).to(self.device)
-        std_devs = torch.zeros((num_units), requires_grad=False).to(self.device)
-        #TODO: record standard deviations
+        std_devs = torch.zeros((2, num_units), requires_grad=False).to(self.device)
         for u in range(num_units):
             print(f"Intervening on {u} ...")
             with torch.no_grad():
-                # intervention on d
-                errors, std_dev = self._invarianceScorer.noise_invariance(unit=u, unit_dim=U, num_samples=samples_per_intervention,
-                                                                             num_interventions=num_interventions,
-                                                                             device=self.device)
-                #note: errors and std_dev both have shape num_units x 1
-                invariances[u,:] = errors
-                std_devs +=std_dev
+                # interventions on unit u
+                errors, std_dev = self._invarianceScorer.noise_invariance(unit=u, unit_dim=U, num_units=num_units,
+                                                                          num_samples=samples_per_intervention,
+                                                                          num_interventions=num_interventions,
+                                                                          device=self.device)
+                invariances[u,:] = errors; std_devs += std_dev
 
         invariances = 1.0 - invariances
-        std_devs /= num_units #taking the average
 
         if store_it:
             print("Storing invariance evaluation results.")
@@ -180,7 +178,7 @@ class ModelHandler(object):
             with open(path/ ("invariances"+".pkl"), 'wb') as o:
                 pickle.dump(invariances, o)
 
-        return invariances, std_devs
+        return invariances, std_devs/num_units
 
     def latent_responses(self, **kwargs):
         """Computes latent response matrix for the given model plus handles storage
@@ -348,7 +346,7 @@ class VisualModelHandler(ModelHandler):
             plots["invariances"] = self.visualiser.plot_heatmap(invariances.cpu().numpy(),
                                                                 title="Invariances", threshold=0., **kwargs)
             plots["std_devs"] = self.visualiser.plot_heatmap(std_devs.cpu().numpy(),
-                                                             title="Standard Deviation of Responses marginals",
+                                                             title="Standard Deviation of marginals (original and responses)",
                                                              threshold=0., **kwargs)
 
         if do_latent_block:
