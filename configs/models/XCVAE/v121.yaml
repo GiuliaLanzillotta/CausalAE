@@ -11,7 +11,7 @@ model_params:
   gaussian_init: 'xavier' #other option: 'normal'
   num_samples: 5
   num_interventions: 10
-  do_KL: True
+  do_KL: False
 
 
 opt_params:

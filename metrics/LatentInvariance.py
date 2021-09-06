@@ -115,8 +115,9 @@ class LatentInvarianceEvaluator(object):
         # noise has shape m x d
         # we want it to have shape n x m x d
         noise = torch.tile(noise,(num_interventions, 1,1))
-        if hard: intv = sampling_fun(num_interventions).repeat(m,1) # (mxn) x D_u   - same intervention value for all m samples
-        else: intv = sampling_fun(m*num_interventions) # (mxn) x D_u
+        with torch.no_grad():
+            if hard: intv = sampling_fun(num_interventions).repeat(m,1) # (mxn) x D_u   - same intervention value for all m samples
+            else: intv = sampling_fun(m*num_interventions) # (mxn) x D_u
         noise[:,:,unit*unit_dim:(unit+1)*unit_dim] = intv.view(m, num_interventions, unit_dim).permute(1,0,2)
         return noise.view(-1, d) # (mxn) x d
 

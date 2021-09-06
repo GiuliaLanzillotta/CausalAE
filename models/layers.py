@@ -510,7 +510,7 @@ class HybridLayer(nn.Module):
         if self.prior is None: raise ValueError("No samples from the prior have been obtained yet")
         prior_min = torch.min(self.prior, dim=0).values
         prior_max = torch.max(self.prior, dim=0).values
-        ranges = [(m.detach().cpu().numpy(),M.detach().cpu().numpy())
+        ranges = [(m.detach().cpu().numpy().item(),M.detach().cpu().numpy().item())
                   for (m,M) in zip(prior_min,prior_max)]
         return ranges
 

@@ -21,8 +21,19 @@ class CausalNet(GenerativeAE, ABC):
         self.random_state = np.random.RandomState(params['random_seed'])
 
     @abstractmethod
+    def get_causal_variables(self, noises:Tensor):
+        """Generic function to allow diversity between models in definition/computation of causal variables
+        given the noises (i.e. the output of 'encode')"""
+        raise NotImplementedError
+
+    @abstractmethod
     def compute_errors_from_responses(self, R, R_prime, **kwargs):
         """Returns: Dx1 torch tensor of errors (e_i^{j,k})"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def compute_errors_from_causal_vars(self, X1, X2, **kwargs):
+        """ X1 and X2 have the same shape, namely (l x d) """
         raise NotImplementedError
 
     def compute_invariance_loss(self, inputs, **kwargs):
@@ -78,14 +89,72 @@ class CausalNet(GenerativeAE, ABC):
         errors = errors.mean()
         return errors
 
+    def compute_equivariance_loss(self, inputs, **kwargs):
+        """ kwargs accepted keys:
+            - num_samples -> number of samples for each intervention
+            - num_interventions -> number of interventions to use to compute invariance score
+            - device - SE
+
+        Note that although similar in scope the computation performed here is not equivalent to the
+        one used to evaluate the model's noise invariance at evaluation time
+            - the posterior distribution is obtained from a single batch here
+            - the errors are not normalised
+        """
+        device = kwargs.get('device','cpu')
+        num_samples = kwargs.get('num_samples', 10)
+        num_interventions = kwargs.get('num_interventions', 10)
+        prior_mode = kwargs.get('prior_mode','posterior')
+        num_units = self.latent_size//self.unit_dim
+
+        #TODO: include support for variational models
+
+        with torch.no_grad():
+            prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode).to(device)
+            #Note that we're using only the available batch to approximaate the aggregate posterior estimate
+            posterior_samples = self.sample_noise_from_posterior(inputs).to(device)
+            # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
+            responses = self.encode(self.decode(prior_samples, activate=True)) # n x d
+
+
+        all_prior_samples = []
+        all_responses_prime = []
+
+        for u in range(num_units):
+            hybrid_posterior = LatentInvarianceEvaluator.posterior_distribution(posterior_samples,self.random_state, u, self.unit_dim)
+            all_samples = torch.vstack([prior_samples, responses]) #2m x d
+            all_samples_prime = LatentInvarianceEvaluator.noise_multi_intervention(all_samples, u, self.unit_dim,
+                                                                                     num_interventions=num_interventions,
+                                                                                     hard=True, sampling_fun=hybrid_posterior) # m x n x d
+            all_samples_prime = all_samples_prime.view(num_interventions, num_samples, self.latent_size)
+            prior_samples_prime = all_samples_prime[:,:num_samples,:]; responses_prime = all_samples_prime[:,num_samples+1:,:]
+            all_prior_samples.append(prior_samples_prime)
+            all_responses_prime.append(responses_prime)
+
+        all_prior_samples = torch.vstack(all_prior_samples)# (dxnxm) x d
+        all_responses_prime = torch.vstack(all_responses_prime)# (dxnxm) x d
+        all_responses_prime2 = self.encode(self.decode(all_prior_samples.to(device), activate=True))
+        # now get causal variables from both
+        X_prime1 = self.get_causal_variables(all_responses_prime)
+        X_prime2 = self.get_causal_variables(all_responses_prime2)
+
+
+        errors = self.compute_errors_from_causal_vars(X_prime1, X_prime2, complete_shape=(num_units, num_interventions, -1, self.latent_size), **kwargs)
+        errors = errors.mean()
+        return errors
+
     def add_regularisation_terms(self, *args, **kwargs):
         """ Takes as input the losses dictionary containing the reconstruction
         loss and adds all the regularisation terms to it"""
+        equivariance = kwargs.get('equivariance',False)
         losses = kwargs.get('losses')
         lamda = kwargs.get('invariance_lamda')
         X = kwargs["X"]
-        L_reg = self.compute_invariance_loss(inputs = X, **kwargs)
-        losses['Invariance_loss'] = L_reg
+        if equivariance:
+            L_reg = self.compute_equivariance_loss(inputs = X, **kwargs)
+            losses['Equivariance_loss'] = L_reg
+        else:
+            L_reg = self.compute_invariance_loss(inputs = X, **kwargs)
+            losses['Invariance_loss'] = L_reg
         losses['loss'] += lamda*L_reg
         return losses
 
@@ -96,6 +165,11 @@ class CausalAE(CausalNet, ABC):
 
     def __init__(self, params):
         super(CausalAE, self).__init__(params)
+
+    def compute_errors_from_causal_vars(self, X1, X2, **kwargs):
+        """ X1 and X2 have the same shape, namely (l x d) """
+        #TODO
+        pass
 
     def compute_errors_from_responses(self, R, R_prime, **kwargs):
         """
@@ -116,6 +190,12 @@ class XCSAE(CausalAE, XSAE):
     def decode(self, noise:Tensor, activate:bool):
         return XSAE.decode(self, noise, activate)
 
+    def get_causal_variables(self, noises:Tensor):
+        """Generic function to allow diversity between models in definition/computation of causal variables
+        given the noises (i.e. the output of 'encode')"""
+        #TODO
+        pass
+
     def add_regularisation_terms(self, *args, **kwargs):
         losses = CausalAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
@@ -130,6 +210,12 @@ class XCAE(CausalAE, XAE):
     def decode(self, noise:Tensor, activate:bool):
         return XAE.decode(self, noise, activate)
 
+    def get_causal_variables(self, noises:Tensor):
+        """Generic function to allow diversity between models in definition/computation of causal variables
+        given the noises (i.e. the output of 'encode')"""
+        #TODO
+        pass
+
     def add_regularisation_terms(self, *args, **kwargs):
         losses = CausalAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
@@ -141,6 +227,11 @@ class CausalVAE(CausalNet, VAE, ABC):
     """ Causally trained version on VAE network - i.e. any net that implements VAEBase"""
     def __init__(self, params:dict):
         super(CausalVAE, self).__init__(params)
+
+    def compute_errors_from_causal_vars(self, X1, X2, **kwargs):
+        """ X1 and X2 have the same shape, namely (l x d) """
+        #TODO
+        pass
 
     def compute_errors_from_responses(self, R: List[Tensor], R_prime: List[Tensor], **kwargs):
         # errors shape = (dxnxm) x d ---> reduce=False by default nbn
@@ -171,6 +262,12 @@ class XCVAE(CausalVAE, Xnet):
         out = self.decoder[1](out_init)
         if activate: out = self.act(out)
         return out
+
+    def get_causal_variables(self, noises:Tensor):
+        """Generic function to allow diversity between models in definition/computation of causal variables
+        given the noises (i.e. the output of 'encode')"""
+        #TODO
+        pass
 
     def add_regularisation_terms(self, *args, **kwargs):
         losses = CausalVAE.add_regularisation_terms(self, *args, **kwargs)

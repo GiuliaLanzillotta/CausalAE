@@ -14,6 +14,8 @@ model_params:
   num_samples: 10
   num_interventions: 10
   sparsity: True
+  # parameters for the invariance penalty
+  ignore_variance: True
   do_KL: False
 
 

@@ -10,10 +10,11 @@ import os
 import glob
 import time
 import copy
-from visualisations import ModelVisualiser, SynthVecDataVisualiser
+from visualisations import ModelVisualiser, SynthVecDataVisualiser, vis_responses
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentInvarianceEvaluator
 import pytorch_lightning as pl
 from metrics.responses import compute_response_matrix
+
 
 
 """ Evaluation toolbox for GenerativeAE models"""
@@ -321,7 +322,8 @@ class VisualModelHandler(ModelHandler):
     def plot_model(self, do_originals=False, do_reconstructions=False,
                    do_random_samples=False, do_traversals=False, do_hybrisation=False,
                    do_loss2distortion=False, do_marginal=False, do_loss2marginal=False,
-                   do_invariance=False, do_latent_block=False, **kwargs):
+                   do_invariance=False, do_latent_block=False, do_traversal_responses=False,
+                   **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -350,6 +352,15 @@ class VisualModelHandler(ModelHandler):
             plots["std_devs"] = self.visualiser.plot_heatmap(std_devs.cpu().numpy(),
                                                              title="Standard Deviation of marginals (original and responses)",
                                                              threshold=0., **kwargs)
+        if do_traversal_responses:
+            all_traversal_latents, all_traversals_responses = vis_responses.traversal_responses(self.model, self.device, **kwargs)
+            plots["trvs_responses"] = []
+            S = kwargs.get('steps',20); D = self.model.latent_size
+            for d in range(D):
+                fig = self.visualiser.plot_traversal_responses(d, all_traversal_latents[d].view(S,-1,D),
+                                                               all_traversals_responses[d].view(S,-1,D), **kwargs)
+                plots["trvs_responses"].append(fig)
+
 
         if do_latent_block:
             # plotting latent block adjacency matrix

@@ -1,20 +1,17 @@
 """ Script implementing logic for model visualisations """
-import numpy as np
-import os
-import torch
-from torch import Tensor
-from torchvision import utils as tvu
-from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
-
-from metrics import LatentInvarianceEvaluator
-from models import GenerativeAE, ESAE, HybridLayer
-import torchvision
-import seaborn as sns
+import numpy as np
 import pandas as pd
-from torch.nn import functional as F
+import seaborn as sns
+import torch
+import torchvision
+from matplotlib.lines import Line2D
+from torch import Tensor
+from . import utils
+from .vis_responses import traversal_responses
 
-import itertools
+from models import GenerativeAE, ESAE, HybridLayer
+
 
 class ModelVisualiser(object):
     """ Takes a trained model and a logger and produces visualisations, saving them to the logger."""
@@ -87,13 +84,10 @@ class ModelVisualiser(object):
             code = self.model.encode_mu(test_sample.unsqueeze(0).to(device), update_prior=False)
         latent_vector = code.data.cpu().numpy()
         dimensions = np.arange(latent_vector.shape[1])
-        if not tailored: values = np.tile(np.linspace(-1., 1., num=steps), [dimensions, 1])
-        else:
-            #the values have to be tailored on the range of the specific dimensions
-            #by default the selected range includes >= 90% of the density (with some approximation for hybrid layer)
-            ranges = self.model.get_prior_range()
-            values = np.stack([np.linspace(m,M, steps) for (m,M) in ranges],0)
-        traversals = self.do_latent_traversals_multi_dim(latent_vector, dimensions, values, device=device)
+        if not tailored: ranges = [(-1.,1.)]*len(dimensions)
+        else: ranges = self.model.get_prior_range()
+        values = utils.get_traversals_steps(steps, ranges).cpu().numpy()
+        traversals = utils.do_latent_traversals_multi_dim(self.model, latent_vector, dimensions, values, device=device)
         grid_traversals = torchvision.utils.make_grid(traversals, nrow=steps)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_traversals.permute(1, 2, 0).cpu().numpy())
@@ -333,29 +327,50 @@ class ModelVisualiser(object):
             losses.append(loss)
         return torch.vstack(losses) # D x n_steps
 
-    def do_latent_traversals_multi_dim(self, latent_vector, dimensions, values, device=None):
-        """ Creates a tensor where each element is obtained by passing a
-            modified version of latent_vector to the generato. For each
-            dimension of latent_vector the value is replaced by a range of
-            values, obtaining len(values) different elements.
-
-            values is an array with shape [num_dimensionsXsteps]
-
-        latent_vector, dimensions, values are all numpy arrays
+    @staticmethod
+    def plot_traversal_responses(dim:int, latents:Tensor, responses:Tensor, **kwargs):
+        """For the selected latent dimension plots the recorded errors on the responses across the traversal
+        @latents: Tensor of shape (steps, N, D)
+        @responses:   //        //
+        kwargs accepted keys:
+        - figure parameters
+        - population: bool - whether to plot the whole population trend or the individual samples (default False)
+        - normalise: bool - whether to normalise the codes by dividing each dimension by its standard deviation
+        Returns a grid plot with D subplots.
         """
-        num_values = values.shape[1]
-        traversals = []
-        for dimension, _values in zip(dimensions, values):
-            # Creates num_values copy of the latent_vector along the first axis.
-            latent_traversal_vectors = np.tile(latent_vector, [num_values, 1])
-            # Intervenes in the latent space.
-            latent_traversal_vectors[:, dimension] = _values
-            # Generate the batch of images
-            with torch.no_grad():
-                images = self.model.decode(torch.tensor(latent_traversal_vectors, dtype=torch.float).to(device), activate=True)
-                # images has shape stepsx(image shape)
-            traversals.append(images)
-        return torch.cat(traversals, dim=0)
+        print("")
+        print(f"Plotting traversal responses for dimension {dim}")
+        S, N, D = latents.shape
+        population = kwargs.get('population',False)
+        normalise = kwargs.get('normalise',False)
+        figsize = kwargs.get("figsize",(20,10))
+        markersize = kwargs.get("markersize",10)
+        font_scale = kwargs.get("font_scale",11)
+        ylim = kwargs.get("ylim")
+        xlim = kwargs.get("xlim")
+        nrows = kwargs.get("nrows", D//3); ncols = D//nrows +1 if D%nrows!=0 else D//nrows
+
+        i = 0
+        fig, ax = plt.subplots(nrows, ncols, sharey=False, figsize=figsize)
+        for row in range(nrows):
+            for col in range(ncols):
+                if i==D: break
+                ax[row,col].set_title(f"Responses on latent dimension {i}")
+                x = latents[:,:,dim].view(-1,).cpu().numpy() # steps x N
+                y = (latents[:,:,i] - responses[:,:,i]).view(-1,).cpu().numpy() # steps x N
+                if normalise: y /= torch.std(responses[0,:,i]).cpu().numpy()
+                hue = None if population else [i for _ in range(S) for i in range(N)]
+                axi = sns.lineplot(x, y, ax=ax[row,col], marker=".", markersize=markersize, hue=hue)
+                axi.axhline(0., color='red')
+                axi.set(ylabel=f'Error registered on dimension {i}',
+                        xlabel=f'Traversal on dimension {dim}')
+                axi.set_xticklabels([f'{i:.2f}' for i in latents[:,0,dim]])
+                axi.tick_params(axis="x", labelsize=font_scale)
+                axi.tick_params(axis="y", labelsize=font_scale)
+                if ylim is not None: axi.set(ylim=(-ylim, ylim))
+                if xlim is not None: axi.set(xlim=(-xlim, xlim))
+                i+=1
+        return fig
 
     def plot_training_gradients(self, figsize=(12,12)):
         '''Plots the gradients flowing through different layers in the net during training.
