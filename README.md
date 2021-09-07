@@ -1,2 +1,2 @@
-# SAE
-Implementation of the Structural Autoencoder for Causal Disentanglement
+# Causal Autoencoders
+Codebase for the causal autoencoders framework.
