@@ -11,6 +11,7 @@ model_params:
   channels: 32
   # invariance regularisation parameters
   lamda: 2.0
+  equivariance: True
 
 vis_params:
   plot_every: 10

@@ -1,0 +1,5 @@
+model_params:
+  # parameters for the causal latent block
+  parents_with_grad: True
+  gumbel: True
+  equivariance: True

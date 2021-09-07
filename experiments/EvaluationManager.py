@@ -323,7 +323,7 @@ class VisualModelHandler(ModelHandler):
                    do_random_samples=False, do_traversals=False, do_hybrisation=False,
                    do_loss2distortion=False, do_marginal=False, do_loss2marginal=False,
                    do_invariance=False, do_latent_block=False, do_traversal_responses=False,
-                   **kwargs):
+                   do_latent_response_field=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -368,6 +368,14 @@ class VisualModelHandler(ModelHandler):
             plots['causal_block_graph'] = self.visualiser.plot_heatmap(A.cpu().numpy(),
                                                                        title="Causal block adjacency matrix",
                                                                        threshold=10e-1, **kwargs)
+
+        if do_latent_response_field:
+            i = kwargs.pop("i",0)
+            j = kwargs.pop("j", 1)
+            response_field, hybrid_grid = vis_responses.response_field(i, j, self.model, self.device, **kwargs)
+            X, Y = hybrid_grid
+            plots["latent_response_field"] = self.visualiser.plot_vector_field(response_field, X, Y, i=i, j=j, **kwargs)
+
         return plots
 
 

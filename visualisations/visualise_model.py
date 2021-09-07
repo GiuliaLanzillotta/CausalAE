@@ -9,6 +9,10 @@ from matplotlib.lines import Line2D
 from torch import Tensor
 from . import utils
 from .vis_responses import traversal_responses
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+from matplotlib.ticker import LinearLocator, FormatStrFormatter
+
 
 from models import GenerativeAE, ESAE, HybridLayer
 
@@ -371,6 +375,64 @@ class ModelVisualiser(object):
                 if xlim is not None: axi.set(xlim=(-xlim, xlim))
                 i+=1
         return fig
+
+    @staticmethod
+    def plot_vector_field(vectors:torch.Tensor, X:torch.Tensor, Y:torch.Tensor, **kwargs):
+        """ Takes as input a set of 2D vectors (shape grid_size**2 x 2) and the corresponding
+        coordinates X,Y organised in a grid (shape grid_size x grid_size) to plot them in a streamplot.
+        Accepted kwargs:
+        - figsize
+        -i
+        -j
+        -type \in [stream, quiver, contour, 3D]
+        -surface: whether to plot the response magnitudes or the latent response surface (exp(-response))
+        """
+
+        print("")
+        print(f"Plotting vector field")
+        figsize = kwargs.get("figsize",(9, 7))
+        title = kwargs.get("title","Vector field")
+        i = kwargs.get("i","First dim")
+        j = kwargs.get("j", "Second dim")
+        type = kwargs.get('type','stream')
+        surface = kwargs.get('surface',False)
+
+        grid_size = X.shape[0]
+        assert vectors.shape[0] == grid_size**2, "Grid and vectors sizes not matching"
+        assert vectors.shape[1] == 2, "Only 2D vector fields are supported"
+        magnitudes = torch.linalg.norm(vectors, ord=2, dim=1)
+        if surface: magnitudes = torch.exp(-1*magnitudes)
+        U = vectors[:,0].view(grid_size,grid_size).cpu().numpy()
+        V = vectors[:,1].view(grid_size,grid_size).cpu().numpy()
+
+        fig, ax = plt.subplots(figsize=figsize)
+        if type=='stream':
+            strm = ax.streamplot(Y.cpu().numpy(), X.cpu().numpy(), V, U, density=2,
+                                 color=magnitudes.view(grid_size,grid_size).cpu().numpy(),
+                                 arrowstyle='->', arrowsize=1.5)
+            fig.colorbar(strm.lines)
+        elif type=="quiver":
+            strm = ax.quiver(Y.cpu().numpy(), X.cpu().numpy(), V, U,
+                             magnitudes.view(grid_size,grid_size).cpu().numpy())
+        elif type=="contour":
+            contours = plt.contourf(Y.cpu().numpy(), X.cpu().numpy(),
+                                    magnitudes.view(grid_size,grid_size).cpu().numpy(),
+                                    kwargs.get("contour_n",200))
+            plt.colorbar()
+
+        elif type=="3D":
+            ax = fig.gca(projection='3d')
+            surf = ax.plot_surface(Y.cpu().numpy(), X.cpu().numpy(),
+                                   magnitudes.view(grid_size,grid_size).cpu().numpy(),
+                                   rstride=1, cstride=1, linewidth=0, antialiased=False)
+            fig.colorbar(surf, shrink=0.5, aspect=5)
+
+        ax.set_title(title)
+        ax.set_ylabel(f'Latent dim {i}')
+        ax.set_xlabel(f'Latent dim {j}')
+
+        return fig
+
 
     def plot_training_gradients(self, figsize=(12,12)):
         '''Plots the gradients flowing through different layers in the net during training.

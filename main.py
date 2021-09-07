@@ -9,6 +9,7 @@ import numpy as np
 import os
 import glob
 import torch
+from pytorch_lightning.profiler import PyTorchProfiler
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 
@@ -27,7 +28,7 @@ from pathlib import Path
 
 
 
-def train_model(config:dict, tuning:bool=False, test:bool=False, score=True):
+def train_model(config:dict, tuning:bool=False, test:bool=False, debugging=False, score=True):
     """ Wrapper for the model training loop to be used by the hyper-parameter tuner"""
     tb_logger = TensorBoardLogger(save_dir=config['logging_params']['save_dir'],
                                   name=config['logging_params']['name'],
@@ -66,6 +67,10 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, score=True):
     #todo: add profiler for "debugging mode"
     # see here: https://pytorch-lightning.readthedocs.io/en/latest/advanced/profiler.html
 
+    if debugging:
+        profiler = PyTorchProfiler(on_trace_ready=torch.profiler.tensorboard_trace_handler(base_path),
+                                   profile_memory=False)
+
     runner = Trainer(min_epochs=1,
                      accelerator=None,#todo: look into this
                      gpus = 1,
@@ -79,6 +84,7 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, score=True):
                      reload_dataloaders_every_epoch=config['data_params']['reload_dataloaders_every_epoch'],
                      track_grad_norm=2, # tracking the norm
                      gradient_clip_val = 1.0,
+                     profiler=profiler if debugging else None,
                      **config['trainer_params'])
 
 
@@ -140,7 +146,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='XAE')
+                        default='XCSAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
@@ -161,6 +167,11 @@ if __name__ == '__main__':
                         metavar="TEST",
                         help= "Whether to load the model for testing",
                         default=False)
+    parser.add_argument('--debugging', '-db', #Note that when testing is switched on then training is switched off
+                        dest="debug",
+                        metavar="DEBUG",
+                        help= "Whether to enter debugging mode (pytorch profiler on)",
+                        default=False)
     parser.add_argument('--score', '-s', #Note that when testing is switched on then training is switched off
                         dest="score",
                         metavar="SCORE",
@@ -171,4 +182,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = get_config(args.tuning, args.name, args.data, args.version, args.data_version)
     if args.tuning: do_tuning(config)
-    else: train_model(config, test=args.test, score=args.score)
+    else: train_model(config, test=args.test, debugging=args.debug, score=args.score)
