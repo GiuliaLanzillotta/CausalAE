@@ -64,12 +64,11 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, debugging=False
         with open(hparams_path, 'w') as out:
             yaml.dump(config, out, default_flow_style=False)
 
-    #todo: add profiler for "debugging mode"
-    # see here: https://pytorch-lightning.readthedocs.io/en/latest/advanced/profiler.html
 
     if debugging:
+        # see here: https://pytorch-lightning.readthedocs.io/en/latest/advanced/profiler.html
         profiler = PyTorchProfiler(on_trace_ready=torch.profiler.tensorboard_trace_handler(base_path),
-                                   profile_memory=False)
+                                   profile_memory=True)
 
     runner = Trainer(min_epochs=1,
                      accelerator=None,#todo: look into this
@@ -146,7 +145,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='XCSAE')
+                        default='XCAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",

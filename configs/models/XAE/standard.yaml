@@ -9,7 +9,10 @@ model_params:
   channels: 32
   # regularisation parameters
   sparsity_lamda: 2.0
-  sparsity: True
+  sparsity: False
+  # parameters for the causal latent block
+  parents_with_grad: True
+  gumbel: True
 
 eval_params:
   name: "scoring"
@@ -18,4 +21,4 @@ eval_params:
   mode: 'X'
 
 opt_params:
-  weight_decay: 1.0
+  weight_decay: 0.0

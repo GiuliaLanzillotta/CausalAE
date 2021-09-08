@@ -106,14 +106,15 @@ class CausalNet(GenerativeAE, ABC):
         prior_mode = kwargs.get('prior_mode','posterior')
         num_units = self.latent_size//self.unit_dim
 
-        #TODO: include support for variational models
 
         with torch.no_grad():
             prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode).to(device)
             #Note that we're using only the available batch to approximaate the aggregate posterior estimate
             posterior_samples = self.sample_noise_from_posterior(inputs).to(device)
-            # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
-            responses = self.encode(self.decode(prior_samples, activate=True)) # n x d
+
+        # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
+        #TODO: generalise to the whole distribution
+        responses = self.encode_mu(self.decode(prior_samples, activate=True)) # n x d
 
 
         all_prior_samples = []
@@ -122,7 +123,7 @@ class CausalNet(GenerativeAE, ABC):
         for u in range(num_units):
             hybrid_posterior = LatentInvarianceEvaluator.posterior_distribution(posterior_samples,self.random_state, u, self.unit_dim)
             all_samples = torch.vstack([prior_samples, responses]) #2m x d
-            all_samples_prime = LatentInvarianceEvaluator.noise_multi_intervention(all_samples, u, self.unit_dim,
+            all_samples_prime = LatentInvarianceEvaluator.noise_multi_intervention(all_samples, u, self.unit_dim, # here if model is variational we need to sample multiple times from the intervened response
                                                                                      num_interventions=num_interventions,
                                                                                      hard=True, sampling_fun=hybrid_posterior) # m x n x d
             all_samples_prime = all_samples_prime.view(num_interventions, num_samples*2, self.latent_size)
@@ -132,13 +133,14 @@ class CausalNet(GenerativeAE, ABC):
 
         all_prior_samples = torch.vstack(all_prior_samples)# (dxnxm) x d
         all_responses_prime = torch.vstack(all_responses_prime)# (dxnxm) x d
-        all_responses_prime2 = self.encode(self.decode(all_prior_samples.to(device), activate=True))
+        all_responses_prime2 = self.encode_mu(self.decode(all_prior_samples.to(device), activate=True))
         # now get causal variables from both
         X_prime1 = self.get_causal_variables(all_responses_prime, **kwargs)
         X_prime2 = self.get_causal_variables(all_responses_prime2, **kwargs)
 
 
-        errors = self.compute_errors_from_causal_vars(X_prime1, X_prime2, complete_shape=(num_units, num_interventions, -1, self.latent_size), **kwargs)
+        errors = self.compute_errors_from_causal_vars(X_prime1, X_prime2,
+                                                      complete_shape=(num_units, num_interventions, -1, self.latent_size), **kwargs)
         errors = errors.mean()
         return errors
 
@@ -233,9 +235,15 @@ class CausalVAE(CausalNet, VAE, ABC):
         super(CausalVAE, self).__init__(params)
 
     def compute_errors_from_causal_vars(self, X1, X2, **kwargs):
-        """ X1 and X2 have the same shape, namely (l x d) """
-        #TODO
-        pass
+        """ X1 and X2 have the same shape, namely (l x d)
+        Note: this only works with the current setting:
+        i.e. only requiring equivariance for the mean of the posteriors"""
+        unit_dim = kwargs.get('unit_dim',1)
+        complete_shape = kwargs.get('complete_shape')
+        return LatentInvarianceEvaluator.compute_absolute_errors(X1.view(complete_shape),
+                                                                 X2.view(complete_shape),
+                                                                 reduce_dim=2,
+                                                                 unit_dim=unit_dim)
 
     def compute_errors_from_responses(self, R: List[Tensor], R_prime: List[Tensor], **kwargs):
         # errors shape = (dxnxm) x d ---> reduce=False by default nbn
@@ -270,7 +278,6 @@ class XCVAE(CausalVAE, Xnet):
     def get_causal_variables(self, noises: Tensor, **kwargs):
         """Generic function to allow diversity between models in definition/computation of causal variables
         given the noises (i.e. the output of 'encode')"""
-        #TODO: check
         X = self.causal_block(noises, self.tau)
         return X
 

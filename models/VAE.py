@@ -40,7 +40,6 @@ class VAEBase(GenerativeAE, nn.Module, ABC):
         return self.gaussian_latent.sample_standard(num_samples)
 
     def sample_noise_from_posterior(self, inputs: Tensor):
-        #TODO: change here --- why?
         return self.encode(inputs)[0]
 
     def reconstruct(self, x: Tensor, activate:bool) -> Tensor:

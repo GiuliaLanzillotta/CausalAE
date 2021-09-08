@@ -10,7 +10,11 @@ model_params:
   channels: 32
   # sparsity regularisation parameters
   sparsity_lamda: 2.0
-  sparsity: True
+  sparsity: False
+  # parameters for the causal latent block
+  parents_with_grad: True
+  gumbel: True
+
 
 
 eval_params:
@@ -21,4 +25,4 @@ eval_params:
 
 
 opt_params:
-  weight_decay: 1.0
+  weight_decay: 0.0

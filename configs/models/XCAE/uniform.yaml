@@ -1,3 +1,2 @@
 model_params:
-  name: 'XCAE'
   prior_mode: 'uniform'

@@ -377,13 +377,13 @@ class HybridLayer(nn.Module):
         self.hierarchical_weights = torch.Tensor(range(1,self.max_hybridisation_level+1))/sum(range(1,self.max_hybridisation_level+1))
 
     def initialise_prior(self, latent_vectors):
-        latent_vectors = latent_vectors.detach()
         input_size = latent_vectors.shape[0]
         # randomly selecting latent vectors for the prior from the batch
-        idx = torch.randperm(input_size).to(latent_vectors.device) #shuffling indices
-        if input_size>self.N:
-            idx = idx[:self.N]
-        self.prior = torch.index_select(latent_vectors, 0, idx)
+        with torch.no_grad():
+            idx = torch.randperm(input_size).to(latent_vectors.device) #shuffling indices
+            if input_size>self.N:
+                idx = idx[:self.N]
+            self.prior = torch.index_select(latent_vectors, 0, idx).detach()
 
     def update_prior(self, latent_vectors, integrate=False):
         if self.prior is None:
@@ -392,11 +392,11 @@ class HybridLayer(nn.Module):
         if not integrate: return
         # increment prior pool by integrating it with the new vectors and sample
         # from that
-        all_vecs = torch.vstack([self.prior, latent_vectors])
-        all_vecs.detach()
-        all_vecs_size = all_vecs.shape[0]
-        idx = torch.randperm(all_vecs_size).to(latent_vectors.device)[:self.N]
-        self.prior = torch.index_select(all_vecs, 0, idx)
+        with torch.no_grad():
+            all_vecs = torch.vstack([self.prior, latent_vectors])
+            all_vecs_size = all_vecs.shape[0]
+            idx = torch.randperm(all_vecs_size).to(latent_vectors.device)[:self.N]
+        self.prior = torch.index_select(all_vecs, 0, idx).detach()
 
 
     def sample_from_prior(self, input_shape):#FIXME: use directly num_samples instead of input_shape
@@ -411,7 +411,7 @@ class HybridLayer(nn.Module):
             idx = torch.multinomial(self.weights[:self.prior.shape[0]],
                                     num_samples, replacement=True).to(chunk.device)
             new_vectors.append(torch.index_select(chunk, 0, idx))
-        noise = torch.cat(new_vectors, dim=1)
+        noise = torch.cat(new_vectors, dim=1).detach()
         return noise
 
     @staticmethod
@@ -445,14 +445,13 @@ class HybridLayer(nn.Module):
         use_prior: if True the sampling base is the prior set (which usually is a subset of the latent set)"""
         if hybridisation_level==0:
             #TODO: adjust for num_samples here
-            if not use_prior: return latent_vectors.detach()
+            if not use_prior: return latent_vectors.detach().clone()
             return self.prior
         if use_prior and self.prior is None: raise ValueError("use_prior set to True and prior not initialised")
         if hybridisation_level > self.max_hybridisation_level: raise ValueError("Hybridisation level too high")
         if not use_prior:
-            latent_vectors = latent_vectors.detach()
             available_samples = latent_vectors.shape[0]
-            chunks = torch.split(latent_vectors, self.unit_dim, dim=1)
+            chunks = torch.split(latent_vectors.detach().clone(), self.unit_dim, dim=1)
         if use_prior:
             available_samples = self.prior.shape[0]
             chunks = torch.split(self.prior, self.unit_dim, dim=1)
@@ -508,10 +507,11 @@ class HybridLayer(nn.Module):
         most of the data density (905)"""
         #TODO: make this completely discrete
         if self.prior is None: raise ValueError("No samples from the prior have been obtained yet")
-        prior_min = torch.min(self.prior, dim=0).values
-        prior_max = torch.max(self.prior, dim=0).values
-        ranges = [(m.detach().cpu().numpy().item(),M.detach().cpu().numpy().item())
-                  for (m,M) in zip(prior_min,prior_max)]
+        with torch.no_grad():
+            prior_min = torch.min(self.prior, dim=0).values.detach()
+            prior_max = torch.max(self.prior, dim=0).values.detach()
+            ranges = [(m.cpu().numpy().item(),M.cpu().numpy().item())
+                      for (m,M) in zip(prior_min,prior_max)]
         return ranges
 
 
@@ -792,7 +792,7 @@ class VecSCM(nn.Module):
             z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
             if l>0:
                 parents = torch.hstack(causal_vars)
-                if not self.track_parents_gradients: parents = parents.detach().clone()
+                if not self.track_parents_gradients: parents = parents.detach()
                 if self.use_masking and l>0:
                     if self.use_Gumbel:
                         with torch.no_grad(): gumbel_noise = self.gumbel.sample([l]).to(parents.device)
@@ -816,8 +816,6 @@ class VecSCM(nn.Module):
             else: sparsity_penalty += torch.linalg.norm(self.act(mask), ord=1)
         return sparsity_penalty
 
-class MaskedVecSCM(nn.Module):
-    """VecSCM with additional masking on the inputs (to be used to impose sparsity in the inputs of the SCM)"""
 
 
 

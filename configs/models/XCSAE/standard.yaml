@@ -1,7 +1,6 @@
 model_params:
   name: 'XCSAE'
   latent_vecs: 128 # for hybrid sampling
-  residual: True
   latent_size: 12
   enc_depth: 12 #number of convolutional layers in the encoder
   dec_depth: 12
@@ -11,9 +10,12 @@ model_params:
   # invariance regularisation parameters
   sparsity_lamda: 2.0
   invariance_lamda: 2.0
-  num_samples: 50
+  num_samples: 10
   num_interventions: 10
-  sparsity: True
+  # parameters for the causal latent block
+  parents_with_grad: True
+  gumbel: True
+  sparsity: False
 
 
 eval_params:
@@ -25,7 +27,7 @@ eval_params:
 
 opt_params:
   inv_lamda_schedule: 'linear'
-  weight_decay: 1.0
+  weight_decay: 0.0
 
 vis_params:
   plot_every: 5 # hugher frequency for slower training

@@ -75,7 +75,8 @@ class BaseVisualExperiment(pl.LightningModule):
         if latent_block:
             # plotting latent block adjacency matrix
             A = get_causal_block_graph(self.model, self.params["model_params"]["name"], self.device)
-            figure = self.visualiser.plot_heatmap(A.cpu(), title="Causal block adjacency matrix", threshold=0.0, figsize=(6,6))
+            figure = self.visualiser.plot_heatmap(A.cpu(), title="Causal block adjacency matrix",
+                                                  threshold=0.0, figsize=(self.model.latent_size,self.model.latent_size))
             logger.add_figure("Causal block adjacency matrix", figure, global_step=self.global_step)
 
     def validation_epoch_end(self, outputs):

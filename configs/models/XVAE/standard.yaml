@@ -10,13 +10,16 @@ model_params:
   #regularisation parameters
   beta: 4.0
   sparsity_lamda: 2.0
-  sparsity: True
+  sparsity: False
+  # parameters for the causal latent block
+  parents_with_grad: True
+  gumbel: True
 
 
 opt_params:
   KL_decay: 1.0
   beta_schedule: 'linear'
-  weight_decay: 1.0
+  weight_decay: 0.0
 
 eval_params:
   name: "scoring"

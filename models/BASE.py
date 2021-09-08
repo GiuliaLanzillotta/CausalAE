@@ -114,11 +114,7 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
 
     def encode_mu(self, inputs:Tensor, **kwargs) -> Tensor:
         """ returns latent code (not noise) for given input"""
-        codes =  self.encode(inputs)
-        _update_prior = kwargs.get("update_prior", False)
-        _integrate = kwargs.get("integrate", False)
-        if _update_prior:
-            with torch.no_grad():self.hybrid_layer.update_prior(codes, integrate=_integrate)
+        codes =  self.encode(inputs, **kwargs)
         return codes
 
     def sample_hybrid(self, num_samples:int=None, inputs:Tensor=None):
@@ -181,7 +177,7 @@ class Xnet(GenerativeAE, ABC):
     def __init__(self, params):
         super(Xnet, self).__init__(params)
         self.sparsity_on = params.get("sparsity",False)
-        self.causal_block = VecSCM(use_masking = self.sparsity_on, **params)
+        self.causal_block = VecSCM(use_masking = True, **params)
         self.tau = 1.0
 
     def add_regularisation_terms(self, *args, **kwargs):

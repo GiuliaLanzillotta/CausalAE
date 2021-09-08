@@ -1,3 +1,2 @@
 model_params:
-  name: 'XSAE'
   prior_mode: 'uniform'

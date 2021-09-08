@@ -21,7 +21,6 @@ from metrics.responses import compute_response_matrix
 
 class ModelHandler(object):
     """Offers a series of tools to inspect a given model."""
-    #TODO: add suport for multi-dimensional latent units
     def __init__(self, experiment:pl.LightningModule, **kwargs):
         self.config = experiment.params
         self.experiment = experiment
@@ -132,6 +131,7 @@ class ModelHandler(object):
         - num_samples: number of samples for each intervention
         - store_it: SE (self evident)
         - load_it: SE
+        - normalise: whether to normalise the score by each unit std dev or not
         + all kwarks for 'initialise_invarianceScorer' function
         """
         intervt_type = kwargs.get("intervention_type", "noise") #TODO: include in the code
@@ -140,6 +140,7 @@ class ModelHandler(object):
         samples_per_intervention = kwargs.get("num_samples",50)
         store_it = kwargs.get("store",False)
         load_it = kwargs.get("load", False)
+        normalise = kwargs.get('normalise',True)
         print(f"Scoring model's response map invariance to {intervt_type} interventions.")
 
         if load_it:
@@ -167,11 +168,12 @@ class ModelHandler(object):
                                                                           num_samples=samples_per_intervention,
                                                                           num_interventions=num_interventions,
                                                                           device=self.device)
-                invariances[u,:] = errors;
+                invariances[u,:] = errors
                 std_devs += std_dev
 
         std_devs/=num_units
-        invariances = 1.0 - invariances/std_devs[1]
+        if normalise: invariances = invariances/std_devs[1]
+        invariances = 1.0 - invariances
 
         if store_it:
             print("Storing invariance evaluation results.")

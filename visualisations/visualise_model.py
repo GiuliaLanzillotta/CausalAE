@@ -486,7 +486,8 @@ class ModelVisualiser(object):
 
         fig = plt.figure(figsize=figsize)
         sns.set_context('paper', font_scale=1.5)
-        ax = sns.heatmap(M_extreme, linecolor='white', linewidth=2,  cmap="Greens", annot=True)
+        ax = sns.heatmap(M_extreme, linecolor='white', linewidth=2,
+                         cmap="Greens", annot=True,  fmt=".2f")
         bottom, top = ax.get_ylim()
         ax.set_ylim(bottom + 0.5, top - 0.5)
         ax.set_title(title)

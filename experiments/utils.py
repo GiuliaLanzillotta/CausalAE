@@ -10,8 +10,11 @@ def get_causal_block_graph(model, model_name, device, **kwargs):
     num_units = model.latent_size//model.unit_dim
     A = torch.zeros((num_units, num_units), requires_grad=False).to(device)
 
+
     for i,mask in enumerate(model.causal_block.masks):
-        A[:i+1,i+1]=mask.detach()
+        _mask = mask.detach()
+        A[:i+1,i+1]=model.act(_mask/model.tau)
+
     return A
 
 def cyclic_beta_schedule(initial_beta, iter_num):

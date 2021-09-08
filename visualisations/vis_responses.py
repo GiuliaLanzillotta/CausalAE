@@ -13,14 +13,11 @@ def traversal_responses(model:GenerativeAE, device, **kwargs):
         - all arguments accepted in 'sample_noise_from_prior'
 
     Returns 2 lists containing the latents and corresponding responses for each latent unit
-    #TODO: add support for multidimensional units
     """
     print("Computing traversal responses ... ")
     if not kwargs.get('num_samples'):
         kwargs['num_samples'] = 50
     steps = kwargs.get('steps',20)
-    unit_dim = 1
-    num_units = model.latent_size//unit_dim
 
     all_traversal_latents = []
     all_traversals_responses = []
@@ -28,13 +25,13 @@ def traversal_responses(model:GenerativeAE, device, **kwargs):
     prior_samples = model.sample_noise_from_prior(**kwargs).to(device).detach()
     ranges = model.get_prior_range()
     # for each latent unit we start traversal
-    for u in range(num_units):
-        range_u = ranges[u]
+    for d in range(model.latent_size):
+        range_d = ranges[d]
         # 1. obtain traversals values
-        traversals_steps = utils.get_traversals_steps(steps, [range_u]).to(device).detach() #torch Tensor
+        traversals_steps = utils.get_traversals_steps(steps, [range_d]).to(device).detach() #torch Tensor
         with torch.no_grad():
             # 2. do traversals
-            traversals = utils.do_latent_traversals_multi_vec(prior_samples, unit_dim=unit_dim, unit=u,
+            traversals = utils.do_latent_traversals_multi_vec(prior_samples, unit_dim=unit_dim, unit=d,
                                                               values=traversals_steps, device=device) # shape steps x N x D
             traversals_latents = traversals.view(-1, model.latent_size) # reshaping to fit into batch
             # 3. obtain responses

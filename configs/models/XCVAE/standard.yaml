@@ -13,17 +13,20 @@ model_params:
   invariance_lamda: 1.0
   num_samples: 10
   num_interventions: 10
-  sparsity: True
+  sparsity: False
   # parameters for the invariance penalty
   ignore_variance: True
   do_KL: False
+  # parameters for the causal latent block
+  parents_with_grad: True
+  gumbel: True
 
 
 opt_params:
   KL_decay: 1.0
   beta_schedule: 'linear'
   inv_lamda_schedule: 'linear'
-  weight_decay: 1.0
+  weight_decay: 0.0
 
 eval_params:
   name: "scoring"

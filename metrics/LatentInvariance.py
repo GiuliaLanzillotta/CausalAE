@@ -40,8 +40,6 @@ class LatentInvarianceEvaluator(object):
         for i in range(num_batches):
             with torch.no_grad():
                 observations, _ = next(iter(self.dataloader))
-                #TODO: make sure this encode works (we only want the sample and not the parameters of the distribution)
-                # maybe sample from posterior here
                 codes = self.model.sample_noise_from_posterior(observations.to(device))
                 if self.variational: codes = codes[0]
                 source.append(codes)
@@ -98,7 +96,7 @@ class LatentInvarianceEvaluator(object):
          are assumed to be independent) """
         m,_ = noise.shape
         if type(noise) == np.ndarray: noise = torch.from_numpy(noise.copy())
-        elif type(noise) == torch.Tensor: noise = noise.clone()
+        elif type(noise) == torch.Tensor: noise = noise.detach().clone()
         if hard: intv = sampling_fun() # only one value
         else: intv = sampling_fun(m)
         noise[:,unit*unit_dim:(unit+1)*unit_dim] = intv
@@ -111,13 +109,12 @@ class LatentInvarianceEvaluator(object):
         device = noise.device
         m,d = noise.shape
         if type(noise) == np.ndarray: noise = torch.from_numpy(noise.copy())
-        elif type(noise) == torch.Tensor: noise = noise.clone()
+        elif type(noise) == torch.Tensor: noise = noise.detach().clone()
         # noise has shape m x d
         # we want it to have shape n x m x d
         noise = torch.tile(noise,(num_interventions, 1,1))
-        with torch.no_grad():
-            if hard: intv = sampling_fun(num_interventions).repeat(m,1) # (mxn) x D_u   - same intervention value for all m samples
-            else: intv = sampling_fun(m*num_interventions) # (mxn) x D_u
+        if hard: intv = sampling_fun(num_interventions).repeat(m,1) # (mxn) x D_u   - same intervention value for all m samples
+        else: intv = sampling_fun(m*num_interventions) # (mxn) x D_u
         noise[:,:,unit*unit_dim:(unit+1)*unit_dim] = intv.view(m, num_interventions, unit_dim).permute(1,0,2)
         return noise.view(-1, d) # (mxn) x d
 
