@@ -2,7 +2,7 @@ model_params:
   name: 'null'
   norm: 'batch'
   act: 'mish'
-  loss_type: "BCE"
+  loss_type: "MSE"
   random_seed: 11
 
 opt_params:
@@ -18,14 +18,22 @@ data_params:
   reload_dataloaders_every_epoch: False
   add_noise: False
   FID_scoring: True
+  pin_memory: True
 
 trainer_params:
   val_check_interval: 200 #check validation every 200 steps
   fast_dev_run: False # must be used only for debugging purposes
   max_steps: 100000
   num_sanity_val_steps: 2
-  benchmark: False
-  deterministic: True #might make the system slower
+  benchmark: True
+  #precision: 16 - DOES'NT WORK, EVERYTHING EXPLODES
+  progress_bar_refresh_rate: 50
+  log_every_n_steps: 50
+  auto_select_gpus: True #select all the gpus available
+  min_epochs: 1
+  accelerator: null #'ddp'
+  gpus: 1
+
 
 logging_params:
   #save_dir: "/logs"

@@ -6,12 +6,14 @@ model_params:
   enc_depth: 3 #number of convolutional layers in the encoder
   dec_depth: 3
   num_pools: 3
-  unit_dim: 2
   norm: 'batch'
   channels: 32
   # invariance regularisation parameters
   lamda: 2.0
   num_samples: 512
+  #multidim parameters
+  latent_size_prime: 12
+  xunit_dim: 2
 
 vis_params:
   plot_every: 10
@@ -20,3 +22,8 @@ logging_params:
   score_every: 1000
   save_dir: "./logs/"
 
+
+trainer_params:
+  benchmark: True
+  precision: 32
+  accelerator: null

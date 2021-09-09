@@ -22,7 +22,7 @@ def traversal_responses(model:GenerativeAE, device, **kwargs):
     all_traversal_latents = []
     all_traversals_responses = []
     # sample N vectors from prior
-    prior_samples = model.sample_noise_from_prior(**kwargs).to(device).detach()
+    prior_samples = model.sample_noise_from_prior(device=device, **kwargs).detach()
     ranges = model.get_prior_range()
     # for each latent unit we start traversal
     for d in range(model.latent_size):
@@ -64,7 +64,7 @@ def response_field(i:int, j:int, model:GenerativeAE, device, **kwargs):
     unit_dim = 1
     num_units = model.latent_size//unit_dim
     # sample N vectors from prior
-    prior_samples = model.sample_noise_from_prior(**kwargs).to(device).detach()
+    prior_samples = model.sample_noise_from_prior(device=device, **kwargs).detach()
     ranges = model.get_prior_range()
     with torch.no_grad():
         hybrid_grid = torch.meshgrid([torch.linspace(ranges[i][0],ranges[i][1], steps=grid_size),

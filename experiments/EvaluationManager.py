@@ -11,7 +11,7 @@ import glob
 import time
 import copy
 from visualisations import ModelVisualiser, SynthVecDataVisualiser, vis_responses
-from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentInvarianceEvaluator
+from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentConsistencyEvaluator
 import pytorch_lightning as pl
 from metrics.responses import compute_response_matrix
 
@@ -34,7 +34,7 @@ class ModelHandler(object):
         self.fidscorer = None
         self._orthogonalityScorer = None
         self._disentanglementScorer = None
-        self._invarianceScorer = None
+        self._consistencyScorer = None
         self.device = next(self.model.parameters()).device
         self.send_model_to(self.device)
 
@@ -100,7 +100,7 @@ class ModelHandler(object):
 
         return FID_score
 
-    def initialise_invarianceScorer(self, **kwargs):
+    def initialise_consistencyScorer(self, **kwargs):
         """ Looks in the kwargs for the following keys:
             - random_seed
             - num_batches
@@ -108,7 +108,7 @@ class ModelHandler(object):
             - verbose
         """
 
-        if self._invarianceScorer is not None:
+        if self._consistencyScorer is not None:
             return
 
         random_seed = kwargs.get("random_seed",11)
@@ -117,10 +117,10 @@ class ModelHandler(object):
         verbose = kwargs.get("verbose",True)
 
 
-        self._invarianceScorer = LatentInvarianceEvaluator(self.model, self.dataloader.val, mode = mode,
-                                        device = self.device, random_seed=random_seed, verbose=verbose)
+        self._consistencyScorer = LatentConsistencyEvaluator(self.model, self.dataloader.val, mode = mode,
+                                                             device = self.device, random_seed=random_seed, verbose=verbose)
         # initialising the latent posterior distribution
-        self._invarianceScorer.sample_codes_pool(num_batches, self.device)
+        self._consistencyScorer.sample_codes_pool(num_batches, self.device)
 
     def evaluate_invariance(self, **kwargs):
         """ Evaluate invariance of respose map to intervention of the kind specified in the kwargs
@@ -154,7 +154,7 @@ class ModelHandler(object):
             print("No matrix found at "+str(path))
             print("Calculating invariance from scratch.")
 
-        self.initialise_invarianceScorer(**kwargs)
+        self.initialise_consistencyScorer(**kwargs)
         D = self.model.latent_size
         U = self.model.unit_dim
         num_units = D//U
@@ -164,10 +164,10 @@ class ModelHandler(object):
             print(f"Intervening on {u} ...")
             with torch.no_grad():
                 # interventions on unit u
-                errors, std_dev = self._invarianceScorer.noise_invariance(unit=u, unit_dim=U, num_units=num_units,
-                                                                          num_samples=samples_per_intervention,
-                                                                          num_interventions=num_interventions,
-                                                                          device=self.device)
+                errors, std_dev = self._consistencyScorer.noise_invariance(unit=u, unit_dim=U, num_units=num_units,
+                                                                           num_samples=samples_per_intervention,
+                                                                           num_interventions=num_interventions,
+                                                                           device=self.device)
                 invariances[u,:] = errors
                 std_devs += std_dev
 
@@ -184,6 +184,82 @@ class ModelHandler(object):
                 pickle.dump(invariances, o)
 
         return invariances, std_devs
+
+    def evaluate_self_consistency(self, **kwargs):
+        """ Evaluate self_consistency of respose map
+        kwargs expected keys:
+        - num_samples: number of samples for each intervention
+        - normalise: whether to normalise the score by each unit std dev or not
+        + all kwarks for 'initialise_consistencyScorer' function
+        """
+
+        print(f"Scoring model's self consistency.")
+        normalise = kwargs.get('normalise',False)
+
+        self.initialise_consistencyScorer(**kwargs)
+        D = self.model.latent_size
+        U = self.model.unit_dim
+        num_units = D//U
+        with torch.no_grad(): errors, std_devs = self._consistencyScorer.self_consistency(U, num_units,
+                                                                            device=self.device, **kwargs)
+
+        if normalise: errors = errors/std_devs[1]
+        consistency = 1.0 - errors
+        return consistency, std_devs
+
+    def evaluate_equivariance(self, **kwargs):
+        """ Evaluate equivariance of respose map to intervention of the kind specified in the kwargs
+        kwargs expected keys:
+        - intervention_type: ['noise', ...] - unused for now
+        - hard: whether to perform hard or soft intervention (i.e. resample from the dimension or not)
+        - num_interventions: number of interventions to base the statistics on
+        - num_samples: number of samples for each intervention
+        - store_it: SE (self evident)
+        - load_it: SE
+        - normalise: whether to normalise the score by each unit std dev or not
+        + all kwarks for 'initialise_consistencyScorer' function
+        """
+        intervt_type = kwargs.get("intervention_type", "noise") #TODO: include in the code
+        hard = kwargs.get("hard_intervention", False)
+        store_it = kwargs.get("store",False)
+        load_it = kwargs.get("load", False)
+        print(f"Scoring model's response map equivariance to {intervt_type} interventions.")
+
+        if load_it:
+            print("Loading equivariance matrix")
+            path = Path(self.config['logging_params']['save_dir']) / \
+                   self.config['logging_params']['name'] / \
+                   self.config['logging_params']['version'] / ("equivariance"+".pkl")
+            if os.path.exists(path):
+                with open(path, 'rb') as f:
+                    return pickle.load(f)
+            print("No matrix found at "+str(path))
+            print("Calculating equivariance from scratch.")
+
+        self.initialise_consistencyScorer(**kwargs)
+        D = self.model.latent_size
+        U = self.model.unit_dim
+        num_units = D//U
+        equivariances = torch.zeros((num_units,num_units), requires_grad=False, device=self.device)
+        for u in range(num_units):
+            print(f"Intervening on {u} ...")
+            with torch.no_grad():
+                # interventions on unit u
+                errors = self._consistencyScorer.noise_equivariance(unit=u, unit_dim=U, num_units=num_units,
+                                                                    device=self.device, **kwargs)
+                equivariances[u,:] = errors
+
+        equivariances = 1.0 - equivariances
+
+        if store_it:
+            print("Storing equivariance evaluation results.")
+            path = Path(self.config['logging_params']['save_dir']) / \
+                   self.config['logging_params']['name'] / \
+                   self.config['logging_params']['version']
+            with open(path/ ("equivariance"+".pkl"), 'wb') as o:
+                pickle.dump(equivariances, o)
+
+        return equivariances
 
     def latent_responses(self, **kwargs):
         """Computes latent response matrix for the given model plus handles storage
@@ -325,7 +401,7 @@ class VisualModelHandler(ModelHandler):
                    do_random_samples=False, do_traversals=False, do_hybrisation=False,
                    do_loss2distortion=False, do_marginal=False, do_loss2marginal=False,
                    do_invariance=False, do_latent_block=False, do_traversal_responses=False,
-                   do_latent_response_field=False, **kwargs):
+                   do_latent_response_field=False, do_equivariance=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -348,12 +424,17 @@ class VisualModelHandler(ModelHandler):
         if do_loss2marginal:
             plots["marginal_distortion"] = self.visualiser.plot_loss2marginaldistortion(device=self.device, **kwargs)
         if do_invariance:
-            invariances, std_devs = self.evaluate_invariance(load_it = True, store_it=True, **kwargs)
+            invariances, std_devs = self.evaluate_invariance(**kwargs)
             plots["invariances"] = self.visualiser.plot_heatmap(invariances.cpu().numpy(),
                                                                 title="Invariances", threshold=0., **kwargs)
             plots["std_devs"] = self.visualiser.plot_heatmap(std_devs.cpu().numpy(),
                                                              title="Standard Deviation of marginals (original and responses)",
                                                              threshold=0., **kwargs)
+        if do_equivariance:
+            equivariances, std_devs = self.evaluate_equivariance(**kwargs)
+            plots["equivariances"] = self.visualiser.plot_heatmap(equivariances.cpu().numpy(), title="Equivariances",
+                                                                  threshold=0., **kwargs)
+
         if do_traversal_responses:
             all_traversal_latents, all_traversals_responses = vis_responses.traversal_responses(self.model, self.device, **kwargs)
             plots["trvs_responses"] = []

@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
-from metrics import LatentInvarianceEvaluator
+from metrics import LatentConsistencyEvaluator
 from . import HybridAE, GenerativeAE, utils, XSAE, XAE, VAEBase, XVAE, VAE, Xnet, VecSCM
 from .utils import KL_multiple_univariate_gaussians
 
@@ -20,11 +20,6 @@ class CausalNet(GenerativeAE, ABC):
         super().__init__(params)
         self.random_state = np.random.RandomState(params['random_seed'])
 
-    @abstractmethod
-    def get_causal_variables(self, noises:Tensor, **kwargs):
-        """Generic function to allow diversity between models in definition/computation of causal variables
-        given the noises (i.e. the output of 'encode')"""
-        raise NotImplementedError
 
     @abstractmethod
     def compute_errors_from_responses(self, R, R_prime, **kwargs):
@@ -53,21 +48,21 @@ class CausalNet(GenerativeAE, ABC):
         prior_mode = kwargs.get('prior_mode','posterior')
 
         with torch.no_grad():
-            prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode).to(device)
+            prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode, device=device)
             #Note that we're using only the available batch to approximaate the aggregate posterior estimate
-            posterior_samples = self.sample_noise_from_posterior(inputs).to(device)
+            posterior_samples = self.sample_noise_from_posterior(inputs, device=device)
             # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
-            responses = self.encode(self.decode(prior_samples, activate=True)) # n x d
+            responses = self.encode(self.decode(prior_samples, activate=True)).detach() # n x d
 
 
         all_prior_samples = []
         num_units = self.latent_size//self.unit_dim
         for u in range(num_units):
-            hybrid_posterior = LatentInvarianceEvaluator.posterior_distribution(posterior_samples,self.random_state,
-                                                                                u, self.unit_dim)
-            prior_samples_prime = LatentInvarianceEvaluator.noise_multi_intervention(prior_samples, u, self.unit_dim,
-                                                                                     num_interventions=num_interventions, hard=True,
-                                                                                     sampling_fun=hybrid_posterior) # m x n x d
+            hybrid_posterior = LatentConsistencyEvaluator.posterior_distribution(posterior_samples, self.random_state,
+                                                                                 u, self.unit_dim)
+            prior_samples_prime = LatentConsistencyEvaluator.noise_multi_intervention(prior_samples, u, self.unit_dim,
+                                                                                      num_interventions=num_interventions, hard=True,
+                                                                                      sampling_fun=hybrid_posterior) # m x n x d
             all_prior_samples.append(prior_samples_prime)
         all_prior_samples = torch.vstack(all_prior_samples)# (dxnxm) x d
         responses_prime = self.encode(self.decode(all_prior_samples.to(device), activate=True))
@@ -104,13 +99,13 @@ class CausalNet(GenerativeAE, ABC):
         num_samples = kwargs.get('num_samples', 10)
         num_interventions = kwargs.get('num_interventions', 10)
         prior_mode = kwargs.get('prior_mode','posterior')
-        num_units = self.latent_size//self.unit_dim
+        latent_size_prime = kwargs.get('latent_size_prime',self.latent_size)
 
 
         with torch.no_grad():
-            prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode).to(device)
+            prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode, device=device)
             #Note that we're using only the available batch to approximaate the aggregate posterior estimate
-            posterior_samples = self.sample_noise_from_posterior(inputs).to(device)
+            posterior_samples = self.sample_noise_from_posterior(inputs, device=device)
 
         # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
         #TODO: generalise to the whole distribution
@@ -120,12 +115,12 @@ class CausalNet(GenerativeAE, ABC):
         all_prior_samples = []
         all_responses_prime = []
 
-        for u in range(num_units):
-            hybrid_posterior = LatentInvarianceEvaluator.posterior_distribution(posterior_samples,self.random_state, u, self.unit_dim)
+        for d in range(self.latent_size):
+            hybrid_posterior = LatentConsistencyEvaluator.posterior_distribution(posterior_samples, self.random_state, d, unit_dim=1)
             all_samples = torch.vstack([prior_samples, responses]) #2m x d
-            all_samples_prime = LatentInvarianceEvaluator.noise_multi_intervention(all_samples, u, self.unit_dim, # here if model is variational we need to sample multiple times from the intervened response
-                                                                                     num_interventions=num_interventions,
-                                                                                     hard=True, sampling_fun=hybrid_posterior) # m x n x d
+            all_samples_prime = LatentConsistencyEvaluator.noise_multi_intervention(all_samples, d, unit_dim=1,  # here if model is variational we need to sample multiple times from the intervened response
+                                                                                    num_interventions=num_interventions,
+                                                                                    hard=True, sampling_fun=hybrid_posterior) # m x n x d
             all_samples_prime = all_samples_prime.view(num_interventions, num_samples*2, self.latent_size)
             prior_samples_prime = all_samples_prime[:,:num_samples,:]; responses_prime = all_samples_prime[:,num_samples:,:]
             all_prior_samples.append(prior_samples_prime.contiguous().view(num_samples*num_interventions, self.latent_size))#(nxm) x d
@@ -140,7 +135,9 @@ class CausalNet(GenerativeAE, ABC):
 
 
         errors = self.compute_errors_from_causal_vars(X_prime1, X_prime2,
-                                                      complete_shape=(num_units, num_interventions, -1, self.latent_size), **kwargs)
+                                                      complete_shape=(self.latent_size, num_interventions,
+                                                                      -1, latent_size_prime), **kwargs)
+        # errors will have shape latent_size x n x latent_size (latent_size_prim/xunit_dim)
         errors = errors.mean()
         return errors
 
@@ -170,12 +167,12 @@ class CausalAE(CausalNet, ABC):
 
     def compute_errors_from_causal_vars(self, X1, X2, **kwargs):
         """ X1 and X2 have the same shape, namely (l x d) """
-        unit_dim = kwargs.get('unit_dim',1)
+        xunit_dim = kwargs.get('xunit_dim',1)
         complete_shape = kwargs.get('complete_shape')
-        return LatentInvarianceEvaluator.compute_absolute_errors(X1.view(complete_shape),
-                                                                 X2.view(complete_shape),
-                                                                 reduce_dim=2,
-                                                                 unit_dim=unit_dim)
+        return LatentConsistencyEvaluator.compute_absolute_errors(X1.view(complete_shape),
+                                                                  X2.view(complete_shape),
+                                                                  reduce_dim=2,
+                                                                  unit_dim=xunit_dim)
 
     def compute_errors_from_responses(self, R, R_prime, **kwargs):
         """
@@ -183,10 +180,10 @@ class CausalAE(CausalNet, ABC):
         Returns: Dx1 torch tensor of errors (e_i^{j,k})"""
         unit_dim = kwargs.get('unit_dim',1)
         complete_shape = kwargs.get('complete_shape')
-        return LatentInvarianceEvaluator.compute_absolute_errors(R.view(complete_shape),
-                                                                 R_prime.view(complete_shape),
-                                                                 reduce_dim=2,
-                                                                 unit_dim=unit_dim)
+        return LatentConsistencyEvaluator.compute_absolute_errors(R.view(complete_shape),
+                                                                  R_prime.view(complete_shape),
+                                                                  reduce_dim=2,
+                                                                  unit_dim=unit_dim)
 
 class XCSAE(CausalAE, XSAE):
 
@@ -195,12 +192,6 @@ class XCSAE(CausalAE, XSAE):
 
     def decode(self, noise:Tensor, activate:bool):
         return XSAE.decode(self, noise, activate)
-
-    def get_causal_variables(self, noises: Tensor, **kwargs):
-        """Generic function to allow diversity between models in definition/computation of causal variables
-        given the noises (i.e. the output of 'encode')"""
-        X = self.causal_block(noises, self.tau)
-        return X
 
     def add_regularisation_terms(self, *args, **kwargs):
         losses = CausalAE.add_regularisation_terms(self, *args, **kwargs)
@@ -215,12 +206,6 @@ class XCAE(CausalAE, XAE):
 
     def decode(self, noise:Tensor, activate:bool):
         return XAE.decode(self, noise, activate)
-
-    def get_causal_variables(self, noises: Tensor, **kwargs):
-        """Generic function to allow diversity between models in definition/computation of causal variables
-        given the noises (i.e. the output of 'encode')"""
-        X = self.causal_block(noises, self.tau)
-        return X
 
     def add_regularisation_terms(self, *args, **kwargs):
         losses = CausalAE.add_regularisation_terms(self, *args, **kwargs)
@@ -240,17 +225,17 @@ class CausalVAE(CausalNet, VAE, ABC):
         i.e. only requiring equivariance for the mean of the posteriors"""
         unit_dim = kwargs.get('unit_dim',1)
         complete_shape = kwargs.get('complete_shape')
-        return LatentInvarianceEvaluator.compute_absolute_errors(X1.view(complete_shape),
-                                                                 X2.view(complete_shape),
-                                                                 reduce_dim=2,
-                                                                 unit_dim=unit_dim)
+        return LatentConsistencyEvaluator.compute_absolute_errors(X1.view(complete_shape),
+                                                                  X2.view(complete_shape),
+                                                                  reduce_dim=2,
+                                                                  unit_dim=unit_dim)
 
     def compute_errors_from_responses(self, R: List[Tensor], R_prime: List[Tensor], **kwargs):
         # errors shape = (dxnxm) x d ---> reduce=False by default nbn
-        errors =  LatentInvarianceEvaluator.compute_distributional_errors(R, R_prime,
-                                                                          do_KL=kwargs.get('do_KL',True),
-                                                                          reduce=kwargs.get('reduce',False),
-                                                                          ignore_variance=kwargs.get('ignore_variance',False))
+        errors =  LatentConsistencyEvaluator.compute_distributional_errors(R, R_prime,
+                                                                           do_KL=kwargs.get('do_KL',True),
+                                                                           reduce=kwargs.get('reduce',False),
+                                                                           ignore_variance=kwargs.get('ignore_variance',False))
         # complete shape = d x n x m x d --> reduced to d x n x d
         mean_error = errors.view(kwargs.get('complete_shape')).mean(dim=2)
         return mean_error
@@ -274,12 +259,6 @@ class XCVAE(CausalVAE, Xnet):
         out = self.decoder[1](out_init)
         if activate: out = self.act(out)
         return out
-
-    def get_causal_variables(self, noises: Tensor, **kwargs):
-        """Generic function to allow diversity between models in definition/computation of causal variables
-        given the noises (i.e. the output of 'encode')"""
-        X = self.causal_block(noises, self.tau)
-        return X
 
     def add_regularisation_terms(self, *args, **kwargs):
         losses = CausalVAE.add_regularisation_terms(self, *args, **kwargs)

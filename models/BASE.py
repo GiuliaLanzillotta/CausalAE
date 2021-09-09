@@ -41,7 +41,7 @@ class GenerativeAE(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def sample_noise_from_posterior(self, inputs:Tensor) -> Tensor:
+    def sample_noise_from_posterior(self, inputs:Tensor, device:str) -> Tensor:
         raise NotImplementedError
 
     @abstractmethod
@@ -70,6 +70,11 @@ class GenerativeAE(ABC):
     def forward(self,  inputs: Tensor, **kwargs)-> List[Tensor]:
         """Implements forward pass through the model"""
         raise NotImplementedError
+
+    def get_causal_variables(self, noises:Tensor, **kwargs):
+        """Generic function to allow diversity between models in definition/computation of causal variables
+        given the noises (i.e. the output of 'encode')"""
+        return noises
 
     def loss_function(self, *args, **kwargs):
         """General loss function for standard AE
@@ -130,16 +135,17 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
     def sample_noise_from_prior(self, num_samples: int, prior_mode='hybrid', **kwargs):
         """Equivalent to total hybridisation: every point is hybridised at the maximum level
         3 modes supported: posterior/hybrid/uniform"""
+        device= kwargs['device']
         with torch.no_grad():
-            if prior_mode=='posterior': return self.hybrid_layer.prior[:num_samples]
-            if prior_mode=='hybrid': return self.hybrid_layer.sample_from_prior((num_samples,))
-            if prior_mode=='uniform': return self.hybrid_layer.sample_uniformly_in_support(num_samples)
+            if prior_mode=='posterior': return self.hybrid_layer.prior[:num_samples].to(device)
+            if prior_mode=='hybrid': return self.hybrid_layer.sample_from_prior((num_samples,)).to(device)
+            if prior_mode=='uniform': return self.hybrid_layer.sample_uniformly_in_support(num_samples).to(device)
         raise NotImplementedError('Requested sampling mode not implemented')
 
-    def sample_noise_from_posterior(self, inputs: Tensor):
+    def sample_noise_from_posterior(self, inputs: Tensor, device:str):
         """Posterior distribution of a standard autoencoder is given by the set of all samples"""
         self.encode(inputs, update_prior=True, integrate=True)
-        return self.hybrid_layer.prior
+        return self.hybrid_layer.prior.to(device)
 
     def generate(self, num_samples:int, activate: bool, **kwargs) -> Tensor:
         device = kwargs.get('device','cpu')
@@ -177,8 +183,16 @@ class Xnet(GenerativeAE, ABC):
     def __init__(self, params):
         super(Xnet, self).__init__(params)
         self.sparsity_on = params.get("sparsity",False)
+        self.xunit_dim = params.get("xunit_dim",1)
         self.causal_block = VecSCM(use_masking = True, **params)
         self.tau = 1.0
+
+
+    def get_causal_variables(self, noises: Tensor, **kwargs):
+        """Generic function to allow diversity between models in definition/computation of causal variables
+        given the noises (i.e. the output of 'encode')"""
+        X = self.causal_block(noises, self.tau)
+        return X
 
     def add_regularisation_terms(self, *args, **kwargs):
         """ Takes as input the losses dictionary containing the reconstruction

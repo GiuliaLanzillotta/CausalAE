@@ -15,13 +15,14 @@ class ConvAE(HybridAE, nn.Module):
         super(ConvAE, self).__init__(params)
         dim_in = params['dim_in']
         self.dim_in = dim_in # C, H, W
+        self.latent_size_prime = params.get("latent_size_prime", self.latent_size)
         # Building encoder
         conv_net = ConvNet(depth=params["enc_depth"], **params)
         conv_fin = FCBlock(conv_net.final_dim, [256, 128, self.latent_size], act_switch(params.get("act")))
         self.encoder = nn.Sequential(conv_net, conv_fin) # returns vector of latent_dim size
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
         self.decoder_initial_shape = conv_net.final_shape
-        dec_init = FCBlock(self.latent_size, [128, 256, conv_net.final_dim], act_switch(params.get("act")))
+        dec_init = FCBlock(self.latent_size_prime, [128, 256, conv_net.final_dim], act_switch(params.get("act")))
         deconv_net = UpsampledConvNet(self.decoder_initial_shape, final_shape=dim_in, depth=params["dec_depth"], **params)
         self.decoder = nn.ModuleList([dec_init, deconv_net])
 

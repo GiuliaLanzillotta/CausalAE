@@ -37,10 +37,10 @@ class VAEBase(GenerativeAE, nn.Module, ABC):
         return out
 
     def sample_noise_from_prior(self, num_samples: int, **kwargs):
-        return self.gaussian_latent.sample_standard(num_samples)
+        return self.gaussian_latent.sample_standard(num_samples, device=kwargs['device'])
 
-    def sample_noise_from_posterior(self, inputs: Tensor):
-        return self.encode(inputs)[0]
+    def sample_noise_from_posterior(self, inputs: Tensor, device:str):
+        return self.encode(inputs)[0].to(device)
 
     def reconstruct(self, x: Tensor, activate:bool) -> Tensor:
         """ Simply wrapper to directly obtain the reconstructed image from
@@ -48,8 +48,7 @@ class VAEBase(GenerativeAE, nn.Module, ABC):
         return self.forward(x, activate=activate)[0]
 
     def generate(self, num_samples:int, activate: bool, **kwargs) -> Tensor:
-        device = kwargs.get('device','cpu')
-        noise = self.sample_noise_from_prior(num_samples, **kwargs).to(device)
+        noise = self.sample_noise_from_prior(num_samples, **kwargs)
         outputs = self.decode(noise, activate=activate)
         return outputs
 
@@ -90,12 +89,13 @@ class VAE(VAEBase):
         self.beta = params["beta"]
         self.dittadi_v = params.get('dittadi',False) # boolean flag determining whether or not to use Dittadi convolutional structure
         dim_in = params['dim_in']
+        self.latent_size_prime = params.get("latent_size_prime", self.latent_size)
         self.dim_in = dim_in # C, H, W        # Building encoder
         conv_net = ConvNet(depth=params["enc_depth"], **params) if not self.dittadi_v \
             else DittadiConvNet(self.latent_size)
         if not self.dittadi_v:
             fc_enc = FCBlock(conv_net.final_dim, [128, 64, self.latent_size], act_switch(params["act"]))
-            fc_dec = FCBlock(self.latent_size, [64, 128, conv_net.final_dim], act_switch(params["act"]))
+            fc_dec = FCBlock(self.latent_size_prime, [64, 128, conv_net.final_dim], act_switch(params["act"]))
 
         self.encoder = conv_net if self.dittadi_v else nn.Sequential(conv_net, fc_enc)
         self.decoder_initial_shape = conv_net.final_shape

@@ -328,18 +328,19 @@ class GaussianLayer(nn.Module):
         logvar = self.logvar(inputs)
 
         std = torch.exp(0.5*logvar)
-        eps = torch.randn_like(std)
+        eps = torch.randn_like(std, device=inputs.device)
 
         return std * eps + mu, logvar, mu
 
-    def sample_standard(self, num_samples:int) -> Tensor:
+    def sample_standard(self, num_samples:int, device:str) -> Tensor:
         """ Sampling noise from a standard Gaussian"""
-        z = torch.randn(num_samples, self.latent_size)
+        z = torch.randn(num_samples, self.latent_size, device=device)
         return z
 
-    def sample_parametric(self, num_samples:int, mus, logvars):
+    @staticmethod
+    def sample_parametric(num_samples:int, mus, logvars, device:str):
         """Sampling noise from a parametrised Orthogonal Gaussian"""
-        samples = [torch.normal(mus, logvars) for i in range(num_samples)]
+        samples = [torch.normal(mus, logvars, device=device) for i in range(num_samples)]
         return torch.stack(samples)
 
     def init_weights(self, init_type="xavier"):
@@ -370,17 +371,18 @@ class HybridLayer(nn.Module):
         self.dim = dim
         self.unit_dim = unit_dim
         self.N = N # number of vectors to store (these vectors will constitute the set from which samples will be taken)
-        self.weights = torch.ones(self.N) # unnormalised probability weights for each sample (equivalent to uniform)
-        self.weights.requires_grad = False
+        self.weights = None # unnormalised probability weights for each sample (equivalent to uniform)
         self.prior = None
         self.max_hybridisation_level = self.dim//self.unit_dim
-        self.hierarchical_weights = torch.Tensor(range(1,self.max_hybridisation_level+1))/sum(range(1,self.max_hybridisation_level+1))
+        self.hierarchical_weights = None
+
 
     def initialise_prior(self, latent_vectors):
+        if not self.weights: self.weights = torch.ones(self.N, device=latent_vectors.device, requires_grad=False)
         input_size = latent_vectors.shape[0]
         # randomly selecting latent vectors for the prior from the batch
         with torch.no_grad():
-            idx = torch.randperm(input_size).to(latent_vectors.device) #shuffling indices
+            idx = torch.randperm(input_size, device=latent_vectors.device) #shuffling indices
             if input_size>self.N:
                 idx = idx[:self.N]
             self.prior = torch.index_select(latent_vectors, 0, idx).detach()
@@ -395,7 +397,7 @@ class HybridLayer(nn.Module):
         with torch.no_grad():
             all_vecs = torch.vstack([self.prior, latent_vectors])
             all_vecs_size = all_vecs.shape[0]
-            idx = torch.randperm(all_vecs_size).to(latent_vectors.device)[:self.N]
+            idx = torch.randperm(all_vecs_size, device=latent_vectors.device)[:self.N]
         self.prior = torch.index_select(all_vecs, 0, idx).detach()
 
 
@@ -449,6 +451,9 @@ class HybridLayer(nn.Module):
             return self.prior
         if use_prior and self.prior is None: raise ValueError("use_prior set to True and prior not initialised")
         if hybridisation_level > self.max_hybridisation_level: raise ValueError("Hybridisation level too high")
+        # initialisation
+        if not self.hierarchical_weights: self.hierarchical_weights = torch.Tensor(range(1,self.max_hybridisation_level+1))/sum(range(1,self.max_hybridisation_level+1))
+
         if not use_prior:
             available_samples = latent_vectors.shape[0]
             chunks = torch.split(latent_vectors.detach().clone(), self.unit_dim, dim=1)
@@ -744,7 +749,7 @@ class VecSCMDecoder(nn.Module):
 class VecSCM(nn.Module):
     """ Implements SCM layer only with fully connected layers, thus not moving to
     the image space. Given input U of size (N) returns output X of same size."""
-    def __init__(self, latent_size, unit_dim, **kwargs):
+    def __init__(self, **kwargs):
         """
         An implementation of an SCM in its most general form
         Each structural assignment is parametrised by a fully connected block of 3 layers
@@ -758,28 +763,28 @@ class VecSCM(nn.Module):
         note: dimensionality of the output can be different from dimensionality of the input
         """
         super().__init__()
-        assert latent_size%unit_dim==0, "The noise vector must be a multiple of the unit dimension"
-        self.depth = latent_size//unit_dim
-        self.dim_in = latent_size
-        self.unit_dim = unit_dim
+        noise_size = kwargs.get('latent_size')
+        x_size = kwargs.get('latent_size_prime',noise_size)
+        self.xunit_dim = kwargs.get('xunit_dim',1)
+        assert noise_size*self.xunit_dim == x_size
+        self.depth = noise_size
+        self.dim_in = noise_size
+        self.dim_out = x_size
         self.use_masking = kwargs.get("use_masking",False)
         self.track_parents_gradients = kwargs.get("parents_with_grad",False)
         self.use_Gumbel = kwargs.get("gumbel",False)
         if self.use_masking:
             self.gumbel = Gumbel(0,1)
             self.act = nn.Sigmoid()
-
         self.str_assignments = nn.ModuleList([])
         if self.use_masking: self.masks = nn.ParameterList([])
         act = act_switch(kwargs.get("act"))
 
         for l in range(self.depth):
-            dim_in: int = (l+1)*self.unit_dim
-            #TODO: check number and size of layers here ---why?
+            dim_in: int = l*self.xunit_dim + 1 # l parents + 1 noise
             if self.use_masking and l>0: #excluding first node from sparsity penalty (no causal parents to prune away)
                 self.masks.append(torch.nn.Parameter(torch.randn(l)))
-            self.str_assignments.append(FCBlock(dim_in, [10,10,self.unit_dim], act=act)) #mapping noise + parents to one causal variable
-
+            self.str_assignments.append(FCBlock(dim_in, [10,10,self.xunit_dim], act=act)) #mapping noise + parents to one causal variable
         self.str_assignments.apply(lambda m: standard_initialisation(m, kwargs.get("act")))
 
     def forward(self, z, masks_temperature=0.5):
@@ -789,7 +794,7 @@ class VecSCM(nn.Module):
         causal_vars = []
         for l in range(self.depth):
             #extract noise
-            z_i = z[:,l*self.unit_dim:(l+1)*self.unit_dim]
+            z_l = z[:,l].view(-1,1)
             if l>0:
                 parents = torch.hstack(causal_vars)
                 if not self.track_parents_gradients: parents = parents.detach()
@@ -799,10 +804,10 @@ class VecSCM(nn.Module):
                         mask = self.act((self.masks[l-1] + gumbel_noise)/masks_temperature)
                     else: mask = self.masks[l-1]
                     # mask dimension = num_units in parents
-                    mask = mask.repeat_interleave(self.unit_dim)
+                    mask = mask.repeat_interleave(self.xunit_dim)
                     parents = mask*parents # no effect if the masks are kept to one
-                inputs = torch.hstack([z_i, parents])
-            else: inputs = z_i # l=0, first variable has no parents
+                inputs = torch.hstack([z_l, parents])
+            else: inputs = z_l # l=0, first variable has no parents
             causal_vars.append(self.str_assignments[l](inputs)) # unit_size x 1
         x = torch.hstack(causal_vars)
         return x

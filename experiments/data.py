@@ -249,14 +249,13 @@ class DatasetLoader:
         self.train = DataLoader(train_set,
                                 batch_size=args["batch_size"],
                                 shuffle=True,
-                                num_workers=args["num_workers"])
+                                num_workers=args["num_workers"],
+                                pin_memory=args["pin_memory"])
         self.val = DataLoader(valid_set,
                               batch_size=args["batch_size"],
-                              shuffle=True,
                               num_workers=args["num_workers"])
         self.test = DataLoader(test_set,
                                batch_size=args["test_batch_size"],
-                               shuffle=False, #it is best practice to turn shuffling off for validation and test dataloaders.
                                num_workers=args["num_workers"])
 
 

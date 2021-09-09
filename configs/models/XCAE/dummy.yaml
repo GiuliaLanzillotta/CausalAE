@@ -18,3 +18,8 @@ logging_params:
   score_every: 1000
   save_dir: "./logs/"
 
+trainer_params:
+  benchmark: True
+  precision: null
+  accelerator: null
+

@@ -14,7 +14,7 @@ from models.BASE import GenerativeAE
 from models.utils import KL_multiple_univariate_gaussians, distribution_parameter_distance
 
 
-class LatentInvarianceEvaluator(object):
+class LatentConsistencyEvaluator(object):
     """ Responsible for evaluating drift in the latent space"""
 
     def __init__(self, model:GenerativeAE, dataloader:DataLoader, mode="X",
@@ -40,7 +40,7 @@ class LatentInvarianceEvaluator(object):
         for i in range(num_batches):
             with torch.no_grad():
                 observations, _ = next(iter(self.dataloader))
-                codes = self.model.sample_noise_from_posterior(observations.to(device))
+                codes = self.model.sample_noise_from_posterior(observations.to(device), device=device)
                 if self.variational: codes = codes[0]
                 source.append(codes)
                 updater(i+1, 1, num_batches)
@@ -193,6 +193,63 @@ class LatentInvarianceEvaluator(object):
 
         return std_dev
 
+
+    def self_consistency(self, unit_dim:int, num_units:int, num_samples:int, **kwargs):
+        """Equivariance of response map under null intervention
+            - num_samples -> number of samples for each intervention
+            - device - SE
+            - uniform: if desired sampling from uniform for deterministic models
+            - mode: prior sampling mode (for non variational models): hybrid/uniform/posterior"""
+
+        assert self.source is not None, "Initialise the Evaluator first"
+        prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs)
+        responses = self.model.encode_mu(self.model.decode(prior_samples, activate=True)).detach()
+        #observed standard deviation on each latent unit
+        std_dev = self.compute_std_dev(prior_samples, responses, num_units, unit_dim)
+        errors = self.compute_absolute_errors(prior_samples, responses, reduce_dim=0, unit_dim=unit_dim).detach()
+        return errors, std_dev # average error over interventions
+
+    def noise_equivariance(self, unit:int, unit_dim:int, num_units:int, num_samples:int, **kwargs):
+        """ Evaluates equivariance of response map to interventions on the noise variable dim
+        kwargs accepted keys:
+            - num_samples -> number of samples for each intervention
+            - num_interventions -> number of interventions to use to compute invariance score
+            - device - SE
+            - prior_mode: prior sampling mode (for non variational models): hybrid/uniform/posterior
+        """
+
+        assert self.source is not None, "Initialise the Evaluator first"
+        device = kwargs.get('device','cpu')
+        num_interventions = kwargs.get('num_interventions', 20)
+
+        prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs)
+        responses = self.model.encode_mu(self.model.decode(prior_samples, activate=True)).detach()
+        # same intervention must be applied to prior distribution and response posterior
+        all_samples = torch.vstack([prior_samples, responses]) # shape = (m x 2, d)
+
+        posterior_samples = self.source
+        hybrid_posterior = self.posterior_distribution(posterior_samples, self.random_state, unit, unit_dim)
+
+        errors = torch.zeros(num_units, dtype=torch.float, device=device) #TODO: check the sizes here when increasing number of causal units
+
+        for intervention_idx in range(num_interventions):
+            all_samples_prime = self.noise_intervention(all_samples, unit, unit_dim, hard=True, sampling_fun=hybrid_posterior).to(device)
+            prior_samples_prime = all_samples_prime[:num_samples]; responses_prime = all_samples_prime[num_samples:]
+            responses_prime2 = self.model.encode_mu(self.model.decode(prior_samples_prime, activate=True)).detach() # m x d
+            # now get causal variables from both
+            X_prime1 = self.model.get_causal_variables(responses_prime, **kwargs)
+            X_prime2 = self.model.get_causal_variables(responses_prime2, **kwargs)
+            # we're ignoring the variance to make the results from VAE comparable with results from Hybrid models
+            error = self.compute_absolute_errors(X_prime1, X_prime2, reduce_dim=0, unit_dim=unit_dim) # D x 1
+
+            intervention_magnitude = torch.linalg.norm((prior_samples_prime-prior_samples), ord=2, dim=1).mean() # mean over samples of the delta
+            errors += (error/(intervention_magnitude + 10e-5)) # D x 1
+
+        #TODO: take the meadian instead of mean when averaging over interventions
+        # OR store the worst intervention and return it
+        return errors/num_interventions # average error over interventions
+
+
     def noise_invariance(self, unit:int, unit_dim:int, num_units:int, num_samples:int, **kwargs):
         """ Evaluates invariance of response map to interventions on the noise variable dim
         kwargs accepted keys:
@@ -209,19 +266,19 @@ class LatentInvarianceEvaluator(object):
 
         assert self.source is not None, "Initialise the Evaluator first"
 
-        prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs).to(device)
+        prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs)
         posterior_samples = self.source
-        responses = self.model.encode(self.model.decode(prior_samples, activate=True))
+        responses = self.model.encode(self.model.decode(prior_samples, activate=True)).detach()
 
         #observed standard deviation on each latent unit
         std_dev = self.compute_std_dev(prior_samples, responses, num_units, unit_dim)
 
-        errors = torch.zeros(num_units, dtype=torch.float).to(device)
+        errors = torch.zeros(num_units, dtype=torch.float, device=device)
         hybrid_posterior = self.posterior_distribution(posterior_samples, self.random_state, unit, unit_dim)
 
         for intervention_idx in range(num_interventions):
             prior_samples_prime = self.noise_intervention(prior_samples, unit, unit_dim, hard=True, sampling_fun=hybrid_posterior)
-            responses_prime = self.model.encode(self.model.decode(prior_samples_prime.to(device), activate=True)) # m x d
+            responses_prime = self.model.encode(self.model.decode(prior_samples_prime.to(device), activate=True)).detach() # m x d
             # we're ignoring the variance to make the results from VAE comparable with results from Hybrid models
             if self.variational: error = self.compute_distributional_errors(responses, responses_prime,
                                                                             reduce=False, do_KL=False,

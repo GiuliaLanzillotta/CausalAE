@@ -13,13 +13,14 @@ class SAE(HybridAE):
         super(SAE, self).__init__(params)
         dim_in = params['dim_in']
         self.dim_in = dim_in # C, H, W
+        self.latent_size_prime = params.get("latent_size_prime", self.latent_size)
         # Building encoder
         conv_net = ConvNet(depth=params["enc_depth"], **params)
         fc_net = FCBlock(conv_net.final_dim, [256, 128, self.latent_size], act_switch(params.get("act")))
         self.encoder = nn.Sequential(conv_net, fc_net) # returns vector of latent_dim size
         # initialise constant image to be used in decoding (it's going to be an image full of zeros)
         self.decoder_initial_shape = conv_net.final_shape
-        self.dec_init = FCBlock(self.latent_size, [128, 256, conv_net.final_dim], act_switch(params.get("act")))
+        self.dec_init = FCBlock(self.latent_size_prime, [128, 256, conv_net.final_dim], act_switch(params.get("act")))
         self.scm = SCMDecoder(self.decoder_initial_shape, dim_in, depth=params["dec_depth"],**params)
 
     def decode(self, noise:Tensor, activate:bool):

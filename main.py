@@ -19,6 +19,7 @@ from configs import get_config
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.plugins import DDPPlugin
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 from ray import tune
 import ray
@@ -70,20 +71,13 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, debugging=False
         profiler = PyTorchProfiler(on_trace_ready=torch.profiler.tensorboard_trace_handler(base_path),
                                    profile_memory=True)
 
-    runner = Trainer(min_epochs=1,
-                     accelerator=None,#todo: look into this
-                     gpus = 1,
-                     auto_select_gpus=True, #select all the gpus available
-                     logger=tb_logger,
-                     log_every_n_steps=50,
+    runner = Trainer(logger=tb_logger,
                      callbacks=callbacks,
-                     progress_bar_refresh_rate=50,
                      weights_summary=None,
                      resume_from_checkpoint=latest_checkpoint,
                      reload_dataloaders_every_epoch=config['data_params']['reload_dataloaders_every_epoch'],
-                     track_grad_norm=2, # tracking the norm
-                     gradient_clip_val = 1.0,
                      profiler=profiler if debugging else None,
+                     #plugins=DDPPlugin(find_unused_parameters=False) if config['trainer_params']['accelerator']=='ddp' else None,
                      **config['trainer_params'])
 
 
@@ -145,7 +139,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='XCAE')
+                        default='XAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",

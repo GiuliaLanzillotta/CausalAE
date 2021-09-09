@@ -42,7 +42,7 @@ class ModelVisualiser(object):
         num_plots = grid_size**2
         test_sample = self.test_input[:num_plots]
         with torch.no_grad():
-            recons = self.model.reconstruct(test_sample.to(device), activate=True)
+            recons = self.model.reconstruct(test_sample.to(device), activate=True).detach()
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
@@ -54,7 +54,7 @@ class ModelVisualiser(object):
         """ samples from latent prior and plots reconstructions"""
         num_pics = grid_size**2 # square grid
         with torch.no_grad():
-            recons = self.model.generate(num_pics, activate=True, device=device)
+            recons = self.model.generate(num_pics, activate=True, device=device).detach()
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
@@ -85,8 +85,8 @@ class ModelVisualiser(object):
         # get posterior codes
         test_sample= self.test_input[11] #I like the number 11
         with torch.no_grad():
-            code = self.model.encode_mu(test_sample.unsqueeze(0).to(device), update_prior=False)
-        latent_vector = code.data.cpu().numpy()
+            code = self.model.encode_mu(test_sample.unsqueeze(0).to(device), update_prior=False).detach()
+        latent_vector = code.cpu().numpy()
         dimensions = np.arange(latent_vector.shape[1])
         if not tailored: ranges = [(-1.,1.)]*len(dimensions)
         else: ranges = self.model.get_prior_range()
@@ -111,7 +111,7 @@ class ModelVisualiser(object):
         all_samples = self.test_input[:1+Np]
         # encode
         with torch.no_grad():
-            codes = self.model.encode_mu(all_samples.to(device), update_prior=False)
+            codes = self.model.encode_mu(all_samples.to(device), update_prior=False).detach()
         M = codes.shape[1]
         base_idx = rng.randint(1+Np)
         base = codes[base_idx].view(1,-1)
@@ -124,15 +124,15 @@ class ModelVisualiser(object):
             # two M dimensional vectors
             new_vector, parent_idx = HybridLayer.hybridise_from_N(base, parents, [u], unit_dim=unit_dim, random_state=rng)
             # 1x(3) grid plotting all the samples together with their parents
-            complete_set.append(new_vector.view(1,M))
-            complete_set.append(base.view(1,M))
-            complete_set.append(parents[parent_idx].view(1,M))
+            complete_set.append(new_vector.view(1,M).detach())
+            complete_set.append(base.view(1,M).detach())
+            complete_set.append(parents[parent_idx].view(1,M).detach())
 
         # this is a (3*M) long tensor
         complete_set = torch.cat(complete_set, dim=0)
         # decode and plot
         with torch.no_grad():
-            recons = self.model.decode(complete_set.to(device), activate=True)
+            recons = self.model.decode(complete_set.to(device), activate=True).detach()
         grid_recons = torchvision.utils.make_grid(recons, nrow=3) #nrow is actually ncol
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
@@ -479,6 +479,8 @@ class ModelVisualiser(object):
         - thershold
         - title"""
 
+        vmin= kwargs.get('vmin')
+        vmax=kwargs.get('vmax')
         figsize = kwargs.get("figsize",(20,30))
         threshold = kwargs.get("threshold",0.01)
         title = kwargs.get("title")
@@ -487,7 +489,8 @@ class ModelVisualiser(object):
         fig = plt.figure(figsize=figsize)
         sns.set_context('paper', font_scale=1.5)
         ax = sns.heatmap(M_extreme, linecolor='white', linewidth=2,
-                         cmap="Greens", annot=True,  fmt=".2f")
+                         cmap="Greens", annot=True,  fmt=".2f",
+                         vmin=vmin, vmax=vmax) #Values to anchor the colormap, otherwise they are inferred from the data and other keyword arguments.
         bottom, top = ax.get_ylim()
         ax.set_ylim(bottom + 0.5, top - 0.5)
         ax.set_title(title)
