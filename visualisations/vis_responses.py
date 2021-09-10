@@ -18,6 +18,7 @@ def traversal_responses(model:GenerativeAE, device, **kwargs):
     if not kwargs.get('num_samples'):
         kwargs['num_samples'] = 50
     steps = kwargs.get('steps',20)
+    unit_dim = 1
 
     all_traversal_latents = []
     all_traversals_responses = []

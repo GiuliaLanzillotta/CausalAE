@@ -378,7 +378,7 @@ class HybridLayer(nn.Module):
 
 
     def initialise_prior(self, latent_vectors):
-        if not self.weights: self.weights = torch.ones(self.N, device=latent_vectors.device, requires_grad=False)
+        if self.weights is None: self.weights = torch.ones(self.N, device=latent_vectors.device, requires_grad=False)
         input_size = latent_vectors.shape[0]
         # randomly selecting latent vectors for the prior from the batch
         with torch.no_grad():
@@ -452,7 +452,7 @@ class HybridLayer(nn.Module):
         if use_prior and self.prior is None: raise ValueError("use_prior set to True and prior not initialised")
         if hybridisation_level > self.max_hybridisation_level: raise ValueError("Hybridisation level too high")
         # initialisation
-        if not self.hierarchical_weights: self.hierarchical_weights = torch.Tensor(range(1,self.max_hybridisation_level+1))/sum(range(1,self.max_hybridisation_level+1))
+        if self.hierarchical_weights is None: self.hierarchical_weights = torch.Tensor(range(1,self.max_hybridisation_level+1))/sum(range(1,self.max_hybridisation_level+1))
 
         if not use_prior:
             available_samples = latent_vectors.shape[0]

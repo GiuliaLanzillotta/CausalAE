@@ -52,27 +52,29 @@ class CausalNet(GenerativeAE, ABC):
             #Note that we're using only the available batch to approximaate the aggregate posterior estimate
             posterior_samples = self.sample_noise_from_posterior(inputs, device=device)
             # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
-            responses = self.encode(self.decode(prior_samples, activate=True)).detach() # n x d
+            responses = self.encode(self.decode(prior_samples, activate=True)) # n x d
 
 
         all_prior_samples = []
         num_units = self.latent_size//self.unit_dim
         for u in range(num_units):
-            hybrid_posterior = LatentConsistencyEvaluator.posterior_distribution(posterior_samples, self.random_state,
+            hybrid_posterior = LatentConsistencyEvaluator.posterior_distribution(posterior_samples.detach(),
+                                                                                 self.random_state,
                                                                                  u, self.unit_dim)
             prior_samples_prime = LatentConsistencyEvaluator.noise_multi_intervention(prior_samples, u, self.unit_dim,
-                                                                                      num_interventions=num_interventions, hard=True,
+                                                                                      num_interventions=num_interventions,
+                                                                                      hard=True,
                                                                                       sampling_fun=hybrid_posterior) # m x n x d
             all_prior_samples.append(prior_samples_prime)
         all_prior_samples = torch.vstack(all_prior_samples)# (dxnxm) x d
         responses_prime = self.encode(self.decode(all_prior_samples.to(device), activate=True))
-        try: responses_expanded = responses.repeat(num_interventions * num_units, 1)
+        try: responses_expanded = responses.detach().repeat(num_interventions * num_units, 1)
         except AttributeError:
             # variational case
             _, mus_1, logvars_1 = responses
             responses_expanded = [None,
-                                  mus_1.repeat(num_interventions * num_units, 1),
-                                  logvars_1.repeat(num_interventions * num_units, 1)]
+                                  mus_1.detach().repeat(num_interventions * num_units, 1),
+                                  logvars_1.detach().repeat(num_interventions * num_units, 1)]
         errors = self.compute_errors_from_responses(responses_expanded, responses_prime,
                         complete_shape=(num_units, num_interventions, -1, self.latent_size), **kwargs)
 

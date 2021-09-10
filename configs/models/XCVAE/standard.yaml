@@ -8,6 +8,7 @@ model_params:
   unit_dim: 1
   channels: 32
   gaussian_init: 'xavier' #other option: 'normal'
+  loss_type: "BCE"
   # invariance regularisation parameters
   sparsity_lamda: 2.0
   invariance_lamda: 1.0
