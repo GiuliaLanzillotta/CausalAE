@@ -1,6 +1,7 @@
 """Script managing evaluation and exploration of models"""
 import pickle
 
+import pandas as pd
 import torch
 from experiments import pick_model_manager, get_causal_block_graph
 from pathlib import Path
@@ -238,14 +239,13 @@ class ModelHandler(object):
 
         self.initialise_consistencyScorer(**kwargs)
         D = self.model.latent_size
-        U = self.model.unit_dim
-        num_units = D//U
-        equivariances = torch.zeros((num_units,num_units), requires_grad=False, device=self.device)
-        for u in range(num_units):
+        U = self.model.xunit_dim
+        equivariances = torch.zeros((D,D), requires_grad=False, device=self.device)
+        for u in range(D):
             print(f"Intervening on {u} ...")
             with torch.no_grad():
                 # interventions on unit u
-                errors = self._consistencyScorer.noise_equivariance(unit=u, unit_dim=U, num_units=num_units,
+                errors = self._consistencyScorer.noise_equivariance(unit=u, unit_dim=U, num_units=D,
                                                                     device=self.device, **kwargs)
                 equivariances[u,:] = errors
 
@@ -347,11 +347,23 @@ class ModelHandler(object):
         except ValueError:
             print(f"No checkpoint available at "+str(checkpoint_path)+". Cannot load trained weights.")
 
-    def score_model(self, FID=False, disentanglement=False, orthogonality=False, invariance=False,
-                    save_scores=False, **kwargs):
-        """Scores the model on the test set in loss and other terms selected"""
+    def score_model(self, FID=True, disentanglement=True, orthogonality=True, invariance=True,
+                    save_scores=True, update_general_scores=True, equivariance=True, self_consistency=True, **kwargs):
+        """Scores the model on the test set in loss and other terms selected
+        #TODO: add here the saving of the scores to the 'scores.csv' file that has the scores of all the models"""
         self.device = next(self.model.parameters()).device
         self.send_model_to(self.device)
+
+
+        if update_general_scores:
+            #initialising the update
+            df = pd.DataFrame()
+            df['model_name'] = [self.config['logging_params']['name']]
+            df['model_version'] = [self.config['logging_params']['version']]
+            df['dataset'] = [self.config['data_params']['dataset_name']]
+            df['random_seed'] = [self.config['model_params']['random_seed']]
+
+        # 1. collect all the scores available
         start=time.time()
         scores = {}
         if orthogonality:
@@ -363,14 +375,20 @@ class ModelHandler(object):
         if FID:
             scores["FID_rec"] = self.score_FID(generation=False, **kwargs)
             scores["FID_gen"] = self.score_FID(generation=True, **kwargs)
-
         if invariance:
             invariances, _ = self.evaluate_invariance(**kwargs)
-            scores["invariance"] = invariances.mean() # minimum score = 1/D , maximum score = 1
+            scores["INV"] = torch.sum(invariances*(1-torch.eye(6, device=self.device))).cpu() #TODO: correct to take into account ignored dimensions (maybe divide by posterior sd?)
+        if equivariance:
+            equivariances = self.evaluate_equivariance(**kwargs)
+            scores["EQV"] = torch.sum(equivariances).cpu()
+        if self_consistency:
+            consistencies, _ = self.evaluate_self_consistency(**kwargs)
+            scores["SCN"] = torch.sum(consistencies).cpu()
         end = time.time()
 
         print("Time elapsed for scoring {:.0f}".format(end-start))
 
+        # save complete scores to a binary file
         if save_scores:
             name = kwargs.get("name","scoring")
             path = Path(self.config['logging_params']['save_dir']) / \
@@ -378,6 +396,21 @@ class ModelHandler(object):
                         self.config['logging_params']['version'] / (name+".pkl")
             with open(path, 'wb') as o:
                 pickle.dump(scores, o)
+
+        #update general scores (contained in .csv file)
+        if update_general_scores:
+            for k,v in scores.items():
+                df.loc[0,k] = v
+            full_df_path = self.config['logging_params']['save_dir'] + "/" + "all_scores.csv"  #read csv into pd.dataframe
+            try: full_df = pd.read_csv(full_df_path, index_col=0)
+            except FileNotFoundError:
+                print("Full scores dataframe not found. Starting a new one")
+                full_df = pd.DataFrame() # empty initialisation
+            full_df = pd.concat([full_df, df], ignore_index=True) #add one row to the csv
+            full_df.drop_duplicates(subset = ["model_name","model_version","dataset","random_seed"],
+                                    keep="last", inplace=True, ignore_index=True)
+            full_df.to_csv(full_df_path) #save it again
+
         return scores
 
     def load_scores(self, **kwargs):
@@ -431,17 +464,18 @@ class VisualModelHandler(ModelHandler):
                                                              title="Standard Deviation of marginals (original and responses)",
                                                              threshold=0., **kwargs)
         if do_equivariance:
-            equivariances, std_devs = self.evaluate_equivariance(**kwargs)
+            equivariances = self.evaluate_equivariance(**kwargs)
             plots["equivariances"] = self.visualiser.plot_heatmap(equivariances.cpu().numpy(), title="Equivariances",
                                                                   threshold=0., **kwargs)
 
         if do_traversal_responses:
-            all_traversal_latents, all_traversals_responses = vis_responses.traversal_responses(self.model, self.device, **kwargs)
+            all_traversal_latents, all_traversals_responses, prior_samples = \
+                vis_responses.traversal_responses(self.model, self.device, **kwargs)
             plots["trvs_responses"] = []
-            S = kwargs.get('steps',20); D = self.model.latent_size
+            D = self.model.latent_size
             for d in range(D):
-                fig = self.visualiser.plot_traversal_responses(d, all_traversal_latents[d].view(S,-1,D),
-                                                               all_traversals_responses[d].view(S,-1,D), **kwargs)
+                fig = self.visualiser.plot_traversal_responses(d, all_traversal_latents[d], all_traversals_responses[d],
+                                                               prior_samples=prior_samples, **kwargs)
                 plots["trvs_responses"].append(fig)
 
 

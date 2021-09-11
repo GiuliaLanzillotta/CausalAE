@@ -1,3 +1,2 @@
 model_params:
-  latent_size_prime: 24
   xunit_dim: 2

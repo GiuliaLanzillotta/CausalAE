@@ -1,0 +1,5 @@
+bsub -oo "XCAE_Sx3_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim3
+bsub -oo "XCAE_Sx4_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim4
+bsub -oo "XCAE_Sx5_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim5
+bsub -oo "XCAE_Sx6_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim6
+bsub -oo "XCAE_Sx7_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim7

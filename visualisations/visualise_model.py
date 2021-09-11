@@ -332,7 +332,7 @@ class ModelVisualiser(object):
         return torch.vstack(losses) # D x n_steps
 
     @staticmethod
-    def plot_traversal_responses(dim:int, latents:Tensor, responses:Tensor, **kwargs):
+    def plot_traversal_responses(dim:int, latents:Tensor, responses:Tensor, prior_samples:Tensor, **kwargs):
         """For the selected latent dimension plots the recorded errors on the responses across the traversal
         @latents: Tensor of shape (steps, N, D)
         @responses:   //        //
@@ -340,6 +340,8 @@ class ModelVisualiser(object):
         - figure parameters
         - population: bool - whether to plot the whole population trend or the individual samples (default False)
         - normalise: bool - whether to normalise the codes by dividing each dimension by its standard deviation
+        - relative: bool - whether to return the relative position in the traversal (i.e. distance from starting
+            point) instead of the absolute one
         Returns a grid plot with D subplots.
         """
         print("")
@@ -347,6 +349,7 @@ class ModelVisualiser(object):
         S, N, D = latents.shape
         population = kwargs.get('population',False)
         normalise = kwargs.get('normalise',False)
+        relative = kwargs.get('relative', False)
         figsize = kwargs.get("figsize",(20,10))
         markersize = kwargs.get("markersize",10)
         font_scale = kwargs.get("font_scale",11)
@@ -360,7 +363,13 @@ class ModelVisualiser(object):
             for col in range(ncols):
                 if i==D: break
                 ax[row,col].set_title(f"Responses on latent dimension {i}")
-                x = latents[:,:,dim].view(-1,).cpu().numpy() # steps x N
+                if relative:
+                    x = latents[:,:,dim] - prior_samples[:,dim].view(1, -1)
+                    ticks = latents[:,0,dim] - prior_samples[:,dim].mean()
+                else:
+                    x = latents[:,:,dim] # absolute position
+                    ticks = latents[:,0,dim]
+                x = x.view(-1,).cpu().numpy() # steps x N
                 y = (latents[:,:,i] - responses[:,:,i]).view(-1,).cpu().numpy() # steps x N
                 if normalise: y /= torch.std(responses[0,:,i]).cpu().numpy()
                 hue = None if population else [i for _ in range(S) for i in range(N)]
@@ -368,7 +377,7 @@ class ModelVisualiser(object):
                 axi.axhline(0., color='red')
                 axi.set(ylabel=f'Error registered on dimension {i}',
                         xlabel=f'Traversal on dimension {dim}')
-                axi.set_xticklabels([f'{i:.2f}' for i in latents[:,0,dim]])
+                axi.set_xticklabels([f'{i:.2f}' for i in ticks])
                 axi.tick_params(axis="x", labelsize=font_scale)
                 axi.tick_params(axis="y", labelsize=font_scale)
                 if ylim is not None: axi.set(ylim=(-ylim, ylim))

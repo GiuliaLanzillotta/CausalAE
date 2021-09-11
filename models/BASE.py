@@ -184,6 +184,7 @@ class Xnet(GenerativeAE, ABC):
         super(Xnet, self).__init__(params)
         self.sparsity_on = params.get("sparsity",False)
         self.xunit_dim = params.get("xunit_dim",1)
+        params['latent_size_prime'] = params['latent_size']*self.xunit_dim
         self.causal_block = VecSCM(use_masking = True, **params)
         self.tau = 1.0
 

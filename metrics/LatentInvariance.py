@@ -209,7 +209,7 @@ class LatentConsistencyEvaluator(object):
         errors = self.compute_absolute_errors(prior_samples, responses, reduce_dim=0, unit_dim=unit_dim).detach()
         return errors, std_dev # average error over interventions
 
-    def noise_equivariance(self, unit:int, unit_dim:int, num_units:int, num_samples:int, **kwargs):
+    def noise_equivariance(self, unit:int, xunit_dim:int,  num_samples:int, **kwargs):
         """ Evaluates equivariance of response map to interventions on the noise variable dim
         kwargs accepted keys:
             - num_samples -> number of samples for each intervention
@@ -228,19 +228,19 @@ class LatentConsistencyEvaluator(object):
         all_samples = torch.vstack([prior_samples, responses]) # shape = (m x 2, d)
 
         posterior_samples = self.source
-        hybrid_posterior = self.posterior_distribution(posterior_samples, self.random_state, unit, unit_dim)
+        hybrid_posterior = self.posterior_distribution(posterior_samples, self.random_state, unit, 1)
 
-        errors = torch.zeros(num_units, dtype=torch.float, device=device) #TODO: check the sizes here when increasing number of causal units
+        errors = torch.zeros(self.model.latent_size, dtype=torch.float, device=device) #TODO: check the sizes here when increasing number of causal units
 
         for intervention_idx in range(num_interventions):
-            all_samples_prime = self.noise_intervention(all_samples, unit, unit_dim, hard=True, sampling_fun=hybrid_posterior).to(device)
+            all_samples_prime = self.noise_intervention(all_samples, unit, 1, hard=True, sampling_fun=hybrid_posterior).to(device)
             prior_samples_prime = all_samples_prime[:num_samples]; responses_prime = all_samples_prime[num_samples:]
             responses_prime2 = self.model.encode_mu(self.model.decode(prior_samples_prime, activate=True)).detach() # m x d
             # now get causal variables from both
-            X_prime1 = self.model.get_causal_variables(responses_prime, **kwargs)
-            X_prime2 = self.model.get_causal_variables(responses_prime2, **kwargs)
+            X_prime1 = self.model.get_causal_variables(responses_prime, **kwargs)# Dx x 1
+            X_prime2 = self.model.get_causal_variables(responses_prime2, **kwargs)# Dx x 1
             # we're ignoring the variance to make the results from VAE comparable with results from Hybrid models
-            error = self.compute_absolute_errors(X_prime1, X_prime2, reduce_dim=0, unit_dim=unit_dim) # D x 1
+            error = self.compute_absolute_errors(X_prime1, X_prime2, reduce_dim=0, unit_dim=xunit_dim) # D x 1
 
             intervention_magnitude = torch.linalg.norm((prior_samples_prime-prior_samples), ord=2, dim=1).mean() # mean over samples of the delta
             errors += (error/(intervention_magnitude + 10e-5)) # D x 1
@@ -262,7 +262,6 @@ class LatentConsistencyEvaluator(object):
 
         device = kwargs.get('device','cpu')
         num_interventions = kwargs.get('num_interventions', 20)
-
 
         assert self.source is not None, "Initialise the Evaluator first"
 

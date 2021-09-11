@@ -37,12 +37,12 @@ def traversal_responses(model:GenerativeAE, device, **kwargs):
             traversals_latents = traversals.view(-1, model.latent_size) # reshaping to fit into batch
             # 3. obtain responses
             trvs_response = model.encode_mu(model.decode(traversals_latents, activate=True))
-            all_traversal_latents.append(traversals_latents)
-            all_traversals_responses.append(trvs_response)
+            all_traversal_latents.append(traversals)
+            all_traversals_responses.append(trvs_response.view(steps, -1, model.latent_size))
 
     print("...done")
 
-    return all_traversal_latents, all_traversals_responses
+    return all_traversal_latents, all_traversals_responses, prior_samples
 
 def hybrid_responses():
     #TODO

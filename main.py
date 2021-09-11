@@ -97,7 +97,6 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, debugging=False
     if score:
         print("Scoring the model")
         handler = ModelHandler.from_experiment(experiment)
-        config['eval_params']['FID']=True #TODO: get rid of at some points
         handler.score_model(save_scores=True,
                             random_seed=config["logging_params"]["manual_seed"],
                             **config['eval_params'])
@@ -139,7 +138,7 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='XAE')
+                        default='XCSAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
@@ -149,7 +148,7 @@ if __name__ == '__main__':
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="dummy")
+                        default="multidim")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",
