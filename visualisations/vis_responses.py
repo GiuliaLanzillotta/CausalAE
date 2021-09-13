@@ -6,7 +6,7 @@ from . import utils
 
 
 def traversal_responses(model:GenerativeAE, device, **kwargs):
-    """Plots the amount of distortion recorded on each latent dimension while traversing a single dimension
+    """Computes the amount of distortion recorded on each latent dimension while traversing a single dimension
     kwargs accepted keywords:
         - num_samples: number of samples from the latent space to use in the computation
         - steps: number of steps to take in the traversal
@@ -18,6 +18,7 @@ def traversal_responses(model:GenerativeAE, device, **kwargs):
     if not kwargs.get('num_samples'):
         kwargs['num_samples'] = 50
     steps = kwargs.get('steps',20)
+    relative = kwargs.get('relative',False)
     unit_dim = 1
 
     all_traversal_latents = []
@@ -26,14 +27,14 @@ def traversal_responses(model:GenerativeAE, device, **kwargs):
     prior_samples = model.sample_noise_from_prior(device=device, **kwargs).detach()
     ranges = model.get_prior_range()
     # for each latent unit we start traversal
+    # 1. obtain traversals values
+    traversals_steps = utils.get_traversals_steps(steps, ranges, relative=relative).to(device).detach() #torch Tensor
     for d in range(model.latent_size):
-        range_d = ranges[d]
-        # 1. obtain traversals values
-        traversals_steps = utils.get_traversals_steps(steps, [range_d]).to(device).detach() #torch Tensor
         with torch.no_grad():
             # 2. do traversals
-            traversals = utils.do_latent_traversals_multi_vec(prior_samples, unit_dim=unit_dim, unit=d,
-                                                              values=traversals_steps, device=device) # shape steps x N x D
+            traversals = utils.do_latent_traversals_multi_vec(prior_samples, unit_dim=unit_dim,
+                                                              unit=d, values=traversals_steps[d],
+                                                              device=device, relative=relative) # shape steps x N x D
             traversals_latents = traversals.view(-1, model.latent_size) # reshaping to fit into batch
             # 3. obtain responses
             trvs_response = model.encode_mu(model.decode(traversals_latents, activate=True))
@@ -42,7 +43,7 @@ def traversal_responses(model:GenerativeAE, device, **kwargs):
 
     print("...done")
 
-    return all_traversal_latents, all_traversals_responses, prior_samples
+    return all_traversal_latents, all_traversals_responses, traversals_steps
 
 def hybrid_responses():
     #TODO

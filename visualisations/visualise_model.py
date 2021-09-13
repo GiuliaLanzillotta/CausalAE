@@ -1,4 +1,6 @@
 """ Script implementing logic for model visualisations """
+from typing import List
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -332,10 +334,11 @@ class ModelVisualiser(object):
         return torch.vstack(losses) # D x n_steps
 
     @staticmethod
-    def plot_traversal_responses(dim:int, latents:Tensor, responses:Tensor, prior_samples:Tensor, **kwargs):
+    def plot_traversal_responses(dim:int, latents:Tensor, responses:Tensor, traversals_steps:Tensor, **kwargs):
         """For the selected latent dimension plots the recorded errors on the responses across the traversal
         @latents: Tensor of shape (steps, N, D)
         @responses:   //        //
+        @traversals_steps: tensor of shape (D, S) with the traversal steps taken for each dimension
         kwargs accepted keys:
         - figure parameters
         - population: bool - whether to plot the whole population trend or the individual samples (default False)
@@ -363,21 +366,16 @@ class ModelVisualiser(object):
             for col in range(ncols):
                 if i==D: break
                 ax[row,col].set_title(f"Responses on latent dimension {i}")
-                if relative:
-                    x = latents[:,:,dim] - prior_samples[:,dim].view(1, -1)
-                    ticks = latents[:,0,dim] - prior_samples[:,dim].mean()
-                else:
-                    x = latents[:,:,dim] # absolute position
-                    ticks = latents[:,0,dim]
+                x = traversals_steps[dim].view(S, 1).repeat(1, N)
                 x = x.view(-1,).cpu().numpy() # steps x N
-                y = (latents[:,:,i] - responses[:,:,i]).view(-1,).cpu().numpy() # steps x N
+                y = (responses[:,:,i] - latents[:,:,i]).view(-1,).cpu().numpy() # steps x N
                 if normalise: y /= torch.std(responses[0,:,i]).cpu().numpy()
                 hue = None if population else [i for _ in range(S) for i in range(N)]
                 axi = sns.lineplot(x, y, ax=ax[row,col], marker=".", markersize=markersize, hue=hue)
                 axi.axhline(0., color='red')
                 axi.set(ylabel=f'Error registered on dimension {i}',
                         xlabel=f'Traversal on dimension {dim}')
-                axi.set_xticklabels([f'{i:.2f}' for i in ticks])
+                #axi.set_xticklabels([f'{i:.2f}' for i in traversals_steps[dim].cpu().numpy()])
                 axi.tick_params(axis="x", labelsize=font_scale)
                 axi.tick_params(axis="y", labelsize=font_scale)
                 if ylim is not None: axi.set(ylim=(-ylim, ylim))
@@ -441,6 +439,30 @@ class ModelVisualiser(object):
         ax.set_xlabel(f'Latent dim {j}')
 
         return fig
+
+    @staticmethod
+    def scatterplot_with_line(x:Tensor, y:Tensor, hue:List, **kwargs):
+        """Plots the scatterplot and lineplot over the two input vectors x,y"""
+        figsize = kwargs.get("figsize",(20,10))
+        markersize = kwargs.get("markersize",10)
+        x_name = kwargs.get("x_name","First dim")
+        y_name = kwargs.get("y_name", "Second dim")
+        with_line = kwargs.get("with_line", False)
+        ylim = kwargs.get("ylim")
+        xlim = kwargs.get("xlim")
+
+        figure = plt.figure(figsize=figsize)
+        axi = sns.scatterplot(x, y,  marker=".", hue=hue, palette="viridis")
+        if with_line:
+            axi = sns.lineplot(x, y,  marker=".", markersize=markersize, hue=hue)
+        axi.set_title(f"Scatterplot of {x_name} and {y_name}")
+        axi.set_ylabel(f'Latent dim {y_name}')
+        axi.set_xlabel(f'Latent dim {x_name}')
+        if ylim is not None: axi.set(ylim=(-ylim, ylim))
+        if xlim is not None: axi.set(xlim=(-xlim, xlim))
+
+        return figure
+
 
 
     def plot_training_gradients(self, figsize=(12,12)):

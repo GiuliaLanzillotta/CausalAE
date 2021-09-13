@@ -265,9 +265,9 @@ class LatentConsistencyEvaluator(object):
 
         assert self.source is not None, "Initialise the Evaluator first"
 
-        prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs)
+        prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs).detach()
         posterior_samples = self.source
-        responses = self.model.encode(self.model.decode(prior_samples, activate=True)).detach()
+        responses = self.model.encode(self.model.decode(prior_samples, activate=True))
 
         #observed standard deviation on each latent unit
         std_dev = self.compute_std_dev(prior_samples, responses, num_units, unit_dim)
@@ -276,8 +276,8 @@ class LatentConsistencyEvaluator(object):
         hybrid_posterior = self.posterior_distribution(posterior_samples, self.random_state, unit, unit_dim)
 
         for intervention_idx in range(num_interventions):
-            prior_samples_prime = self.noise_intervention(prior_samples, unit, unit_dim, hard=True, sampling_fun=hybrid_posterior)
-            responses_prime = self.model.encode(self.model.decode(prior_samples_prime.to(device), activate=True)).detach() # m x d
+            prior_samples_prime = self.noise_intervention(prior_samples, unit, unit_dim, hard=True, sampling_fun=hybrid_posterior).detach()
+            responses_prime = self.model.encode(self.model.decode(prior_samples_prime.to(device), activate=True)) # m x d
             # we're ignoring the variance to make the results from VAE comparable with results from Hybrid models
             if self.variational: error = self.compute_distributional_errors(responses, responses_prime,
                                                                             reduce=False, do_KL=False,

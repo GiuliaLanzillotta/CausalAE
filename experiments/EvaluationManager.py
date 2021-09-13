@@ -11,7 +11,9 @@ import os
 import glob
 import time
 import copy
-from visualisations import ModelVisualiser, SynthVecDataVisualiser, vis_responses
+
+from experiments.utils import temperature_exponential_annealing
+from visualisations import ModelVisualiser, SynthVecDataVisualiser, vis_responses, vis_xnets
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentConsistencyEvaluator
 import pytorch_lightning as pl
 from metrics.responses import compute_response_matrix
@@ -38,6 +40,8 @@ class ModelHandler(object):
         self._consistencyScorer = None
         self.device = next(self.model.parameters()).device
         self.send_model_to(self.device)
+        # update Xnet tau
+        if "X" in self.model_name: self.reset_tau()
 
     @classmethod
     def from_experiment(cls, experiment:pl.LightningModule, **kwargs):
@@ -49,6 +53,12 @@ class ModelHandler(object):
                                  version=model_version, data_version=data_version)
         experiment = pick_model_manager(model_name)(params = config, verbose=kwargs.get("verbose"))
         return cls(experiment, **kwargs)
+
+    def reset_tau(self, step_num=None):
+        if step_num is None: step_num = self.experiment.global_step
+        tau = temperature_exponential_annealing(step_num)
+        self.model.tau = tau
+        print(f"Tau set to {tau}")
 
     def score_disentanglement(self, **kwargs):
         """Scoring model on disentanglement metrics"""
@@ -245,8 +255,7 @@ class ModelHandler(object):
             print(f"Intervening on {u} ...")
             with torch.no_grad():
                 # interventions on unit u
-                errors = self._consistencyScorer.noise_equivariance(unit=u, unit_dim=U, num_units=D,
-                                                                    device=self.device, **kwargs)
+                errors = self._consistencyScorer.noise_equivariance(unit=u, xunit_dim=U, device=self.device, **kwargs)
                 equivariances[u,:] = errors
 
         equivariances = 1.0 - equivariances
@@ -377,13 +386,13 @@ class ModelHandler(object):
             scores["FID_gen"] = self.score_FID(generation=True, **kwargs)
         if invariance:
             invariances, _ = self.evaluate_invariance(**kwargs)
-            scores["INV"] = torch.sum(invariances*(1-torch.eye(6, device=self.device))).cpu() #TODO: correct to take into account ignored dimensions (maybe divide by posterior sd?)
+            scores["INV"] = torch.sum(invariances*(1-torch.eye(self.model.latent_size, device=self.device))).cpu().numpy() #TODO: correct to take into account ignored dimensions (maybe divide by posterior sd?)
         if equivariance:
             equivariances = self.evaluate_equivariance(**kwargs)
-            scores["EQV"] = torch.sum(equivariances).cpu()
+            scores["EQV"] = torch.sum(equivariances).cpu().numpy()
         if self_consistency:
             consistencies, _ = self.evaluate_self_consistency(**kwargs)
-            scores["SCN"] = torch.sum(consistencies).cpu()
+            scores["SCN"] = torch.sum(consistencies).cpu().numpy()
         end = time.time()
 
         print("Time elapsed for scoring {:.0f}".format(end-start))
@@ -434,7 +443,8 @@ class VisualModelHandler(ModelHandler):
                    do_random_samples=False, do_traversals=False, do_hybrisation=False,
                    do_loss2distortion=False, do_marginal=False, do_loss2marginal=False,
                    do_invariance=False, do_latent_block=False, do_traversal_responses=False,
-                   do_latent_response_field=False, do_equivariance=False, **kwargs):
+                   do_latent_response_field=False, do_equivariance=False,
+                   do_jointXmarginals=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -469,13 +479,13 @@ class VisualModelHandler(ModelHandler):
                                                                   threshold=0., **kwargs)
 
         if do_traversal_responses:
-            all_traversal_latents, all_traversals_responses, prior_samples = \
+            all_traversal_latents, all_traversals_responses, traversals_steps = \
                 vis_responses.traversal_responses(self.model, self.device, **kwargs)
             plots["trvs_responses"] = []
             D = self.model.latent_size
             for d in range(D):
                 fig = self.visualiser.plot_traversal_responses(d, all_traversal_latents[d], all_traversals_responses[d],
-                                                               prior_samples=prior_samples, **kwargs)
+                                                               traversals_steps=traversals_steps, **kwargs)
                 plots["trvs_responses"].append(fig)
 
 
@@ -492,6 +502,15 @@ class VisualModelHandler(ModelHandler):
             response_field, hybrid_grid = vis_responses.response_field(i, j, self.model, self.device, **kwargs)
             X, Y = hybrid_grid
             plots["latent_response_field"] = self.visualiser.plot_vector_field(response_field, X, Y, i=i, j=j, **kwargs)
+
+        if do_jointXmarginals:
+            i = kwargs.pop("i",0)
+            j = kwargs.pop("j", 1)
+            print(f"Plotting X{i}-X{j} joint marginal")
+            Xij, hue = vis_xnets.compute_joint_ij(i, j, self.model, self.device, **kwargs)
+            Xij = Xij.detach().cpu().numpy()
+            plots["Xij"] = self.visualiser.scatterplot_with_line(Xij[:,0], Xij[:,1], hue,
+                                                                 x_name=f"X{j}", y_name=f"X{i}", **kwargs)
 
         return plots
 
