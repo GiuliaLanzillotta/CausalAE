@@ -24,8 +24,8 @@ class ModelVisualiser(object):
     def __init__(self, model:GenerativeAE,test_dataloader, **kwargs):
         super(ModelVisualiser, self).__init__()
         self.model = model
-        self.dataloader = test_dataloader
-        self.test_input, _ = next(iter(test_dataloader))
+        self.dataloader = iter(test_dataloader)
+        self.test_input, _ = next(self.dataloader)
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
@@ -41,8 +41,10 @@ class ModelVisualiser(object):
 
     def plot_reconstructions(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         """ plots reconstructions from test set samples"""
+        new_batch = kwargs.get("new_batch",False)
         num_plots = grid_size**2
-        test_sample = self.test_input[:num_plots]
+        if new_batch: test_sample = next(self.dataloader)[0][:num_plots]
+        else: test_sample = self.test_input[:num_plots]
         with torch.no_grad():
             recons = self.model.reconstruct(test_sample.to(device), activate=True).detach()
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
@@ -143,22 +145,14 @@ class ModelVisualiser(object):
 
         return figure
 
-    def plot_marginal(self, device=None, **kwargs):
+    def plot_marginal(self, _all_codes:Tensor, device=None, **kwargs):
         """plotting marginal distributions over latent dimensions"""
         figsize = kwargs.get("figsize",(20,20))
-        num_batches = kwargs.get("num_batches",10)
         n_bins = kwargs.get("bins",200)
         pair = kwargs.get("pair",False) # whether to make a pairplot over the latents
         xlim = kwargs.get("xlim")
-        font_scale = kwargs.get("font_scale",20)
-
-        _all_codes = []
-        for b in range(num_batches):
-            batch, _ = next(iter(self.dataloader))
-            with torch.no_grad():
-                codes = self.model.encode_mu(batch.to(device), update_prior=True, integrate=True)
-                _all_codes.append(codes)
-        _all_codes = torch.vstack(_all_codes) # (B x num batches) x D
+        font_scale = kwargs.get("font_scale",10)
+        palette = kwargs.get('palette','autumn')
 
         N, D = _all_codes.shape
         if not pair:
@@ -177,7 +171,8 @@ class ModelVisualiser(object):
             return fig
 
         fig = plt.figure(figsize=figsize)
-        axi = sns.pairplot(pd.DataFrame(_all_codes.cpu().numpy()), diag_kws = {'alpha':0.55, 'bins':200, 'kde':True})
+        df = pd.DataFrame(_all_codes.cpu().numpy())
+        axi = sns.pairplot(df, kind="kde")
         return fig
 
     #TODO: move distortion functions to dedicated module
@@ -441,6 +436,30 @@ class ModelVisualiser(object):
         return fig
 
     @staticmethod
+    def kdeplot(x:Tensor, y:Tensor, hue:List=None, **kwargs):
+        """Plots the scatterplot and lineplot over the two input vectors x,y"""
+        figsize = kwargs.get("figsize",(20,10))
+        x_name = kwargs.get("x_name","First dim")
+        y_name = kwargs.get("y_name", "Second dim")
+        title = kwargs.get("title", "Desity plot")
+        with_points = kwargs.get("with_points", False)
+        ylim = kwargs.get("ylim")
+        xlim = kwargs.get("xlim")
+
+        figure = plt.figure(figsize=figsize)
+        axi = sns.kdeplot(x,y, cmap="Reds", hue=hue, shade=True)
+        if with_points:
+            axi = sns.scatterplot(x,y, cmap="Reds",marker='.', hue=hue, color="red")
+        axi.set_title(title)
+        axi.set_ylabel(y_name)
+        axi.set_xlabel(x_name)
+        if ylim is not None: axi.set(ylim=(-ylim, ylim))
+        if xlim is not None: axi.set(xlim=(-xlim, xlim))
+
+        return figure
+
+
+    @staticmethod
     def scatterplot_with_line(x:Tensor, y:Tensor, hue:List, **kwargs):
         """Plots the scatterplot and lineplot over the two input vectors x,y"""
         figsize = kwargs.get("figsize",(20,10))
@@ -454,7 +473,7 @@ class ModelVisualiser(object):
         figure = plt.figure(figsize=figsize)
         axi = sns.scatterplot(x, y,  marker=".", hue=hue, palette="viridis")
         if with_line:
-            axi = sns.lineplot(x, y,  marker=".", markersize=markersize, hue=hue)
+            axi = sns.lineplot(x, y,  hue=hue, palette="viridis")
         axi.set_title(f"Scatterplot of {x_name} and {y_name}")
         axi.set_ylabel(f'Latent dim {y_name}')
         axi.set_xlabel(f'Latent dim {x_name}')
@@ -527,3 +546,14 @@ class ModelVisualiser(object):
         ax.set_title(title)
         return fig
 
+    @staticmethod
+    def plot_grid(images:Tensor, nrow=10, **kwargs):
+        """Plots a grid of images with the sizes indicated in the input"""
+        figsize = kwargs.get('figsize')
+        grid_recons = torchvision.utils.make_grid(images, nrow=nrow) #nrow is actually ncol
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.grid(b=None)
+
+        return figure

@@ -49,6 +49,13 @@ class XAE(ConvAE, Xnet):
         if activate: x = self.act(x)
         return x
 
+    def decode_from_X(self, x, *args, **kwargs):
+        activate = kwargs.get('activate',False)
+        z_init = self.decoder[0](x).view((-1, )+self.decoder_initial_shape) # reshaping into image format
+        x = self.decoder[1](z_init)
+        if activate: x = self.act(x)
+        return x
+
     def add_regularisation_terms(self, *args, **kwargs):
         return Xnet.add_regularisation_terms(self, *args, **kwargs)
 

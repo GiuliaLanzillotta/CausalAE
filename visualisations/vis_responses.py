@@ -1,7 +1,7 @@
 """ All functions needed to compute the material to visualise the latent responses"""
 import torch
 
-from models import GenerativeAE
+from models import GenerativeAE, Xnet
 from . import utils
 
 
@@ -80,6 +80,42 @@ def response_field(i:int, j:int, model:GenerativeAE, device, **kwargs):
         all_samples[:,:,j] = j_values.repeat(1,num_samples)
         responses = model.encode_mu(model.decode(all_samples.view(-1,num_units), activate=True))
         response_field = torch.hstack([responses[:,i], responses[:,j]]).view(grid_size**2, num_samples, 2).mean(dim=1) # M x 2
+
+    return response_field, hybrid_grid
+
+
+def response_fieldX(i:int, j:int, model:Xnet, device, **kwargs):
+    """Evaluates the response field over the selected causal units (i and j are the indices)
+    kwargs accepted keys:
+    - grid_size
+    - num_samples
+    - all kwargs accepted in 'sample noise from prior'
+    Returns tensor of size (grid_size**2, 2) with the mean responses over the grid and the grid used
+    """
+
+    print(f"Computing response field for X{i} and X{j} ... ")
+    grid_size = kwargs.get('grid_size', 20) #400 points by default
+    num_samples = kwargs.get('num_samples',50)
+    range_limit = kwargs.get('range_limit',3)
+    unit_dim = model.xunit_dim
+    assert unit_dim==1, "Only one-dimensional units are supported"
+    num_units = model.latent_size
+    # sample N vectors from prior and compute causal variables
+    prior_samples = model.sample_noise_from_prior(device=device, **kwargs).detach()
+    Xs = model.get_causal_variables(prior_samples, **kwargs).detach()
+    with torch.no_grad():
+        hybrid_grid = torch.meshgrid([torch.linspace(-range_limit,range_limit, steps=grid_size),
+                                      torch.linspace(-range_limit,range_limit, steps=grid_size)])
+        i_values = hybrid_grid[0].contiguous().view(-1, unit_dim) # M x u
+        j_values = hybrid_grid[1].contiguous().view(-1, unit_dim) # M x u
+        assert i_values.shape[0] == grid_size**2, "Something wrong detected with meshgrid"
+        # now for each of the prior samples we want to evaluate the full grid in order to then average the results  (mean field approximation)
+        all_samples = torch.tile(Xs, (grid_size**2,1,1)) #shape = M x N x D (M is grid_size**2)
+        all_samples[:,:,i] = i_values.repeat(1,num_samples)
+        all_samples[:,:,j] = j_values.repeat(1,num_samples)
+        responses = model.encode_mu(model.decode_from_X(all_samples.view(-1,num_units), activate=True).detach()).detach()
+        X_responses = model.get_causal_variables(responses, **kwargs).detach()
+        response_field = torch.hstack([X_responses[:,i], X_responses[:,j]]).view(grid_size**2, num_samples, 2).mean(dim=1) # M x 2
 
     return response_field, hybrid_grid
 

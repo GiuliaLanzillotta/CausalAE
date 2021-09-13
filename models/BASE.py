@@ -136,8 +136,12 @@ class HybridAE(GenerativeAE, nn.Module, ABC):
         """Equivalent to total hybridisation: every point is hybridised at the maximum level
         3 modes supported: posterior/hybrid/uniform"""
         device= kwargs['device']
+
         with torch.no_grad():
-            if prior_mode=='posterior': return self.hybrid_layer.prior[:num_samples].to(device)
+            if prior_mode=='posterior':
+                # shuffling and selecting
+                idx = torch.randperm(self.hybrid_layer.prior.shape[0], device=device) #shuffling indices
+                return torch.index_select(self.hybrid_layer.prior, 0, idx[:num_samples]).detach()
             if prior_mode=='hybrid': return self.hybrid_layer.sample_from_prior((num_samples,)).to(device)
             if prior_mode=='uniform': return self.hybrid_layer.sample_uniformly_in_support(num_samples).to(device)
         raise NotImplementedError('Requested sampling mode not implemented')
@@ -188,6 +192,18 @@ class Xnet(GenerativeAE, ABC):
         self.causal_block = VecSCM(use_masking = True, **params)
         self.tau = 1.0
 
+    @abstractmethod
+    def decode_from_X(self, x, *args, **kwargs):
+        """Implementing the decoding process starting directly from X.
+        Useful to inspect the result of an intervention on the causal variables."""
+        raise NotImplementedError
+
+    def intervene_on_X(self, dim:int, noises:Tensor, values:Tensor):
+        """Applies intervention on X at dimension 'dim' by assigning it to 'values'
+        Note: noises and values have to be of the same length - for each sample in noises, values must contain a
+        corresponding intervention"""
+        X = self.causal_block.forward_intervention(noises, dim, values, self.tau)
+        return X
 
     def get_causal_variables(self, noises: Tensor, **kwargs):
         """Generic function to allow diversity between models in definition/computation of causal variables

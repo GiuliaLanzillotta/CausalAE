@@ -49,11 +49,21 @@ class XSAE(SAE, Xnet):
         x = self.causal_block(noise, self.tau)
         # feeding a constant signal into the decoder
         # the output will be built on top of this constant trough the StrTrf layers
-        z = torch.ones(size = x.shape).to(noise.device) # batch x latent
+        z = torch.ones(size = x.shape, device=noise.device) # batch x latent
         z = self.dec_init(z).view((-1, )+self.decoder_initial_shape) # batch x 512
         output = self.scm(z, x)
         if activate: output = self.act(output)
         return output
+
+    def decode_from_X(self, x, *args, **kwargs):
+        device = x.device
+        activate = kwargs.get('activate', False)
+        z = torch.ones(size = x.shape, device=device) # batch x latent
+        z = self.dec_init(z).view((-1, )+self.decoder_initial_shape) # batch x 512
+        output = self.scm(z, x)
+        if activate: output = self.act(output)
+        return output
+
 
     def add_regularisation_terms(self, *args, **kwargs):
         return Xnet.add_regularisation_terms(self, *args, **kwargs)

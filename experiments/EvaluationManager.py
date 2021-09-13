@@ -13,7 +13,7 @@ import time
 import copy
 
 from experiments.utils import temperature_exponential_annealing
-from visualisations import ModelVisualiser, SynthVecDataVisualiser, vis_responses, vis_xnets
+from visualisations import ModelVisualiser, SynthVecDataVisualiser, vis_responses, vis_xnets, vis_latents
 from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentConsistencyEvaluator
 import pytorch_lightning as pl
 from metrics.responses import compute_response_matrix
@@ -204,7 +204,8 @@ class ModelHandler(object):
         + all kwarks for 'initialise_consistencyScorer' function
         """
 
-        print(f"Scoring model's self consistency.")
+        level = kwargs.get('level', 1)
+        print(f"Scoring model's self consistency at level {level}.")
         normalise = kwargs.get('normalise',False)
 
         self.initialise_consistencyScorer(**kwargs)
@@ -327,6 +328,10 @@ class ModelHandler(object):
         print(checkpoints)
         return checkpoints
 
+    def score_causal_vars_entropy(self):
+        #TODO
+        pass
+
     def load_checkpoint(self, name=None):
         #TODO: together with checkpoint load some training status file, old results etc
         base_path = Path(self.config['logging_params']['save_dir']) / \
@@ -444,7 +449,8 @@ class VisualModelHandler(ModelHandler):
                    do_loss2distortion=False, do_marginal=False, do_loss2marginal=False,
                    do_invariance=False, do_latent_block=False, do_traversal_responses=False,
                    do_latent_response_field=False, do_equivariance=False,
-                   do_jointXmarginals=False, **kwargs):
+                   do_jointXmarginals=False, do_hybridsX=False, do_unitMarginal=False,
+                   do_marginalX=False, do_latent_response_fieldX=False, do_N2X=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -459,11 +465,15 @@ class VisualModelHandler(ModelHandler):
         if do_originals: # print the originals
             plots["originals"] = self.visualiser.plot_originals()
         if do_hybrisation: # print the originals
-            plots["hybrids"] = self.visualiser.plot_hybridisation(device=self.device, **kwargs)
+            print(f"Plotting hybridisation on the noise variables")
+            hybrids, _, _  = vis_latents.hybridiseN(self.model, self.device, **kwargs)
+            plots["hybridsN"] = self.visualiser.plot_grid(hybrids, nrow=3, **kwargs)
+
         if do_loss2distortion:
             plots["distortion"] = self.visualiser.plot_loss2distortion(device=self.device, **kwargs)
         if do_marginal:
-            plots["marginal"] = self.visualiser.plot_marginal(device=self.device, **kwargs)
+            codes = vis_latents.get_posterior(self.model, iter(self.dataloader), self.device, **kwargs)
+            plots["marginal"] = self.visualiser.plot_marginal(codes, device=self.device, **kwargs)
         if do_loss2marginal:
             plots["marginal_distortion"] = self.visualiser.plot_loss2marginaldistortion(device=self.device, **kwargs)
         if do_invariance:
@@ -512,6 +522,39 @@ class VisualModelHandler(ModelHandler):
             plots["Xij"] = self.visualiser.scatterplot_with_line(Xij[:,0], Xij[:,1], hue,
                                                                  x_name=f"X{j}", y_name=f"X{i}", **kwargs)
 
+        if do_hybridsX:
+            print(f"Plotting hybridisation on the causal variables")
+            hybrids, _, _  = vis_xnets.hybridiseX(self.model, self.device, **kwargs)
+            plots["hybridsX"] = self.visualiser.plot_grid(hybrids, nrow=3, **kwargs)
+
+        if do_unitMarginal:
+            u = kwargs.get("unit",0)
+            print(f"Plotting marginal of multidim unit {u}")
+            samples_ux2D = vis_xnets.multidimUnitMarginal(self.model, device=self.device, **kwargs)
+            plots[f"unit{u}"] = self.visualiser.kdeplot(samples_ux2D[:,0], samples_ux2D[:,1], **kwargs)
+
+        if do_marginalX: # note: only works for unidimensional Xnets
+            Xs = vis_xnets.get_posterior(self.model, iter(self.dataloader.test), self.device, **kwargs)
+            plots["marginal"] = self.visualiser.plot_marginal(Xs, device=self.device, **kwargs)
+
+
+        if do_latent_response_fieldX:
+            i = kwargs.pop("i",0)
+            j = kwargs.pop("j", 1)
+            response_field, hybrid_grid = vis_responses.response_fieldX(i, j, self.model, self.device, **kwargs)
+            X, Y = hybrid_grid
+            plots["latent_response_fieldX"] = self.visualiser.plot_vector_field(response_field, X, Y, i=i, j=j, **kwargs)
+
+        if do_N2X:
+            dim = kwargs.pop("dim",0)
+            print(f"Plotting N{dim}-X{dim} joint marginal")
+            NX, hue = vis_xnets.compute_N2X(dim, self.model, self.device, **kwargs)
+            NX = NX.detach().cpu().numpy()
+            plots["Xij"] = self.visualiser.scatterplot_with_line(NX[:,0], NX[:,1], hue,
+                                                                 x_name=f"N{dim}", y_name=f"X{dim}", **kwargs)
+
+
+
         return plots
 
 
@@ -556,7 +599,7 @@ class VectorModelHandler(ModelHandler):
 
 if __name__ == '__main__':
 
-    params = {"model_name":"XAE",
+    params = {"model_name":"XCAE",
               "model_version":"standardS",
               "data" : "MNIST"}
 
@@ -564,10 +607,11 @@ if __name__ == '__main__':
     handler = VisualModelHandler.from_config(**params)
     handler.config["logging_params"]["save_dir"] = "./logs"
     handler.load_checkpoint()
-
-    figure_params = {"figsize":(20,30), "nrows":3, "N":100, "markersize":10, "font_scale":10}
-    A = handler.causal_block_graph()
-    fig = handler.visualiser.plot_heatmap(A.cpu().numpy(),
-                                      title="Causal block adjacency matrix",
-                                      threshold=10e-1,
-                                      **figure_params)
+    handler.reset_tau(100000)
+    figure_params = {"figsize":(9,7)}
+    for w in range(1): res = handler.plot_model(do_reconstructions=True, **figure_params)
+    for i in range(6):
+        other_args = {"dim":i, "num_samples":100, "marginal_samples":100,
+                      "prior_mode":"uniform", "with_line":True}
+        res = handler.plot_model(do_reconstructions=False, do_N2X=True,
+                             **figure_params, **other_args)

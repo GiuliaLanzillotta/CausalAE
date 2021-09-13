@@ -196,17 +196,23 @@ class LatentConsistencyEvaluator(object):
 
     def self_consistency(self, unit_dim:int, num_units:int, num_samples:int, **kwargs):
         """Equivariance of response map under null intervention
+            - level:int - the number of forward passes to apply
             - num_samples -> number of samples for each intervention
             - device - SE
             - uniform: if desired sampling from uniform for deterministic models
             - mode: prior sampling mode (for non variational models): hybrid/uniform/posterior"""
 
         assert self.source is not None, "Initialise the Evaluator first"
-        prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs)
-        responses = self.model.encode_mu(self.model.decode(prior_samples, activate=True)).detach()
+        level = kwargs.get('level',1)
+        prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs).detach()
+        _new_samples = prior_samples
+        errors = torch.zeros(level, num_units, device=self.device, requires_grad=False)
+        for l in range(level):
+            responses = self.model.encode_mu(self.model.decode(_new_samples, activate=True)).detach()
+            errors[l] = self.compute_absolute_errors(prior_samples, responses, reduce_dim=0, unit_dim=unit_dim).detach()
+            _new_samples = responses
         #observed standard deviation on each latent unit
         std_dev = self.compute_std_dev(prior_samples, responses, num_units, unit_dim)
-        errors = self.compute_absolute_errors(prior_samples, responses, reduce_dim=0, unit_dim=unit_dim).detach()
         return errors, std_dev # average error over interventions
 
     def noise_equivariance(self, unit:int, xunit_dim:int,  num_samples:int, **kwargs):

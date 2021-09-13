@@ -812,6 +812,32 @@ class VecSCM(nn.Module):
         x = torch.hstack(causal_vars)
         return x
 
+    def forward_intervention(self, z, dim:int, value,  masks_temperature=0.5):
+        """Forward pass on intervened SCM.
+        Intervention = hard intervention on the causal variable dim, with value 'value'."""
+        causal_vars = []
+        for l in range(self.depth):
+            if l == dim: causal_vars.append(value)
+            else:
+                #standard forward
+                z_l = z[:,l].view(-1,1)
+                if l>0:
+                    parents = torch.hstack(causal_vars)
+                    if not self.track_parents_gradients: parents = parents.detach()
+                    if self.use_masking and l>0:
+                        if self.use_Gumbel:
+                            with torch.no_grad(): gumbel_noise = self.gumbel.sample([l]).to(parents.device)
+                            mask = self.act((self.masks[l-1] + gumbel_noise)/masks_temperature)
+                        else: mask = self.masks[l-1]
+                        # mask dimension = num_units in parents
+                        mask = mask.repeat_interleave(self.xunit_dim)
+                        parents = mask*parents # no effect if the masks are kept to one
+                    inputs = torch.hstack([z_l, parents])
+                else: inputs = z_l # l=0, first variable has no parents
+                causal_vars.append(self.str_assignments[l](inputs)) # unit_size x 1
+        x = torch.hstack(causal_vars)
+        return x
+
     def masks_sparsity_penalty(self):
         """Computes sparsity level of input masks """
         sparsity_penalty = 0.

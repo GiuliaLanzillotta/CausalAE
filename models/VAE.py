@@ -122,6 +122,13 @@ class XVAE(VAE, Xnet):
         if activate: out = self.act(out)
         return out
 
+    def decode_from_X(self, x, *args, **kwargs):
+        activate = kwargs.get('activate',False)
+        out_init = self.decoder[0](x).view((-1, )+self.decoder_initial_shape) # reshaping into image format
+        out = self.decoder[1](out_init)
+        if activate: out = self.act(out)
+        return out
+
     def add_regularisation_terms(self, *args, **kwargs):
         losses = VAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
