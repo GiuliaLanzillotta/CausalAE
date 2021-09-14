@@ -43,6 +43,20 @@ def standard_initialisation(m, non_linearity='leaky_relu'):
         nn.init.constant_(m.bias, 0)
 
 
+def Gaussian_kernel(X:Tensor, sigma:float):
+    """Computes Gaussian kernel similarity of data X (to be used to estimate Renyis entropy from data)
+    X has dimensionality (N x d), where N is the number of samples"""
+    N, D = X.shape
+    norms = torch.sum(X**2, axis=1, keepdim=True)
+    dotprods = torch.matmul(X, X.T)
+    distances = norms + norms.T - 2. * dotprods # N x N matrix
+    res = torch.exp(-distances/(4*sigma**2))
+    C = torch.pow(2 * math.pi * sigma * math.sqrt(2), (-D / 2)) # multiplicative constant
+    res = C*res
+    return res
+
+
+
 def RBF_kernel(X:Tensor, Y:Tensor, device:str):
     """
     Computes similarity as MMD between X and Y according to RBF kernel, using sigma equal to the median distance between

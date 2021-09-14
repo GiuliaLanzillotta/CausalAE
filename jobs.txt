@@ -164,3 +164,7 @@ bsub -oo "XCVAE_E_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "
 bsub -oo "XCAE_ES_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCAE --data MNIST --version standardSE
 bsub -oo "XCSAE_ES_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardSE
 bsub -oo "XCVAE_ES_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCVAE --data MNIST --version standardSE
+
+
+
+

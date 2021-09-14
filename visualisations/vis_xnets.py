@@ -1,11 +1,17 @@
 """Visualisation toolkit for Xnets"""
+import math
+from typing import Iterable
+
 import numpy as np
 import torch
 from torch import Tensor
 
+import models.LVAE
 from models import Xnet
+from models import utils as mutils
 from visualisations import utils
 from sklearn.decomposition import PCA
+
 
 def compute_joint_ij(i:int, j:int, model:Xnet, device:str, **kwargs):
     """Computes joint marginal distribution over xi and xj, averaging over all noises and parent values
@@ -109,6 +115,36 @@ def compute_N2X(dim:int,model:Xnet, device:str, **kwargs):
     NX = torch.hstack([traversals[:,dim].view(-1,1), all_X[:,dim].view(-1,1)]) # shape (MxN) x 2
     hue = [i for _ in range(marginal_samples) for i in range(prior_samples.shape[0])]
     return NX, hue
+
+def compute_renyis_entropy_X(model:Xnet,  batch_iter:Iterable, device:str, **kwargs):
+    """ Computes renyis entropy over each causal dimension for alpha = 2
+    source: http://www.cnel.ufl.edu/courses/EEL6814/renyis_entropy.pdf
+    """
+    print(f"Computing entropy of the causal variables")
+
+    # collect samples from aggregate posterior on X
+    num_batches = kwargs.get("num_batches",10)
+    _all_X = []
+    for b in range(num_batches):
+        batch, _ = next(batch_iter)
+        with torch.no_grad():
+            noises = model.encode_mu(batch.to(device), update_prior=True, integrate=True).detach()
+            X = model.get_causal_variables(noises, **kwargs).detach()
+            _all_X.append(X)
+    # concatenating and reshaping
+    _all_X = torch.vstack(_all_X).view(-1, model.latent_size, model.xunit_dim) # N x L x D
+    N,_,D = _all_X.shape
+    entropies = torch.zeros(model.latent_size, device=device)
+    for d in range(model.latent_size):
+        # compute optimal sigma
+        sigma = torch.std(_all_X[:,d,:]).to(device)
+        mulC = math.pow((4/N)*(1/(2*D+1)),(1/(D+4)))
+        sigma= sigma*mulC
+        #obtain kernel estimates of the distances of all samples
+        _all_G = mutils.Gaussian_kernel(_all_X[:,d,:], sigma)
+        # estimate entropy
+        entropies[d] = -1*torch.log(torch.mean(_all_G)).to(device)
+    return entropies
 
 
 

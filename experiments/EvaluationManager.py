@@ -328,9 +328,11 @@ class ModelHandler(object):
         print(checkpoints)
         return checkpoints
 
-    def score_causal_vars_entropy(self):
-        #TODO
-        pass
+    def score_causal_vars_entropy(self, **kwargs):
+        """Scores entropy on each causal dimension
+        Note: only applicable to Xnets"""
+        entropy = vis_xnets.compute_renyis_entropy_X(self.model, iter(self.dataloader.test), self.device, **kwargs)
+        return entropy
 
     def load_checkpoint(self, name=None):
         #TODO: together with checkpoint load some training status file, old results etc
@@ -472,7 +474,7 @@ class VisualModelHandler(ModelHandler):
         if do_loss2distortion:
             plots["distortion"] = self.visualiser.plot_loss2distortion(device=self.device, **kwargs)
         if do_marginal:
-            codes = vis_latents.get_posterior(self.model, iter(self.dataloader), self.device, **kwargs)
+            codes = vis_latents.get_posterior(self.model, iter(self.dataloader.test), self.device, **kwargs)
             plots["marginal"] = self.visualiser.plot_marginal(codes, device=self.device, **kwargs)
         if do_loss2marginal:
             plots["marginal_distortion"] = self.visualiser.plot_loss2marginaldistortion(device=self.device, **kwargs)
