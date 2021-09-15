@@ -812,12 +812,17 @@ class VecSCM(nn.Module):
         x = torch.hstack(causal_vars)
         return x
 
-    def forward_intervention(self, z, dim:int, value,  masks_temperature=0.5):
+    def forward_intervention(self, z, dims:List[int], values:Tensor,  masks_temperature=0.5):
         """Forward pass on intervened SCM.
-        Intervention = hard intervention on the causal variable dim, with value 'value'."""
+        Intervention = hard intervention on the causal variables in dims, with values 'values'.
+        values is a tensor of shape Nx m x Dx, where m is len(values) and Dx is the dimensionality of each xunit, """
         causal_vars = []
+        intervened = 0
+        assert values.shape[1] == len(dims), "Values and dimensions provided do not match"
         for l in range(self.depth):
-            if l == dim: causal_vars.append(value)
+            if l in dims:
+                causal_vars.append(values[:,intervened,:])
+                intervened +=1
             else:
                 #standard forward
                 z_l = z[:,l].view(-1,1)
@@ -836,6 +841,7 @@ class VecSCM(nn.Module):
                 else: inputs = z_l # l=0, first variable has no parents
                 causal_vars.append(self.str_assignments[l](inputs)) # unit_size x 1
         x = torch.hstack(causal_vars)
+        assert intervened == len(dims), f"Not all interventions were performed: {intervened} != {len(dims)}"
         return x
 
     def masks_sparsity_penalty(self):

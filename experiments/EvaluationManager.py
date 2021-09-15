@@ -452,7 +452,8 @@ class VisualModelHandler(ModelHandler):
                    do_invariance=False, do_latent_block=False, do_traversal_responses=False,
                    do_latent_response_field=False, do_equivariance=False,
                    do_jointXmarginals=False, do_hybridsX=False, do_unitMarginal=False,
-                   do_marginalX=False, do_latent_response_fieldX=False, do_N2X=False, **kwargs):
+                   do_marginalX=False, do_latent_response_fieldX=False, do_N2X=False,
+                   do_double_hybridsX=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -528,6 +529,12 @@ class VisualModelHandler(ModelHandler):
             print(f"Plotting hybridisation on the causal variables")
             hybrids, _, _  = vis_xnets.hybridiseX(self.model, self.device, **kwargs)
             plots["hybridsX"] = self.visualiser.plot_grid(hybrids, nrow=3, **kwargs)
+
+        if do_double_hybridsX:
+            print(f"Plotting double hybridisation on the causal variables")
+            hybrids  = vis_xnets.double_hybridiseX(self.model, self.device, **kwargs)
+            plots["hybridsX"] = self.visualiser.plot_grid(hybrids, nrow=self.model.latent_size+1, **kwargs)
+
 
         if do_unitMarginal:
             u = kwargs.get("unit",0)

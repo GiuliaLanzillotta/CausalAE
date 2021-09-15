@@ -198,11 +198,11 @@ class Xnet(GenerativeAE, ABC):
         Useful to inspect the result of an intervention on the causal variables."""
         raise NotImplementedError
 
-    def intervene_on_X(self, dim:int, noises:Tensor, values:Tensor):
-        """Applies intervention on X at dimension 'dim' by assigning it to 'values'
+    def intervene_on_X(self, dims:List[int], noises:Tensor, values:Tensor):
+        """Applies interventions on X at dimensions 'dims' by assigning them the respective 'values'
         Note: noises and values have to be of the same length - for each sample in noises, values must contain a
         corresponding intervention"""
-        X = self.causal_block.forward_intervention(noises, dim, values, self.tau)
+        X = self.causal_block.forward_intervention(noises, dims, values, self.tau)
         return X
 
     def get_causal_variables(self, noises: Tensor, **kwargs):
