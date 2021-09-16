@@ -453,7 +453,7 @@ class VisualModelHandler(ModelHandler):
                    do_latent_response_field=False, do_equivariance=False,
                    do_jointXmarginals=False, do_hybridsX=False, do_unitMarginal=False,
                    do_marginalX=False, do_latent_response_fieldX=False, do_N2X=False,
-                   do_double_hybridsX=False, **kwargs):
+                   do_double_hybridsXN=False, do_interpolationN=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -530,11 +530,18 @@ class VisualModelHandler(ModelHandler):
             hybrids, _, _  = vis_xnets.hybridiseX(self.model, self.device, **kwargs)
             plots["hybridsX"] = self.visualiser.plot_grid(hybrids, nrow=3, **kwargs)
 
-        if do_double_hybridsX:
-            print(f"Plotting double hybridisation on the causal variables")
-            hybrids  = vis_xnets.double_hybridiseX(self.model, self.device, **kwargs)
-            plots["hybridsX"] = self.visualiser.plot_grid(hybrids, nrow=self.model.latent_size+1, **kwargs)
+        if do_double_hybridsXN:
+            print(f"Plotting double hybridisation on the noise and causal variables")
+            hybrids_N, _samples  = vis_latents.double_hybridiseN(self.model, self.device, **kwargs)
+            hybrids_X  = vis_xnets.double_hybridiseX(self.model, self.device, prior_samples=_samples, **kwargs)
+            plots["hybridsN"] = self.visualiser.plot_grid(hybrids_N, nrow=self.model.latent_size+1, **kwargs)
+            plots["hybridsX"] = self.visualiser.plot_grid(hybrids_X, nrow=self.model.latent_size+1, **kwargs)
 
+
+        if do_interpolationN:
+            print(f"Plotting interpolation between random sample from the posterior on the noises")
+            interpolation  = vis_latents.interpolate(self.model, iter(self.dataloader.test), self.device, **kwargs)
+            plots["interpolationN"] = self.visualiser.plot_grid(interpolation, nrow=interpolation.shape[0], **kwargs)
 
         if do_unitMarginal:
             u = kwargs.get("unit",0)
@@ -558,9 +565,11 @@ class VisualModelHandler(ModelHandler):
             dim = kwargs.pop("dim",0)
             print(f"Plotting N{dim}-X{dim} joint marginal")
             NX, hue = vis_xnets.compute_N2X(dim, self.model, self.device, **kwargs)
-            NX = NX.detach().cpu().numpy()
-            plots["Xij"] = self.visualiser.scatterplot_with_line(NX[:,0], NX[:,1], hue,
-                                                                 x_name=f"N{dim}", y_name=f"X{dim}", **kwargs)
+            NX = NX.detach().cpu().numpy()  # shape (MxN) x (1 + xunit_dim) - the first is the noise dimension, the others are Xs
+            ndims = NX.shape[1] - 1
+            for xd in range(ndims):
+                plots["Xij"] = self.visualiser.scatterplot_with_line(NX[:,0], NX[:,xd], hue,
+                                        x_name=f"N{dim}", y_name=f"X{dim}-{xd}", **kwargs)
 
 
 

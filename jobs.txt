@@ -156,9 +156,9 @@ bsub -oo "SCORING.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select
 # EQUIVARIANCE experiments ------------
 
 
-bsub -oo "XCAE_E_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XCAE --data MNIST --version standardE
-bsub -oo "XCSAE_E_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XCSAE --data MNIST --version standardE
-bsub -oo "XCVAE_E_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XCVAE --data MNIST --version standardE
+bsub -oo "XCAE_E_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCAE --data MNIST --version standardE
+bsub -oo "XCSAE_E_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardE
+bsub -oo "XCVAE_E_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCVAE --data MNIST --version standardE
 
 
 bsub -oo "XCAE_ES_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCAE --data MNIST --version standardSE

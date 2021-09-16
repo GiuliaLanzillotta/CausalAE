@@ -40,7 +40,7 @@ def compute_joint_ij(i:int, j:int, model:Xnet, device:str, **kwargs):
     hue = [i for _ in range(marginal_samples) for i in range(prior_samples.shape[0])]
     return Xij, hue
 
-def double_hybridiseX(model:Xnet, device:str, **kwargs):
+def double_hybridiseX(model:Xnet, device:str, prior_samples=None, **kwargs):
     """Performs hybridisation at the causal variable level.
     A randomly picked starting example is hybridised on each pair of dimensions with
      two other samples randomly chosen as well.
@@ -49,8 +49,10 @@ def double_hybridiseX(model:Xnet, device:str, **kwargs):
         """
     xunit_dim = model.xunit_dim
     complete_set = []
-    #first one is base tensor, second and third are used to intervene on the base
-    all_samples =  model.sample_noise_from_prior(3, device=device, **kwargs)
+    if prior_samples is None:
+        #first one is base tensor, second and third are used to intervene on the base
+        all_samples =  model.sample_noise_from_prior(3, device=device, **kwargs)
+    else: all_samples = prior_samples
     all_samplesX = model.get_causal_variables(all_samples)
     # necessary for visualisation purposes
     # for each pair of dimensions we obtain a new intervention with the two samples
@@ -134,9 +136,8 @@ def get_posterior(model:Xnet, batch_iter, device:str, **kwargs):
     _all_X = torch.vstack(_all_X) # (B x num batches) x D
     return _all_X
 
-def compute_N2X(dim:int,model:Xnet, device:str, **kwargs):
-    """Computes noise to X joint
-    - only works for 1 dimensional units models"""
+def compute_N2X(dim:int, model:Xnet, device:str, **kwargs):
+    """Computes noise to X joint"""
     print(f"Computing joint between N{dim} and X{dim}")
     marginal_samples = kwargs.get('marginal_samples',100) # M
     # sample N vectors from prior
@@ -149,8 +150,8 @@ def compute_N2X(dim:int,model:Xnet, device:str, **kwargs):
                                                       unit=dim, values=_marginalN,
                                                       device=device, relative=False).view(-1,model.latent_size) # shape M x N x D
     # obtain causal variables
-    all_X = model.get_causal_variables(traversals)
-    NX = torch.hstack([traversals[:,dim].view(-1,1), all_X[:,dim].view(-1,1)]) # shape (MxN) x 2
+    all_X = model.get_causal_variables(traversals).view(-1, model.latent_size, model.xunit_dim) # (MxN) x Dx
+    NX = torch.hstack([traversals[:,dim].view(-1,1), all_X[:,dim,:]]) # shape (MxN) x (1 + xunit_dim)
     hue = [i for _ in range(marginal_samples) for i in range(prior_samples.shape[0])]
     return NX, hue
 
