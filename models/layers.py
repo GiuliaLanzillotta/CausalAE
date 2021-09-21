@@ -181,10 +181,13 @@ class ConvNet(nn.Module):
 
         # Stacking the conv layers
         modules = []
+        tot_pools = 0
         for l in range(depth):
             c = channels_list[l+1]
-            reduce = l%pool_every==0
-            if reduce: h=h//2
+            reduce = l%pool_every==0 and tot_pools<num_pools
+            if reduce:
+                h=h//2
+                tot_pools+=1
             modules.append(ConvBlock(C,c,3,1,1,act=act,norm=norm,pool=reduce))
             C = c
 
@@ -359,7 +362,6 @@ class GaussianLayer(nn.Module):
         ranges = [(-2., 2.) for i in range(self.latent_size)]
         return ranges
 
-
 class HybridLayer(nn.Module):
     """Stochastic layer based on Hybrid sampling
     Implements
@@ -519,7 +521,6 @@ class HybridLayer(nn.Module):
                       for (m,M) in zip(prior_min,prior_max)]
         return ranges
 
-
 class AdaIN(nn.Module):
     #TODO: implement AdaIN layer (to be used instead of StrTrf in baselines)
     pass
@@ -543,7 +544,6 @@ class StrTrf(nn.Module):
         sigma_z = sigma_z.view(*sigma_z.shape, *(1,) * (len(x.shape) - len(sigma_z.shape)))
         y = mu_z + sigma_z*x
         return y
-
 
 class UpsampledConv(nn.Module):
     """Implements layer to be used in structural decoder:
@@ -588,17 +588,21 @@ class UpsampledConvNet(nn.Module):
             pool_every = depth//num_pools
         else: pool_every = self.depth//num_pools
 
+
         #residual = kwargs.get("residual") FIXME
         channels = kwargs.get("channels")
         channels_list = [C] + [channels]*depth; channels_list[-1] = final_shape[0] # reducing number of channels at the end
         norm = kwargs.get("norm")
         act = act_switch(kwargs.get("act",'mish'))
-        assert H == self.final_shape[1]//(2**(depth//pool_every))
-        remainder = self.final_shape[1]%(2**(depth//pool_every))
+        assert H == self.final_shape[1]//(2**(num_pools))
+        remainder = self.final_shape[1]%(2**(num_pools))
+
+        tot_pools = 0
         for l in range(depth):
             c = channels_list[l+1]
-            if l%pool_every==0:
+            if l%pool_every==0 and tot_pools<num_pools:
                 conv_modules.append(nn.Upsample(scale_factor=2., mode="bilinear", align_corners=False))
+                tot_pools +=1
             conv_modules.append(ConvBlock(C,c,3,1,1, act=act, norm=norm))
             C = channels_list[l+1]
         #adjusting the shape at the end using the following equation

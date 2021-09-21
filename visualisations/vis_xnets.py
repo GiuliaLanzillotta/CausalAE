@@ -136,22 +136,22 @@ def get_posterior(model:Xnet, batch_iter, device:str, **kwargs):
     _all_X = torch.vstack(_all_X) # (B x num batches) x D
     return _all_X
 
-def compute_N2X(dim:int, model:Xnet, device:str, **kwargs):
+def compute_N2X(dimN:int, dimX:int, model:Xnet, device:str, **kwargs):
     """Computes noise to X joint"""
-    print(f"Computing joint between N{dim} and X{dim}")
+    print(f"Computing joint between N{dimN} and X{dimX}")
     marginal_samples = kwargs.get('marginal_samples',100) # M
     # sample N vectors from prior
     prior_samples = model.sample_noise_from_prior(device=device, **kwargs).detach()
     #sample again to obtain noise dim marginal
     _marginalN = model.sample_noise_from_prior(device=device, num_samples=marginal_samples,
-                                               prior_mode="posterior").detach()[:, dim]
+                                               prior_mode="posterior").detach()[:, dimN]
     # traverse the latent dimension
     traversals = utils.do_latent_traversals_multi_vec(prior_samples, unit_dim=1,
-                                                      unit=dim, values=_marginalN,
+                                                      unit=dimN, values=_marginalN,
                                                       device=device, relative=False).view(-1,model.latent_size) # shape M x N x D
     # obtain causal variables
     all_X = model.get_causal_variables(traversals).view(-1, model.latent_size, model.xunit_dim) # (MxN) x Dx
-    NX = torch.hstack([traversals[:,dim].view(-1,1), all_X[:,dim,:]]) # shape (MxN) x (1 + xunit_dim)
+    NX = torch.hstack([traversals[:,dimN].view(-1,1), all_X[:,dimX,:]]) # shape (MxN) x (1 + xunit_dim)
     hue = [i for _ in range(marginal_samples) for i in range(prior_samples.shape[0])]
     return NX, hue
 

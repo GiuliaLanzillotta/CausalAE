@@ -1,0 +1,78 @@
+bsub -oo "XCAE_Sr13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version standardSrandom_seed13
+bsub -oo "XCAE_Sr17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version standardSrandom_seed17
+bsub -oo "XCAE_Sr37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version standardSrandom_seed37
+bsub -oo "XCAE_Sr121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version standardSrandom_seed121
+
+
+bsub -oo "XCAE_dr13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version standardrandom_seed13
+bsub -oo "XCAE_dr17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version standardrandom_seed17
+bsub -oo "XCAE_dr37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version standardrandom_seed37
+bsub -oo "XCAE_dr121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version standardrandom_seed121
+
+
+bsub -oo "XCAE_4r13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim4random_seed13
+bsub -oo "XCAE_4r17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim4random_seed17
+bsub -oo "XCAE_4r37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim4random_seed37
+bsub -oo "XCAE_4r121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim4random_seed121
+
+
+bsub -oo "XCAE_7r13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim7random_seed13
+bsub -oo "XCAE_7r17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim7random_seed17
+bsub -oo "XCAE_7r37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim7random_seed37
+bsub -oo "XCAE_7r121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCAE --data MNIST --version xunit_dim7random_seed121
+
+
+
+
+bsub -oo "XCSAE_Sr13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardSrandom_seed13
+bsub -oo "XCSAE_Sr17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardSrandom_seed17
+bsub -oo "XCSAE_Sr37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardSrandom_seed37
+bsub -oo "XCSAE_Sr121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardSrandom_seed121
+
+
+bsub -oo "XCSAE_dr13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardrandom_seed13
+bsub -oo "XCSAE_dr17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardrandom_seed17
+bsub -oo "XCSAE_dr37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardrandom_seed37
+bsub -oo "XCSAE_dr121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version standardrandom_seed121
+
+
+bsub -oo "XCSAE_4r13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version xunit_dim4random_seed13
+bsub -oo "XCSAE_4r17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version xunit_dim4random_seed17
+bsub -oo "XCSAE_4r37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version xunit_dim4random_seed37
+bsub -oo "XCSAE_4r121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version xunit_dim4random_seed121
+
+
+bsub -oo "XCSAE_7r13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version xunit_dim7random_seed13
+bsub -oo "XCSAE_7r17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version xunit_dim7random_seed17
+bsub -oo "XCSAE_7r37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version xunit_dim7random_seed37
+bsub -oo "XCSAE_7r121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCSAE --data MNIST --version xunit_dim7random_seed121
+
+
+
+
+bsub -oo "XCVAE_Sr13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version standardSrandom_seed13
+bsub -oo "XCVAE_Sr17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version standardSrandom_seed17
+bsub -oo "XCVAE_Sr37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version standardSrandom_seed37
+bsub -oo "XCVAE_Sr121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version standardSrandom_seed121
+
+
+bsub -oo "XCVAE_dr13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version standardrandom_seed13
+bsub -oo "XCVAE_dr17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version standardrandom_seed17
+bsub -oo "XCVAE_dr37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version standardrandom_seed37
+bsub -oo "XCVAE_dr121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version standardrandom_seed121
+
+
+bsub -oo "XCVAE_4r13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version xunit_dim4random_seed13
+bsub -oo "XCVAE_4r17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version xunit_dim4random_seed17
+bsub -oo "XCVAE_4r37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version xunit_dim4random_seed37
+bsub -oo "XCVAE_4r121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version xunit_dim4random_seed121
+
+
+bsub -oo "XCVAE_7r13_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version xunit_dim7random_seed13
+bsub -oo "XCVAE_7r17_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version xunit_dim7random_seed17
+bsub -oo "XCVAE_7r37_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version xunit_dim7random_seed37
+bsub -oo "XCVAE_7r121_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCVAE --data MNIST --version xunit_dim7random_seed121
+
+
+
+

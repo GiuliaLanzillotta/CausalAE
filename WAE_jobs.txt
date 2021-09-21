@@ -1,0 +1,19 @@
+bsub -oo "WAE_SG_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name WAE --data MNIST --version standardSG
+bsub -oo "XWAE_SG_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XWAE --data MNIST --version standardSG
+bsub -oo "XCWAE_SG_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCWAE --data MNIST --version standardSG
+
+bsub -oo "WAE_SU_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name WAE --data MNIST --version standardSU
+bsub -oo "XWAE_SU_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XWAE --data MNIST --version standardSU
+bsub -oo "XCWAE_SU_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCWAE --data MNIST --version standardSU
+
+bsub -oo "WAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name WAE --data MNIST --version standard
+bsub -oo "XWAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XWAE --data MNIST --version standard
+bsub -oo "XCWAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCWAE --data MNIST --version standard
+
+bsub -oo "XWAE_S4_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XWAE --data MNIST --version xunit_dim4
+bsub -oo "XCWAE_S4_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCWAE --data MNIST --version xunit_dim4
+bsub -oo "XCWAE_S4E_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XCWAE --data MNIST --version xunit_dim4E
+
+bsub -oo "WAE_CelebA.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name WAE --data CelebA --version v16_big
+bsub -oo "XWAE_CelebA.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XWAE --data CelebA --version v16_big
+bsub -oo "XCWAE_CelebA.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCWAE --data CelebA --version v16_big

@@ -1,0 +1,6 @@
+model_params:
+  latent_size: 6
+  enc_depth: 6 #number of convolutional layers in the encoder
+  dec_depth: 6
+  prior_type: 'Uniform'
+

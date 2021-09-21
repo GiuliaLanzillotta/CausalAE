@@ -86,5 +86,6 @@ def get_config(tuning:bool, model_name:str, data:str, version:str, data_version:
     config["logging_params"].update(logging_fig)
     # finally tuning
     if tuning: config = config_switch[model_name](config)
+
     return config
 

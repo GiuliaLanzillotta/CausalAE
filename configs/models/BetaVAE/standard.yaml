@@ -14,8 +14,7 @@ model_params:
 
 opt_params:
   KL_decay: 1.0
-  beta_schedule: 'cyclic'
+  beta_schedule: 'linear'
 
 eval_params:
   name: "scoring"
-  FID: False

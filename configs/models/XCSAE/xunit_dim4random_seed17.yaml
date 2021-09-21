@@ -1,0 +1,6 @@
+model_params:
+  dec_depth: 6
+  enc_depth: 6
+  latent_size: 6
+  random_seed: 17
+  xunit_dim: 4

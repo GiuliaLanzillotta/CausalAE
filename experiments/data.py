@@ -87,26 +87,27 @@ class DatasetLoader:
                             transform=transform)
 
         elif args["dataset_name"] == 'celeba':
+            size = args["size"]
             trfs = [
                 transforms.CenterCrop(148),
-                transforms.Resize((64, 64)),
+                transforms.Resize((size, size)),
                 transforms.ToTensor(),
             ]
             if args["add_noise"]:
                 trfs.append(AdditiveNoise())
             transform = transforms.Compose(trfs)
-            data_folder = './datasets/celeba/'
+            data_folder = '/cluster/scratch/glanzillo/datasets/celeba/'
             train_set = CelebA(data_folder,
                                split='train',
-                               download=True,
+                               download=False,
                                transform=transform); dataset = train_set
             valid_set = CelebA(data_folder,
                               split='valid',
-                              download=True,
+                              download=False,
                               transform=transform)
             test_set = CelebA(data_folder,
                               split='test',
-                              download=True,
+                              download=False,
                               transform=transform)
             already_split = True
             tot = len(train_set) + len(valid_set) + len(test_set)
@@ -245,6 +246,8 @@ class DatasetLoader:
                                                                  lengths=[train_num, val_num],
                                                                  generator=torch.Generator().manual_seed(42))
             self.num_samples = tot_train + tot_test
+
+        print(args["batch_size"])
 
         self.train = DataLoader(train_set,
                                 batch_size=args["batch_size"],

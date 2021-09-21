@@ -1,0 +1,27 @@
+eval_params:
+  FID: true
+  latent_responses: true
+  mode: X
+  name: scoring
+model_params:
+  channels: 32
+  dec_depth: 12
+  enc_depth: 12
+  gumbel: true
+  invariance_lamda: 2.0
+  latent_size: 12
+  latent_vecs: 128
+  name: XCAE
+  num_interventions: 10
+  num_pools: 3
+  num_samples: 10
+  parents_with_grad: true
+  random_seed: 13
+  sparsity: false
+  sparsity_lamda: 0.01
+  unit_dim: 1
+opt_params:
+  inv_lamda_schedule: linear
+  weight_decay: 0.0
+vis_params:
+  plot_every: 5

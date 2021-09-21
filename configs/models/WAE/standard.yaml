@@ -1,0 +1,19 @@
+model_params:
+  name: 'WAE'
+  latent_vecs: 128 # for hybrid sampling
+  residual: True
+  latent_size: 12
+  enc_depth: 12 #number of convolutional layers in the encoder
+  dec_depth: 12
+  num_pools: 3
+  unit_dim: 1
+  channels: 32
+  MMD_kernel: 'IMQ'
+  prior_type: 'Gaussian'
+  prior_scale: 1.0
+  # regularisation parameters
+  MMD_lamda: 100.0
+
+
+opt_params:
+  MMD_lamda_schedule: 'linear'

@@ -1,0 +1,13 @@
+model_params:
+  latent_vecs: 144
+  latent_size: 16
+  enc_depth: 16 #number of convolutional layers in the encoder
+  dec_depth: 16
+  num_pools: 7
+  unit_dim: 1
+  loss_type: "MSE"
+  channels: 100
+
+eval_params:
+  name: "scoring"
+  FID: True

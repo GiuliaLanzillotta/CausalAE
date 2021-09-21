@@ -106,21 +106,11 @@ def IMQ_kernel(X:Tensor, Y:Tensor, device:str):
     distances = norms_pz + norms_qz.T - 2. * dotprods
 
     # expected squared distance between two multivariate Gaussian vectors drawn from prior
-    Cbase = 2.*float(X.shape[1])*torch.mean(distances_qz)
+    C = 2.*float(X.shape[1])*torch.mean(distances_qz)
 
-    res1 = torch.zeros_like(distances_pz).to(device)
-    res2 = torch.zeros_like(distances_qz).to(device)
-    res3 = torch.zeros_like(distances).to(device)
-
-    for scale in [.1, .2, .5, 1., 2., 5., 10.]: #TODO: why this sum over different scales
-        C = Cbase * scale
-        r = C / (C + distances_qz)
-        res1 += r #torch.multiply(r, 1. - torch.eye(N).to(device))
-
-        r = C / (C + distances_pz)
-        res2 += r #torch.multiply(r, 1. - torch.eye(M).to(device))
-
-        res3 += C / (C + distances)
+    res1 = C / (C + distances_qz)
+    res2 = C / (C + distances_pz)
+    res3 = C / (C + distances)
 
     return res1, res2, res3
 
@@ -195,11 +185,14 @@ def compute_MMD(fromP:Tensor, fromQ:Tensor, kernel="RBF", **kwargs):
     # term -> which will in turn make them react stronger to it
     # the idea is to keep the natural spread that the latent distribution has
 
-    all_ = torch.vstack([fromP,fromQ])
-    means = all_.mean(dim=0, keepdim=True)
-    stds = all_.std(dim=0, keepdim=True)
-    PN = (fromP - means) / stds
-    QN = (fromQ -means) / stds  #standardise both samples with respect to the input distribution
+    standardise = kwargs.get('standardise',False)
+    if standardise:
+        all_ = torch.vstack([fromP,fromQ])
+        means = all_.mean(dim=0, keepdim=True)
+        stds = all_.std(dim=0, keepdim=True)
+        PN = (fromP - means) / stds
+        QN = (fromQ -means) / stds  #standardise both samples with respect to the input distribution
+    else: PN = fromP; QN = fromQ
 
     device = kwargs.get('device')
     #TODO: insert hierarchy RBF -why though? we would end up giving more slack to some dimensions: is this what we want?

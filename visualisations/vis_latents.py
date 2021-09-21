@@ -4,6 +4,8 @@ from collections import Iterable
 import torch
 from torch import Tensor
 import numpy as np
+from . import utils
+
 from torch.utils.data import DataLoader
 
 from models import GenerativeAE
@@ -98,6 +100,48 @@ def interpolate(model:GenerativeAE, batch_iter:Iterable, device:str, **kwargs):
     out_path = model.decode(codes_path, activate=True).detach()
     return out_path
 
+
+def traversals(model:GenerativeAE, device, inputs=None, **kwargs):
+    """Computes the reconstructions obtained while traversing a single dimension.
+    If inputs is given the codes for the traversals are randomly picked from the latent representation
+    of the inputs.
+    kwargs accepted keywords:
+        - num_samples: number of samples from the latent space to use in the computation
+        - steps: number of steps to take in the traversal
+        - all arguments accepted in 'sample_noise_from_prior'
+
+    Returns 2 lists containing the latents and corresponding responses for each latent unit
+    """
+    print("Computing latent traversals ... ")
+    if not kwargs.get('num_samples'):
+        kwargs['num_samples'] = 50
+    steps = kwargs.get('steps',20)
+    unit_dim = 1
+
+    if inputs is None: codes = model.sample_noise_from_prior(device=device, **kwargs).detach()
+    else: codes = model.encode_mu(inputs[torch.randperm(inputs.shape[0])[:kwargs['num_samples']]].to(device)) #sample randomly
+
+    all_reconstructions = []
+    # sample N vectors from prior
+
+    ranges = model.get_prior_range()
+    # for each latent unit we start traversal
+    # 1. obtain traversals values
+    traversals_steps = utils.get_traversals_steps(steps, ranges, relative=False).to(device).detach() #torch Tensor
+    for d in range(model.latent_size):
+        with torch.no_grad():
+            # 2. do traversals
+            traversal_vecs = utils.do_latent_traversals_multi_vec(codes, unit_dim=unit_dim,
+                                                                  unit=d, values=traversals_steps[d],
+                                                                  device=device, relative=False).detach() # shape steps x N x D
+            traversal_vecs = traversal_vecs.view(-1, model.latent_size) # reshaping to fit into batch
+            # 3. obtain responses
+            recons = model.decode(traversal_vecs.to(device), activate=True).detach() #shape = (SxN) x X_dim
+            all_reconstructions.append(recons)
+
+    print("...done")
+
+    return torch.cat(all_reconstructions, dim=0).to(device)
 
 
 def get_posterior(model:GenerativeAE, batch_iter, device:str, **kwargs):

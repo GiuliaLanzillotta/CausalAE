@@ -272,7 +272,7 @@ class LatentConsistencyEvaluator(object):
         assert self.source is not None, "Initialise the Evaluator first"
 
         prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs).detach()
-        posterior_samples = self.source
+        posterior_samples = self.source.detach()
         responses = self.model.encode(self.model.decode(prior_samples, activate=True))
 
         #observed standard deviation on each latent unit

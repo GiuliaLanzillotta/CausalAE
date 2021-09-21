@@ -1,4 +1,5 @@
 """ Script implementing logic for model visualisations """
+import math
 from typing import List
 
 import matplotlib.pyplot as plt
@@ -30,8 +31,9 @@ class ModelVisualiser(object):
         self.random_state = np.random.RandomState(0)
 
     def plot_originals(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
-        num_plots = grid_size**2
-        test_sample = self.test_input[:num_plots]
+        test_sample = self.test_input
+        num_plots = test_sample.shape[0]
+        grid_size = int(math.sqrt(num_plots))
         grid_originals = torchvision.utils.make_grid(test_sample, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_originals.permute(1, 2, 0).cpu().numpy())
@@ -42,9 +44,10 @@ class ModelVisualiser(object):
     def plot_reconstructions(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         """ plots reconstructions from test set samples"""
         new_batch = kwargs.get("new_batch",False)
-        num_plots = grid_size**2
-        if new_batch: test_sample = next(self.dataloader)[0][:num_plots]
-        else: test_sample = self.test_input[:num_plots]
+        if new_batch: test_sample = next(self.dataloader)[0]
+        else: test_sample = self.test_input
+        num_plots = test_sample.shape[0]
+        grid_size = int(math.sqrt(num_plots))
         with torch.no_grad():
             recons = self.model.reconstruct(test_sample.to(device), activate=True).detach()
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
@@ -557,3 +560,4 @@ class ModelVisualiser(object):
         plt.grid(b=None)
 
         return figure
+

@@ -10,6 +10,7 @@ from torch import Tensor, nn
 
 from metrics import LatentConsistencyEvaluator
 from . import HybridAE, GenerativeAE, utils, XSAE, XAE, VAEBase, XVAE, VAE, Xnet, VecSCM
+from .WAE import XWAE
 from .utils import KL_multiple_univariate_gaussians
 
 
@@ -48,7 +49,7 @@ class CausalNet(GenerativeAE, ABC):
         prior_mode = kwargs.get('prior_mode','posterior')
 
         with torch.no_grad():
-            prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode, device=device)
+            prior_samples = self.sample_noise_from_prior(num_samples, prior_mode=prior_mode, device=device).detach()
             #Note that we're using only the available batch to approximaate the aggregate posterior estimate
             posterior_samples = self.sample_noise_from_posterior(inputs, device=device)
             # note: the output of the 'encode' method could be whatever (e.g. a list, a Tensor)
@@ -66,7 +67,7 @@ class CausalNet(GenerativeAE, ABC):
                                                                                       hard=True,
                                                                                       sampling_fun=hybrid_posterior) # m x n x d
             all_prior_samples.append(prior_samples_prime)
-        all_prior_samples = torch.vstack(all_prior_samples)# (dxnxm) x d
+        all_prior_samples = torch.vstack(all_prior_samples).detach()# (dxnxm) x d
         responses_prime = self.encode(self.decode(all_prior_samples.to(device), activate=True))
         try: responses_expanded = responses.detach().repeat(num_interventions * num_units, 1)
         except AttributeError:
@@ -213,6 +214,20 @@ class XCAE(CausalAE, XAE):
         losses = CausalAE.add_regularisation_terms(self, *args, **kwargs)
         kwargs['losses'] = losses
         losses = XAE.add_regularisation_terms(self, *args, **kwargs)
+        return losses
+
+class XCWAE(CausalAE, XWAE):
+
+    def __init__(self, params: dict) -> None:
+        super(XCWAE, self).__init__(params)
+
+    def decode(self, noise:Tensor, activate:bool):
+        return XWAE.decode(self, noise, activate)
+
+    def add_regularisation_terms(self, *args, **kwargs):
+        losses = CausalAE.add_regularisation_terms(self, *args, **kwargs)
+        kwargs['losses'] = losses
+        losses = XWAE.add_regularisation_terms(self, *args, **kwargs)
         return losses
 
 

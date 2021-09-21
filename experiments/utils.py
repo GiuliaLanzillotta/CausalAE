@@ -28,13 +28,12 @@ def cyclic_beta_schedule(initial_beta, iter_num):
     weight = min(((2*relative_iter)/cycle_len),1.0) #half of the cycle constant at the maximum value
     return initial_beta*weight
 
-def linear_determ_warmup(initial_beta, iter_num):
+def linear_determ_warmup(initial_beta, iter_num, warmup_time=10000):
     """ Implements linear deterministich warm-up for beta to solve KL annealing problem
     - initial_beta: the original value for beta to take
     - iter_num: number of current iteration
     Taken from (Bowman et al.,2015; Sønderby et al., 2016)
     """
-    warmup_time = 10000
     weight = min((iter_num/warmup_time),1.0)
     return weight*initial_beta
 
@@ -59,6 +58,7 @@ class SchedulersManager():
         self.variational = 'VAE' in model_name
         self.explicit = 'X' in model_name
         self.causal = 'C' in model_name
+        self.wae = "W" in model_name
         self.weights = {}
 
         if self.variational:
@@ -73,6 +73,12 @@ class SchedulersManager():
             self.invariance_lamda_init = params['model_params']['invariance_lamda']
             self.weights['invariance_lamda'] = self.invariance_lamda_init
 
+        if self.wae:
+            print("Wasserstein mode ON")
+            self.MMD_lamda_scheduler = scheduler_switch[params['opt_params']['MMD_lamda_schedule']]
+            self.MMD_lamda_init = params['model_params']['MMD_lamda']
+            self.weights['MMD_lamda'] = self.MMD_lamda_init
+
         if self.explicit:
             print("Explicit mode ON")
 
@@ -82,5 +88,7 @@ class SchedulersManager():
             self.weights['KL_weight'] = self.beta_scheduler(self.KL_weight_init, step_num) # decaying the KL term
         if self.causal:
             self.weights['invariance_lamda'] = self.lamda_scheduler(self.invariance_lamda_init, step_num)
+        if self.wae:
+            self.weights['MMD_lamda'] = self.MMD_lamda_scheduler(self.MMD_lamda_init, step_num, warmup_time=50000)
         if self.explicit:
             model.tau = temperature_exponential_annealing(step_num)

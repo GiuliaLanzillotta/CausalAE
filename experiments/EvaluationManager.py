@@ -86,9 +86,14 @@ class ModelHandler(object):
         return ortho_scores
 
     def score_FID(self, **kwargs):
-        """Scoring the model reconstraction quality with FID"""
+        """Scoring the model reconstraction quality with FID
+        kwargs accepted keys:
+        -num_FID_steps
+        -kind: str \in ['reconstruction', 'generation', 'traversals']
+        """
         num_FID_steps = kwargs.get("num_FID_steps",10)
-        generation = kwargs.get('generation',False)
+        kind = kwargs.get('kind','reconstruction')
+
         kwargs = copy.deepcopy(kwargs) # need this to make modifications to the dictionary possible without hurting the rest of the program
 
         if self.fidscorer is None:
@@ -98,9 +103,14 @@ class ModelHandler(object):
             if idx==0:
                 self.fidscorer.start_new_scoring(self.config['data_params']['batch_size']*num_FID_steps, device=self.device)
             inputs, labels = next(iter(self.dataloader.val))
-            if generation:
+            if kind == 'generation':
                 kwargs.pop('num_samples', None)
                 fake_input = self.model.generate(num_samples=inputs.shape[0], activate=True, device=self.device, **kwargs)
+            elif kind == 'traversals':
+                num_samples = inputs.shape[0]//10 + 1
+                fake_input = vis_latents.traversals(self.model, self.device, inputs=inputs, num_samples=num_samples, num_steps=10)
+                assert fake_input.shape[0] >= inputs.shape[0], "Not enough fake inputs collected"
+                fake_input = fake_input[:inputs.shape[0]]
             else: fake_input = self.model.reconstruct(inputs.to(self.device), activate=True)
             try: self.fidscorer.get_activations(inputs.to(self.device), fake_input) #store activations for current batch
             except Exception as e:
@@ -389,8 +399,9 @@ class ModelHandler(object):
             disentanglement_scores = self.score_disentanglement(**kwargs)
             scores.update(disentanglement_scores)
         if FID:
-            scores["FID_rec"] = self.score_FID(generation=False, **kwargs)
-            scores["FID_gen"] = self.score_FID(generation=True, **kwargs)
+            scores["FID_rec"] = self.score_FID(kind="reconstruction", **kwargs)
+            scores["FID_gen"] = self.score_FID(kind="generation", **kwargs)
+            scores["FID_trv"] = self.score_FID(kind="traversals", **kwargs)
         if invariance:
             invariances, _ = self.evaluate_invariance(**kwargs)
             scores["INV"] = torch.sum(invariances*(1-torch.eye(self.model.latent_size, device=self.device))).cpu().numpy() #TODO: correct to take into account ignored dimensions (maybe divide by posterior sd?)
@@ -464,14 +475,14 @@ class VisualModelHandler(ModelHandler):
             try: plots["random_samples"] = self.visualiser.plot_samples_from_prior(device=self.device, **kwargs)
             except ValueError:pass #no prior samples stored yet
         if do_traversals:
-            plots["traversals"] = self.visualiser.plot_latent_traversals(device=self.device, tailored=True, **kwargs)
+            traversals_rec = vis_latents.traversals(self.model, self.device, **kwargs)
+            plots["traversals"] = self.visualiser.plot_grid(traversals_rec, nrow=kwargs.get('steps'), **kwargs)
         if do_originals: # print the originals
             plots["originals"] = self.visualiser.plot_originals()
         if do_hybrisation: # print the originals
             print(f"Plotting hybridisation on the noise variables")
             hybrids, _, _  = vis_latents.hybridiseN(self.model, self.device, **kwargs)
             plots["hybridsN"] = self.visualiser.plot_grid(hybrids, nrow=3, **kwargs)
-
         if do_loss2distortion:
             plots["distortion"] = self.visualiser.plot_loss2distortion(device=self.device, **kwargs)
         if do_marginal:
@@ -500,7 +511,6 @@ class VisualModelHandler(ModelHandler):
                 fig = self.visualiser.plot_traversal_responses(d, all_traversal_latents[d], all_traversals_responses[d],
                                                                traversals_steps=traversals_steps, **kwargs)
                 plots["trvs_responses"].append(fig)
-
 
         if do_latent_block:
             # plotting latent block adjacency matrix
@@ -537,7 +547,6 @@ class VisualModelHandler(ModelHandler):
             plots["hybridsN"] = self.visualiser.plot_grid(hybrids_N, nrow=self.model.latent_size+1, **kwargs)
             plots["hybridsX"] = self.visualiser.plot_grid(hybrids_X, nrow=self.model.latent_size+1, **kwargs)
 
-
         if do_interpolationN:
             print(f"Plotting interpolation between random sample from the posterior on the noises")
             interpolation  = vis_latents.interpolate(self.model, iter(self.dataloader.test), self.device, **kwargs)
@@ -553,7 +562,6 @@ class VisualModelHandler(ModelHandler):
             Xs = vis_xnets.get_posterior(self.model, iter(self.dataloader.test), self.device, **kwargs)
             plots["marginal"] = self.visualiser.plot_marginal(Xs, device=self.device, **kwargs)
 
-
         if do_latent_response_fieldX:
             i = kwargs.pop("i",0)
             j = kwargs.pop("j", 1)
@@ -562,14 +570,15 @@ class VisualModelHandler(ModelHandler):
             plots["latent_response_fieldX"] = self.visualiser.plot_vector_field(response_field, X, Y, i=i, j=j, **kwargs)
 
         if do_N2X:
-            dim = kwargs.pop("dim",0)
-            print(f"Plotting N{dim}-X{dim} joint marginal")
-            NX, hue = vis_xnets.compute_N2X(dim, self.model, self.device, **kwargs)
+            dimN = kwargs.pop("dimN",0)
+            dimX = kwargs.pop("dimX",0)
+            print(f"Plotting N{dimN}-X{dimX} joint marginal")
+            NX, hue = vis_xnets.compute_N2X(dimN, dimX,  self.model, self.device, **kwargs)
             NX = NX.detach().cpu().numpy()  # shape (MxN) x (1 + xunit_dim) - the first is the noise dimension, the others are Xs
             ndims = NX.shape[1] - 1
             for xd in range(ndims):
-                plots["Xij"] = self.visualiser.scatterplot_with_line(NX[:,0], NX[:,xd], hue,
-                                        x_name=f"N{dim}", y_name=f"X{dim}-{xd}", **kwargs)
+                plots["Xij"] = self.visualiser.scatterplot_with_line(NX[:,0], NX[:,1+xd], hue,
+                                        x_name=f"N{dimN}", y_name=f"X{dimX}-{xd}", **kwargs)
 
 
 

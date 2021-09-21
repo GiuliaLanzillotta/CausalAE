@@ -84,7 +84,7 @@ class BaseVisualExperiment(pl.LightningModule):
         # Visualisation
         if self.num_val_steps%self.plot_every==0 or \
                 self.global_step==self.params["trainer_params"]["max_steps"]:
-            self.make_plots(originals=self.global_step==0, hybrids=True, latent_block=True)
+            self.make_plots(originals=self.global_step==0, hybrids=True, latent_block="X" in self.params["model_params"]["name"])
         self.num_val_steps+=1
 
     def test_epoch_end(self, outputs):

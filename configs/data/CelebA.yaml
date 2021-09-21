@@ -1,0 +1,6 @@
+dataset_name: celeba
+num_workers: 4
+add_noise: False
+size: 128
+batch_size: 128
+test_batch_size: 128
