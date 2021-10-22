@@ -1,6 +1,6 @@
 # Study on interventional consistency 
 
-Codebase for the 'Study on Interventional Consistency'. 
+Codebase for the paper 'On interventional Consistency'. 
 
 <div align="center">
 <img src="https://github.com/GiuliaLanzillotta/CausalAE/blob/main/random_samples_XCAExunit_dim4.png" 
