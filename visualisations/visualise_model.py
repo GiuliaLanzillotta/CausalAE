@@ -46,10 +46,9 @@ class ModelVisualiser(object):
         new_batch = kwargs.get("new_batch",False)
         if new_batch: test_sample = next(self.dataloader)[0]
         else: test_sample = self.test_input
-        num_plots = test_sample.shape[0]
-        grid_size = int(math.sqrt(num_plots))
+        num_plots = kwargs.get('num_plots',test_sample.shape[0])
         with torch.no_grad():
-            recons = self.model.reconstruct(test_sample.to(device), activate=True).detach()
+            recons = self.model.reconstruct(test_sample[:num_plots].to(device), activate=True).detach()
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
@@ -59,7 +58,7 @@ class ModelVisualiser(object):
 
     def plot_samples_from_prior(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         """ samples from latent prior and plots reconstructions"""
-        num_pics = grid_size**2 # square grid
+        num_pics = kwargs.get('num_pics',grid_size**2) # square grid
         with torch.no_grad():
             recons = self.model.generate(num_pics, activate=True, device=device).detach()
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
@@ -100,7 +99,7 @@ class ModelVisualiser(object):
         values = utils.get_traversals_steps(steps, ranges).cpu().numpy()
         traversals = utils.do_latent_traversals_multi_dim(self.model, latent_vector, dimensions, values, device=device)
         grid_traversals = torchvision.utils.make_grid(traversals, nrow=steps)
-        figure = plt.figure(figsize=figsize)
+        figure = plt.figure(figsize=(steps, self.model.latent_size))
         plt.imshow(grid_traversals.permute(1, 2, 0).cpu().numpy())
         plt.axis('off')
         plt.grid(b=None)
@@ -469,6 +468,7 @@ class ModelVisualiser(object):
         markersize = kwargs.get("markersize",10)
         x_name = kwargs.get("x_name","First dim")
         y_name = kwargs.get("y_name", "Second dim")
+        legend_on = kwargs.get("legend", True)
         with_line = kwargs.get("with_line", False)
         ylim = kwargs.get("ylim")
         xlim = kwargs.get("xlim")
@@ -480,6 +480,7 @@ class ModelVisualiser(object):
         axi.set_title(f"Scatterplot of {x_name} and {y_name}")
         axi.set_ylabel(f'Latent dim {y_name}')
         axi.set_xlabel(f'Latent dim {x_name}')
+        if not legend_on: axi.legend([],[], frameon=False)
         if ylim is not None: axi.set(ylim=(-ylim, ylim))
         if xlim is not None: axi.set(xlim=(-xlim, xlim))
 
@@ -537,13 +538,14 @@ class ModelVisualiser(object):
         figsize = kwargs.get("figsize",(20,30))
         threshold = kwargs.get("threshold",0.01)
         title = kwargs.get("title")
+        cbar = kwargs.get('cbar',False)
         M_extreme = (matrix.abs() >= threshold)*matrix
 
         fig = plt.figure(figsize=figsize)
         sns.set_context('paper', font_scale=1.5)
         ax = sns.heatmap(M_extreme, linecolor='white', linewidth=2,
                          cmap="Greens", annot=True,  fmt=".2f",
-                         vmin=vmin, vmax=vmax) #Values to anchor the colormap, otherwise they are inferred from the data and other keyword arguments.
+                         vmin=vmin, vmax=vmax, cbar=cbar) #Values to anchor the colormap, otherwise they are inferred from the data and other keyword arguments.
         bottom, top = ax.get_ylim()
         ax.set_ylim(bottom + 0.5, top - 0.5)
         ax.set_title(title)

@@ -9,3 +9,8 @@ model_params:
   num_samples: 3
   num_interventions: 1
   invariance_lamda: 4.0
+  beta: 12.0
+
+
+trainer_params:
+  max_steps: 200000

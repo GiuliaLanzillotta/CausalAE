@@ -1,5 +1,7 @@
 model_params:
-  latent_size: 6
+  latent_size: 8
   enc_depth: 6 #number of convolutional layers in the encoder
   dec_depth: 6
+  MMD_lamda: 10.0
+
 

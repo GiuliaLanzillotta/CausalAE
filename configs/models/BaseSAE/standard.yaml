@@ -9,6 +9,3 @@ model_params:
   unit_dim: 1
   channels: 32
 
-eval_params:
-  name: "scoring"
-  FID: False

@@ -6,15 +6,11 @@ model_params:
   unit_dim: 1
   num_samples: 5
   num_interventions: 1
+  invariance_lamda: 4.0
   loss_type: "MSE"
   channels: 100
+  beta: 250.0
 
 eval_params:
   name: "scoring"
   FID: True
-
-
-trainer_params:
-  accelerator: 'ddp'
-  gpus: 4
-  num_nodes: 4

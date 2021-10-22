@@ -52,7 +52,8 @@ class WAE(ConvAE, nn.Module):
                 idx = torch.randperm(self.hybrid_layer.prior.shape[0], device=device) #shuffling indices
                 return torch.index_select(self.hybrid_layer.prior, 0, idx[:num_samples]).detach()
             if prior_mode=='hybrid': return self.hybrid_layer.sample_from_prior((num_samples,)).to(device)
-            if prior_mode=='self': return self.priorD.sample([num_samples]).to(device)
+            if prior_mode=='self':
+                return self.priorD.sample([num_samples]).to(device)
         raise NotImplementedError('Requested sampling mode not implemented')
 
     def get_prior_range(self):
@@ -65,9 +66,10 @@ class WAE(ConvAE, nn.Module):
         """Computes regularization term to be added to the overall loss of the model.
         Regularization consists in MMD between prior and aggregate posterior"""
         device = kwargs.get('device')
-        Z = args[1] #TODO: change forward to return posterior latents
+        Z = args[1]
         Z_prior = self.sample_noise_from_prior(num_samples=Z.shape[0], prior_mode='self', device=device).detach()
-        reg = utils.compute_MMD(Z, Z_prior, kernel=self.kernel_type, device=device, hierarchy=False, strict=False, standardise=False)
+        reg = utils.compute_MMD(Z, Z_prior, kernel=self.kernel_type, device=device, hierarchy=False,
+                                strict=False, standardise=False)
         return reg.to(device)
 
     def add_regularisation_terms(self, *args, **kwargs):

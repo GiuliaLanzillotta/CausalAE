@@ -26,7 +26,7 @@ def generate_multiple_configs(model_names:List[str], model_versions:List[str], a
         base_path = Path('configs/models')/model_name
         if write_commands:
             base_command = copy.deepcopy(command)
-            base_command = base_command.replace('_model',model_name)
+            base_command = base_command.replace('_name',model_name)
 
         for model_version in model_versions:
             print(f"Generating material for multiple runs on {model_name} {model_version} for {attribute_name}")
@@ -64,12 +64,12 @@ def generate_multiple_configs(model_names:List[str], model_versions:List[str], a
 
 
 if __name__ == '__main__':
-    _model_names = ["XCAE","XCSAE","XCVAE"]
-    _model_versions = ["standardS","standard","xunit_dim4","xunit_dim7"]
+    _model_names = ["AE","XAE","XCAE","BetaVAE","XVAE","XCVAE"]
+    _model_versions = ["v32_big"]
     _attribute_family = "model_params"
     _attribute_name = "random_seed"
     _attribute_values = [13,17,37,121]
-    _command = 'bsub -oo "_model_title_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" ' \
-              'python main.py --name _model --data MNIST --version _version'
+    _command = 'bsub -oo "_name_title_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" ' \
+              '-R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name _name --data CelebA --version _version'
     generate_multiple_configs(_model_names, _model_versions, _attribute_family,
                               _attribute_name, _attribute_values, _command)

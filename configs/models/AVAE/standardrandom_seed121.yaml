@@ -1,0 +1,15 @@
+model_params:
+  beta: 4.0
+  channels: 32
+  dec_depth: 12
+  dittadi: false
+  enc_depth: 12
+  gaussian_init: xavier
+  latent_size: 12
+  name: AVAE
+  num_pools: 3
+  random_seed: 121
+  ro: 0.975
+opt_params:
+  KL_decay: 1.0
+  beta_schedule: linear

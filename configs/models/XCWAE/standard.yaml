@@ -1,5 +1,5 @@
 model_params:
-  name: 'WAE'
+  name: 'XCWAE'
   latent_vecs: 128 # for hybrid sampling
   residual: True
   latent_size: 12

@@ -54,35 +54,39 @@ bsub -oo "VecAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python
 # MNIST EXPERIMENTS -----------------------------------------------
 # standard
 bsub -oo "SAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version standard
+bsub -oo "AE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data MNIST --version standard
+bsub -oo "VAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data MNIST --version standard
+
 bsub -oo "ESAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name ESAE --data MNIST --version standard
 bsub -oo "RSAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data MNIST --version standard
-bsub -oo "VAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data MNIST --version standard
 bsub -oo "RAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data MNIST --version standard
-bsub -oo "AE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data MNIST --version standard
 
 #standard SMALL
 bsub -oo "SAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version standardS
+bsub -oo "VAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data MNIST --version standardS
+bsub -oo "AE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data MNIST --version standardS
+
 bsub -oo "ESAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name ESAE --data MNIST --version standardS
 bsub -oo "RSAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data MNIST --version standardS
-bsub -oo "VAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data MNIST --version standardS
 bsub -oo "RAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data MNIST --version standardS
-bsub -oo "AE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data MNIST --version standardS
 
 # unbalanced
 bsub -oo "SAE_U_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data MNIST --version unbalanced
 
 # 3DS EXPERIMENTS
 bsub -oo "SAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BaseSAE --data 3DS --version v121
-bsub -oo "ESAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name ESAE --data 3DS --version v121
+bsub -oo "AE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data 3DS --version v121
 bsub -oo "VAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name BetaVAE --data 3DS --version v121
+
+bsub -oo "ESAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name ESAE --data 3DS --version v121
 bsub -oo "RSAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RSAE --data 3DS --version v121
 bsub -oo "RAE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name RAE --data 3DS --version v121
-bsub -oo "AE_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name AE --data 3DS --version v121
 
 
 
 # CAUSAL EXPERIMENTS -----------------------------------------------
 # standard
+
 bsub -oo "XAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XAE --data MNIST --version standard
 bsub -oo "XSAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XSAE --data MNIST --version standard
 bsub -oo "XVAE_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XVAE --data MNIST --version standard
@@ -103,13 +107,25 @@ bsub -oo "XCVAE_S_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" pyth
 
 
 # 3DS
-bsub -oo "XAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XAE --data 3DS --version v121
-bsub -oo "XSAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XSAE --data 3DS --version v121
-bsub -oo "XVAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XVAE --data 3DS --version v121
+bsub -oo "AE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name AE --data 3DS --version v121
+bsub -oo "SAE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name BaseSAE --data 3DS --version v121
+bsub -oo "VAE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name BetaVAE --data 3DS --version v121
 
-bsub -oo "XCAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XCAE --data 3DS --version v121
-bsub -oo "XCSAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XCSAE --data 3DS --version v121
-bsub -oo "XCVAE_v121_3DS.txt" -W 4:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python main.py --name XCVAE --data 3DS --version v121
+bsub -oo "XAE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XAE --data 3DS --version v121
+bsub -oo "XSAE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XSAE --data 3DS --version v121
+bsub -oo "XVAE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XVAE --data 3DS --version v121
+
+bsub -oo "XCAE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data 3DS --version v121
+bsub -oo "XCSAE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCSAE --data 3DS --version v121
+bsub -oo "XCVAE_v121_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCVAE --data 3DS --version v121
+
+bsub -oo "XCAE_v1214_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data 3DS --version v1214
+bsub -oo "XCSAE_v1214_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCSAE --data 3DS --version v1214
+bsub -oo "XCVAE_v1214_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCVAE --data 3DS --version v1214
+
+bsub -oo "XCAE_v121E_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data 3DS --version v121E
+bsub -oo "XCSAE_v121E_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCSAE --data 3DS --version v121E
+bsub -oo "XCVAE_v121E_3DS.txt" -W 24:00 -R "rusage[mem=30000,ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCVAE --data 3DS --version v121E
 
 # uniform
 bsub -oo "XAE_U_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" python main.py --name XAE --data MNIST --version uniform
@@ -148,5 +164,7 @@ bsub -oo "XCVAE_ES_MNIST.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  py
 bsub -oo "SCORING.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==TeslaV100_SXM2_32GB]" python scoring.py
 
 
+# CelebA evalaution -------------------
+bsub -oo "CelebAeval2.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  -R "select[gpu_model0==A100_PCIE_40GB]" python CelebA_evaluation.py
 
 

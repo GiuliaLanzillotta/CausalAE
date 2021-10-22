@@ -1,0 +1,17 @@
+eval_params:
+  name: scoring
+model_params:
+  beta: 4.0
+  channels: 32
+  dec_depth: 12
+  dittadi: false
+  enc_depth: 12
+  gaussian_init: xavier
+  latent_size: 12
+  name: BetaVAE
+  num_pools: 3
+  random_seed: 121
+  residual: true
+opt_params:
+  KL_decay: 1.0
+  beta_schedule: linear

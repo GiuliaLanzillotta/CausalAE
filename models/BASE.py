@@ -54,6 +54,10 @@ class GenerativeAE(ABC):
         """ generates output from input"""
         raise NotImplementedError
 
+    def get_representation(self, inputs:Tensor, **kwargs):
+        """ returns a representation vector for the given inputs"""
+        return self.encode_mu(inputs, **kwargs)
+
     @abstractmethod
     def get_prior_range(self):
         """ returns a range in format [(min, max)] for every dimension that should contain
@@ -221,3 +225,10 @@ class Xnet(GenerativeAE, ABC):
             losses['sparsity_penalty'] = sparsity_penalty
             losses['loss'] += lamda*sparsity_penalty
         return losses
+
+    def get_representation(self, inputs:Tensor, **kwargs):
+        """ returns a representation vector for the given inputs"""
+        causal = kwargs.get('causal', False)
+        codes = self.encode_mu(inputs, **kwargs)
+        if causal: return self.get_causal_variables(codes, **kwargs)
+        return codes

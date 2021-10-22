@@ -1,0 +1,16 @@
+eval_params:
+  FID: false
+  latent_responses: true
+  name: scoring
+model_params:
+  channels: 32
+  dec_depth: 6
+  enc_depth: 6
+  latent_size: 6
+  latent_vecs: 128
+  loss_type: MSE
+  name: AE
+  num_pools: 3
+  random_seed: 13
+  residual: true
+  unit_dim: 1

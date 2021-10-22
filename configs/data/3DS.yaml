@@ -1,3 +1,6 @@
 dataset_name: 3DShapes
 num_workers: 2
 add_noise: False
+out_dim: 40
+multi_class: True
+size: 64

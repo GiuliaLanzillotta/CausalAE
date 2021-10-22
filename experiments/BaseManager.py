@@ -93,13 +93,18 @@ class BaseVisualExperiment(pl.LightningModule):
     def configure_optimizers(self):
         opt_params = self.params["opt_params"]
         optimizer = optim.Adam(self.model.parameters(),
+                               betas=opt_params['betas'],
                                lr=opt_params['LR'],
                                weight_decay=opt_params['weight_decay'])
-        """
-        if opt_params['scheduler_gamma'] is not None:
-            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma = opt_params['scheduler_gamma'])
-            return optimizer
-        """
+
+        if opt_params['scheduler_type'] != 'null':
+            if opt_params['scheduler_type'] == 'exp':
+                scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma = opt_params['scheduler_gamma'])
+            elif opt_params['scheduler_type'] == 'step':
+                scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opt_params["schedulers_step"],
+                                                          gamma=opt_params['scheduler_gamma'])
+            else: raise NotImplementedError(f"No support for requested scheduler {opt_params['scheduler_type']}")
+
         return optimizer
 
     def train_dataloader(self):

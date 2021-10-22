@@ -1,0 +1,20 @@
+eval_params:
+  FID: false
+  latent_responses: true
+  name: scoring
+model_params:
+  beta: 4.0
+  channels: 32
+  dec_depth: 6
+  dittadi: false
+  enc_depth: 6
+  gaussian_init: xavier
+  latent_size: 6
+  loss_type: MSE
+  name: BetaVAE
+  num_pools: 3
+  random_seed: 17
+  residual: true
+opt_params:
+  KL_decay: 1.0
+  beta_schedule: cyclic

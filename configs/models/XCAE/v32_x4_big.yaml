@@ -9,7 +9,8 @@ model_params:
   num_samples: 3
   num_interventions: 1
   invariance_lamda: 4.0
+  xunit_dim: 4
 
-eval_params:
-  name: "scoring"
-  FID: True
+
+trainer_params:
+  max_steps: 200000

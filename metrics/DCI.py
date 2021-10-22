@@ -139,19 +139,19 @@ def compute_importance_gbt(x_train, y_train, x_test, y_test):
     num_factors = y_train.shape[0]
     num_codes = x_train.shape[0]
     importance_matrix = np.zeros(shape=[num_codes, num_factors], dtype=np.float64) # a row for each latent dim, column for each factor
-    train_loss = []
-    test_loss = []
+    train_accuracy = []
+    test_accuracy = []
     for i in range(num_factors):
         model = GradientBoostingClassifier()
         # x_train.T is (num_samples, sample_dim)
         model.fit(x_train.T, y_train[i, :]) # predicting i-th factor across all samples
         importance_matrix[:, i] = np.abs(model.feature_importances_) # why abs?
         # measuring average accuracy on train and test set
-        train_loss.append(np.mean(model.predict(x_train.T) == y_train[i, :]))
-        test_loss.append(np.mean(model.predict(x_test.T) == y_test[i, :]))
-    train_loss = np.asarray(train_loss)  # per factor
-    test_loss = np.asarray(test_loss)  # per factor
-    return importance_matrix, train_loss, test_loss
+        train_accuracy.append(np.mean(model.predict(x_train.T) == y_train[i, :]))
+        test_accuracy.append(np.mean(model.predict(x_test.T) == y_test[i, :]))
+    train_accuracy = np.asarray(train_accuracy)  # per factor
+    test_accuracy = np.asarray(test_accuracy)  # per factor
+    return importance_matrix, train_accuracy, test_accuracy
 
 
 def disentanglement_per_code(importance_matrix):

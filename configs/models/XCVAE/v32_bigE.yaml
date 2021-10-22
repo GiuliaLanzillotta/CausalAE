@@ -8,5 +8,9 @@ model_params:
   channels: 100
   num_samples: 3
   num_interventions: 1
-  invariance_lamda: 8.0
+  invariance_lamda: 4.0
   equivariance: True
+
+
+trainer_params:
+  max_steps: 200000

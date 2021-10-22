@@ -10,6 +10,7 @@ model_params:
   invariance_lamda: 4.0
   loss_type: "MSE"
   channels: 100
+  xunit_dim: 4
 
 eval_params:
   name: "scoring"

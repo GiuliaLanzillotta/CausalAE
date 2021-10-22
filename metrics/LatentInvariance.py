@@ -185,8 +185,6 @@ class LatentConsistencyEvaluator(object):
         """Takes samples from the prior and second aggregate posterior
         distributions and returns the standard deviation measured per latent unit."""
 
-        if self.variational: # encode returns a list of parameters
-            responses=responses[1]
         # shape = 2 x num_units x 1
         std_dev = torch.vstack([torch.std(prior_samples.view(-1, num_units, unit_dim), dim=[0,2]),
                                 torch.std(responses.view(-1, num_units, unit_dim), dim=[0,2])]).detach()
@@ -230,11 +228,14 @@ class LatentConsistencyEvaluator(object):
 
         prior_samples = self.model.sample_noise_from_prior(num_samples, **kwargs)
         responses = self.model.encode_mu(self.model.decode(prior_samples, activate=True)).detach()
+        responses_X = self.model.get_causal_variables(responses).view(-1, self.model.latent_size, self.model.xunit_dim)
+        std_dev = torch.std(responses_X, dim=[0,2]).to(device)
         # same intervention must be applied to prior distribution and response posterior
         all_samples = torch.vstack([prior_samples, responses]) # shape = (m x 2, d)
 
         posterior_samples = self.source
         hybrid_posterior = self.posterior_distribution(posterior_samples, self.random_state, unit, 1)
+
 
         errors = torch.zeros(self.model.latent_size, dtype=torch.float, device=device) #TODO: check the sizes here when increasing number of causal units
 
@@ -251,9 +252,10 @@ class LatentConsistencyEvaluator(object):
             intervention_magnitude = torch.linalg.norm((prior_samples_prime-prior_samples), ord=2, dim=1).mean() # mean over samples of the delta
             errors += (error/(intervention_magnitude + 10e-5)) # D x 1
 
+
         #TODO: take the meadian instead of mean when averaging over interventions
         # OR store the worst intervention and return it
-        return errors/num_interventions # average error over interventions
+        return errors/num_interventions, std_dev # average error over interventions
 
 
     def noise_invariance(self, unit:int, unit_dim:int, num_units:int, num_samples:int, **kwargs):
@@ -276,7 +278,8 @@ class LatentConsistencyEvaluator(object):
         responses = self.model.encode(self.model.decode(prior_samples, activate=True))
 
         #observed standard deviation on each latent unit
-        std_dev = self.compute_std_dev(prior_samples, responses, num_units, unit_dim)
+        response_samples = responses[1] if self.variational else responses
+        std_dev = self.compute_std_dev(prior_samples, response_samples, num_units, unit_dim)
 
         errors = torch.zeros(num_units, dtype=torch.float, device=device)
         hybrid_posterior = self.posterior_distribution(posterior_samples, self.random_state, unit, unit_dim)

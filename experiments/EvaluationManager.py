@@ -1,8 +1,12 @@
 """Script managing evaluation and exploration of models"""
 import pickle
 
+import numpy as np
 import pandas as pd
 import torch
+from torch import optim, nn
+from torch.optim import lr_scheduler
+
 from experiments import pick_model_manager, get_causal_block_graph
 from pathlib import Path
 from configs import get_config
@@ -11,14 +15,15 @@ import os
 import glob
 import time
 import copy
+import math
+
+
 
 from experiments.utils import temperature_exponential_annealing
 from visualisations import ModelVisualiser, SynthVecDataVisualiser, vis_responses, vis_xnets, vis_latents
-from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentConsistencyEvaluator
+from metrics import FIDScorer, ModelDisentanglementEvaluator, LatentOrthogonalityEvaluator, LatentConsistencyEvaluator, inference
 import pytorch_lightning as pl
 from metrics.responses import compute_response_matrix
-
-
 
 """ Evaluation toolbox for GenerativeAE models"""
 
@@ -38,6 +43,7 @@ class ModelHandler(object):
         self._orthogonalityScorer = None
         self._disentanglementScorer = None
         self._consistencyScorer = None
+        self._inet = None
         self.device = next(self.model.parameters()).device
         self.send_model_to(self.device)
         # update Xnet tau
@@ -93,6 +99,10 @@ class ModelHandler(object):
         """
         num_FID_steps = kwargs.get("num_FID_steps",10)
         kind = kwargs.get('kind','reconstruction')
+        # adjusting FID steps based on inpput size
+        factor = math.ceil(self.config['data_params']['size']/32)
+        num_FID_steps = math.ceil(num_FID_steps/factor)
+        print(f"FID scoring set with {num_FID_steps} steps")
 
         kwargs = copy.deepcopy(kwargs) # need this to make modifications to the dictionary possible without hurting the rest of the program
 
@@ -105,17 +115,21 @@ class ModelHandler(object):
             inputs, labels = next(iter(self.dataloader.val))
             if kind == 'generation':
                 kwargs.pop('num_samples', None)
-                fake_input = self.model.generate(num_samples=inputs.shape[0], activate=True, device=self.device, **kwargs)
+                with torch.no_grad():
+                    fake_input = self.model.generate(num_samples=inputs.shape[0], activate=True, device=self.device, **kwargs)
             elif kind == 'traversals':
                 num_samples = inputs.shape[0]//10 + 1
-                fake_input = vis_latents.traversals(self.model, self.device, inputs=inputs, num_samples=num_samples, num_steps=10)
+                with torch.no_grad():
+                    fake_input = vis_latents.traversals(self.model, self.device, inputs=inputs, num_samples=num_samples, num_steps=10)
+                    fake_input = torch.cat(fake_input, dim=0).to(self.device)
                 assert fake_input.shape[0] >= inputs.shape[0], "Not enough fake inputs collected"
                 fake_input = fake_input[:inputs.shape[0]]
-            else: fake_input = self.model.reconstruct(inputs.to(self.device), activate=True)
+            else:
+                with torch.no_grad():
+                    fake_input = self.model.reconstruct(inputs.to(self.device), activate=True)
             try: self.fidscorer.get_activations(inputs.to(self.device), fake_input) #store activations for current batch
-            except Exception as e:
-                print("Reached the end of FID scorer buffer")
-                raise(e)
+            except RuntimeError as e:
+                raise e
 
         FID_score = self.fidscorer.calculate_fid()
 
@@ -245,6 +259,7 @@ class ModelHandler(object):
         hard = kwargs.get("hard_intervention", False)
         store_it = kwargs.get("store",False)
         load_it = kwargs.get("load", False)
+        normalise = kwargs.get('normalise',False)
         print(f"Scoring model's response map equivariance to {intervt_type} interventions.")
 
         if load_it:
@@ -266,9 +281,10 @@ class ModelHandler(object):
             print(f"Intervening on {u} ...")
             with torch.no_grad():
                 # interventions on unit u
-                errors = self._consistencyScorer.noise_equivariance(unit=u, xunit_dim=U, device=self.device, **kwargs)
+                errors, std_dev = self._consistencyScorer.noise_equivariance(unit=u, xunit_dim=U, device=self.device, **kwargs)
                 equivariances[u,:] = errors
 
+        if normalise: equivariances /= std_dev
         equivariances = 1.0 - equivariances
 
         if store_it:
@@ -279,7 +295,7 @@ class ModelHandler(object):
             with open(path/ ("equivariance"+".pkl"), 'wb') as o:
                 pickle.dump(equivariances, o)
 
-        return equivariances
+        return equivariances, std_dev
 
     def latent_responses(self, **kwargs):
         """Computes latent response matrix for the given model plus handles storage
@@ -320,6 +336,20 @@ class ModelHandler(object):
         if device=="cpu": self.model.cpu()
         else: self.model.cuda()
 
+    def evaluate_inference(self, **kwargs):
+        """ Evaluates trained representation on inference task using gradient boosting"""
+        causal = kwargs.get('causal',False)
+        def representation(inputs): # representation function to be used
+            return self.model.get_representation(inputs, causal=causal).detach().clone()
+        importance_matrix, train_acc, test_acc = inference.do_inference(self.dataloader.train,
+                                                                        self.dataloader.test,
+                                                                        representation,
+                                                                        self.device,
+                                                                        num_train=kwargs.get('num_train',20000),
+                                                                        num_test=kwargs.get('num_test',10000),
+                                                                        batch_size=self.config['data_params']['batch_size'])
+        return importance_matrix, train_acc, test_acc
+
     def load_batch(self, train=True, valid=False, test=False):
         if train: loader = self.dataloader.train
         elif valid: loader = self.dataloader.val
@@ -328,11 +358,15 @@ class ModelHandler(object):
         new_batch = next(iter(loader))
         return new_batch
 
-    def list_available_checkpoints(self):
+    @property
+    def root(self):
         base_path = Path(self.config['logging_params']['save_dir']) / \
                     self.config['logging_params']['name'] / \
                     self.config['logging_params']['version']
-        checkpoint_path =  base_path / "checkpoints/"
+        return base_path
+
+    def list_available_checkpoints(self):
+        checkpoint_path =  self.root / "checkpoints/"
         checkpoints = glob.glob(str(checkpoint_path) + "/*ckpt")
         print("Available checkpoints at "+ str(checkpoint_path)+" :")
         print(checkpoints)
@@ -346,11 +380,8 @@ class ModelHandler(object):
 
     def load_checkpoint(self, name=None):
         #TODO: together with checkpoint load some training status file, old results etc
-        base_path = Path(self.config['logging_params']['save_dir']) / \
-                    self.config['logging_params']['name'] / \
-                    self.config['logging_params']['version']
-        checkpoint_path =  base_path / "checkpoints/"
-        hparams_path = str(base_path)+"/hparams.yaml"
+        checkpoint_path =  self.root / "checkpoints/"
+        hparams_path = str(self.root)+"/hparams.yaml"
         actual_checkpoint_path = ""
 
         try:
@@ -374,11 +405,13 @@ class ModelHandler(object):
             print(f"No checkpoint available at "+str(checkpoint_path)+". Cannot load trained weights.")
 
     def score_model(self, FID=True, disentanglement=True, orthogonality=True, invariance=True,
-                    save_scores=True, update_general_scores=True, equivariance=True, self_consistency=True, **kwargs):
+                    save_scores=True, update_general_scores=True, equivariance=True,
+                    self_consistency=True, inference=True, sparsity=True, **kwargs):
         """Scores the model on the test set in loss and other terms selected
         #TODO: add here the saving of the scores to the 'scores.csv' file that has the scores of all the models"""
         self.device = next(self.model.parameters()).device
         self.send_model_to(self.device)
+
 
 
         if update_general_scores:
@@ -402,15 +435,48 @@ class ModelHandler(object):
             scores["FID_rec"] = self.score_FID(kind="reconstruction", **kwargs)
             scores["FID_gen"] = self.score_FID(kind="generation", **kwargs)
             scores["FID_trv"] = self.score_FID(kind="traversals", **kwargs)
+
         if invariance:
-            invariances, _ = self.evaluate_invariance(**kwargs)
-            scores["INV"] = torch.sum(invariances*(1-torch.eye(self.model.latent_size, device=self.device))).cpu().numpy() #TODO: correct to take into account ignored dimensions (maybe divide by posterior sd?)
-        if equivariance:
-            equivariances = self.evaluate_equivariance(**kwargs)
-            scores["EQV"] = torch.sum(equivariances).cpu().numpy()
+            invariances, std_devs = self.evaluate_invariance(**kwargs)
+            weighted = kwargs.get('weighted',True) # wheter to use weights depending on the standard deviations in the sum
+            W = 1-torch.eye(self.model.latent_size, device=self.device); Z = W.sum()
+            scores["INV"] = (torch.sum(invariances*W)/Z).cpu().numpy()
+            if weighted:
+                W = W*(std_devs[1,:].view(-1,1))
+                Z = W.sum().cpu().numpy()
+                scores["INV_w"] = torch.sum(invariances*W).cpu().numpy()/Z
+
+        if equivariance and 'X' in self.model_name:
+            weighted = kwargs.get('weighted',True) # wheter to use weights depending on the standard deviations in the sum
+            equivariances, std_devs = self.evaluate_equivariance(**kwargs)
+            W = torch.ones(self.model.latent_size, self.model.latent_size, device=self.device); Z = W.sum()
+            scores["EQV"] = (torch.sum(equivariances*W)/Z).cpu().numpy()
+            if weighted:
+                W = W*(std_devs.view(-1,1))
+                Z = W.sum().cpu().numpy()
+                scores["EQV_w"] = torch.sum(equivariances*W).cpu().numpy()/Z
+
+        if sparsity and 'X' in self.model_name:
+            # plotting latent block adjacency matrix
+            A = get_causal_block_graph(self.model, self.model_name, self.device, tau=100000)
+            scores['sparsity'] = (A.sum()/(self.model.latent_size**2)).cpu().numpy()
+
         if self_consistency:
-            consistencies, _ = self.evaluate_self_consistency(**kwargs)
-            scores["SCN"] = torch.sum(consistencies).cpu().numpy()
+            weighted = kwargs.get('weighted',True) # wheter to use weights depending on the standard deviations in the sum
+            consistencies, std_devs = self.evaluate_self_consistency(**kwargs)
+            W = torch.ones(self.model.latent_size, device=self.device); Z = W.sum()
+            scores["SCN"] = (torch.sum(consistencies*W)/Z).cpu().numpy()
+            if weighted:
+                W = W*(std_devs[1,:].view(-1,1))
+                Z = W.sum().cpu().numpy()
+                scores["SCN_w"] = torch.sum(consistencies*W).cpu().numpy()/Z
+
+        if inference:
+            _, _, inference = self.evaluate_inference(**kwargs)
+            scores["inference"] = np.mean(inference)
+            if 'X' in self.model_name:
+                _, _, inferenceX = self.evaluate_inference(causal=True, **kwargs)
+                scores["inferenceX"] = np.mean(inferenceX)
         end = time.time()
 
         print("Time elapsed for scoring {:.0f}".format(end-start))
@@ -464,7 +530,8 @@ class VisualModelHandler(ModelHandler):
                    do_latent_response_field=False, do_equivariance=False,
                    do_jointXmarginals=False, do_hybridsX=False, do_unitMarginal=False,
                    do_marginalX=False, do_latent_response_fieldX=False, do_N2X=False,
-                   do_double_hybridsXN=False, do_interpolationN=False, **kwargs):
+                   do_double_hybridsXN=False, do_interpolationN=False,
+                   do_inference=False, do_multiple_traversals=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -476,7 +543,8 @@ class VisualModelHandler(ModelHandler):
             except ValueError:pass #no prior samples stored yet
         if do_traversals:
             traversals_rec = vis_latents.traversals(self.model, self.device, **kwargs)
-            plots["traversals"] = self.visualiser.plot_grid(traversals_rec, nrow=kwargs.get('steps'), **kwargs)
+            plots["traversals"] = self.visualiser.plot_grid(torch.cat(traversals_rec, dim=0).to(self.device),
+                                                            nrow=kwargs.get('steps'), **kwargs)
         if do_originals: # print the originals
             plots["originals"] = self.visualiser.plot_originals()
         if do_hybrisation: # print the originals
@@ -498,10 +566,9 @@ class VisualModelHandler(ModelHandler):
                                                              title="Standard Deviation of marginals (original and responses)",
                                                              threshold=0., **kwargs)
         if do_equivariance:
-            equivariances = self.evaluate_equivariance(**kwargs)
+            equivariances, _ = self.evaluate_equivariance(**kwargs)
             plots["equivariances"] = self.visualiser.plot_heatmap(equivariances.cpu().numpy(), title="Equivariances",
                                                                   threshold=0., **kwargs)
-
         if do_traversal_responses:
             all_traversal_latents, all_traversals_responses, traversals_steps = \
                 vis_responses.traversal_responses(self.model, self.device, **kwargs)
@@ -511,6 +578,14 @@ class VisualModelHandler(ModelHandler):
                 fig = self.visualiser.plot_traversal_responses(d, all_traversal_latents[d], all_traversals_responses[d],
                                                                traversals_steps=traversals_steps, **kwargs)
                 plots["trvs_responses"].append(fig)
+        if do_multiple_traversals:
+            # list of reconstructions for each dimension
+            all_traversals_recs = vis_latents.traversals(self.model, self.device, **kwargs)
+            plots["multi_traversals"] = []
+            D = self.model.latent_size
+            for d in range(D):
+                fig = self.visualiser.plot_grid(all_traversals_recs[d], nrow=kwargs.get('steps'), **kwargs)
+                plots["multi_traversals"].append(fig)
 
         if do_latent_block:
             # plotting latent block adjacency matrix
@@ -518,14 +593,12 @@ class VisualModelHandler(ModelHandler):
             plots['causal_block_graph'] = self.visualiser.plot_heatmap(A.cpu().numpy(),
                                                                        title="Causal block adjacency matrix",
                                                                        threshold=10e-1, **kwargs)
-
         if do_latent_response_field:
             i = kwargs.pop("i",0)
             j = kwargs.pop("j", 1)
             response_field, hybrid_grid = vis_responses.response_field(i, j, self.model, self.device, **kwargs)
             X, Y = hybrid_grid
             plots["latent_response_field"] = self.visualiser.plot_vector_field(response_field, X, Y, i=i, j=j, **kwargs)
-
         if do_jointXmarginals:
             i = kwargs.pop("i",0)
             j = kwargs.pop("j", 1)
@@ -534,41 +607,34 @@ class VisualModelHandler(ModelHandler):
             Xij = Xij.detach().cpu().numpy()
             plots["Xij"] = self.visualiser.scatterplot_with_line(Xij[:,0], Xij[:,1], hue,
                                                                  x_name=f"X{j}", y_name=f"X{i}", **kwargs)
-
         if do_hybridsX:
             print(f"Plotting hybridisation on the causal variables")
             hybrids, _, _  = vis_xnets.hybridiseX(self.model, self.device, **kwargs)
             plots["hybridsX"] = self.visualiser.plot_grid(hybrids, nrow=3, **kwargs)
-
         if do_double_hybridsXN:
             print(f"Plotting double hybridisation on the noise and causal variables")
             hybrids_N, _samples  = vis_latents.double_hybridiseN(self.model, self.device, **kwargs)
             hybrids_X  = vis_xnets.double_hybridiseX(self.model, self.device, prior_samples=_samples, **kwargs)
             plots["hybridsN"] = self.visualiser.plot_grid(hybrids_N, nrow=self.model.latent_size+1, **kwargs)
             plots["hybridsX"] = self.visualiser.plot_grid(hybrids_X, nrow=self.model.latent_size+1, **kwargs)
-
         if do_interpolationN:
             print(f"Plotting interpolation between random sample from the posterior on the noises")
             interpolation  = vis_latents.interpolate(self.model, iter(self.dataloader.test), self.device, **kwargs)
             plots["interpolationN"] = self.visualiser.plot_grid(interpolation, nrow=interpolation.shape[0], **kwargs)
-
         if do_unitMarginal:
             u = kwargs.get("unit",0)
             print(f"Plotting marginal of multidim unit {u}")
             samples_ux2D = vis_xnets.multidimUnitMarginal(self.model, device=self.device, **kwargs)
             plots[f"unit{u}"] = self.visualiser.kdeplot(samples_ux2D[:,0], samples_ux2D[:,1], **kwargs)
-
         if do_marginalX: # note: only works for unidimensional Xnets
             Xs = vis_xnets.get_posterior(self.model, iter(self.dataloader.test), self.device, **kwargs)
             plots["marginal"] = self.visualiser.plot_marginal(Xs, device=self.device, **kwargs)
-
         if do_latent_response_fieldX:
             i = kwargs.pop("i",0)
             j = kwargs.pop("j", 1)
             response_field, hybrid_grid = vis_responses.response_fieldX(i, j, self.model, self.device, **kwargs)
             X, Y = hybrid_grid
             plots["latent_response_fieldX"] = self.visualiser.plot_vector_field(response_field, X, Y, i=i, j=j, **kwargs)
-
         if do_N2X:
             dimN = kwargs.pop("dimN",0)
             dimX = kwargs.pop("dimX",0)
@@ -576,12 +642,16 @@ class VisualModelHandler(ModelHandler):
             NX, hue = vis_xnets.compute_N2X(dimN, dimX,  self.model, self.device, **kwargs)
             NX = NX.detach().cpu().numpy()  # shape (MxN) x (1 + xunit_dim) - the first is the noise dimension, the others are Xs
             ndims = NX.shape[1] - 1
+            res = []
             for xd in range(ndims):
-                plots["Xij"] = self.visualiser.scatterplot_with_line(NX[:,0], NX[:,1+xd], hue,
-                                        x_name=f"N{dimN}", y_name=f"X{dimX}-{xd}", **kwargs)
+                res.append(self.visualiser.scatterplot_with_line(NX[:,0], NX[:,1+xd], hue,
+                                        x_name=f"N{dimN}", y_name=f"X{dimX}-{xd}", legend=False, **kwargs))
+            plots["Xij"] = res
 
-
-
+        if do_inference:
+            importance_matrix, train_acc, test_acc = self.evaluate_inference(**kwargs)
+            plots["inference_imp"] = self.visualiser.plot_heatmap(torch.Tensor(importance_matrix), title="Importance matrix for inference", threshold=0., **kwargs)
+            plots["inference_acc"] = self.visualiser.plot_heatmap(torch.Tensor(test_acc), title="Average accuracies for inference", threshold=0., **kwargs)
         return plots
 
 

@@ -1,0 +1,15 @@
+model_params:
+  beta: 12.0
+  channels: 100
+  dec_depth: 16
+  enc_depth: 16
+  invariance_lamda: 4.0
+  latent_size: 32
+  loss_type: MSE
+  num_interventions: 1
+  num_pools: 7
+  num_samples: 3
+  random_seed: 13
+  unit_dim: 1
+trainer_params:
+  max_steps: 200000

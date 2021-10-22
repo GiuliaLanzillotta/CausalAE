@@ -7,6 +7,7 @@ model_params:
   unit_dim: 1
   num_samples: 5
   num_interventions: 1
+  invariance_lamda: 4.0
   loss_type: "MSE"
   channels: 100
 

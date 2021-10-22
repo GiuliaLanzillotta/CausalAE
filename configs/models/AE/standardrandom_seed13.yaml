@@ -1,0 +1,14 @@
+eval_params:
+  FID: false
+  name: scoring
+model_params:
+  channels: 32
+  dec_depth: 12
+  enc_depth: 12
+  latent_size: 12
+  latent_vecs: 128
+  name: AE
+  num_pools: 3
+  random_seed: 13
+  residual: true
+  unit_dim: 1

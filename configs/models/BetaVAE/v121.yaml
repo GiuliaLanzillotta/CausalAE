@@ -6,6 +6,7 @@ model_params:
   unit_dim: 1
   loss_type: "MSE"
   channels: 64
+  beta: 4.0
 
 eval_params:
   name: "scoring"

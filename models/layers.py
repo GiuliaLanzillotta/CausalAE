@@ -343,7 +343,7 @@ class GaussianLayer(nn.Module):
     @staticmethod
     def sample_parametric(num_samples:int, mus, logvars, device:str):
         """Sampling noise from a parametrised Orthogonal Gaussian"""
-        samples = [torch.normal(mus, logvars, device=device) for i in range(num_samples)]
+        samples = [torch.normal(mus, torch.exp(logvars), device=device) for i in range(num_samples)]
         return torch.stack(samples)
 
     def init_weights(self, init_type="xavier"):

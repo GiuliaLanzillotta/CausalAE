@@ -4,3 +4,6 @@ model_params:
   num_samples: 5
   num_interventions: 10
   xunit_dim: 4
+  beta: 4.0
+  loss_type: "MSE"
+  do_KL: False

@@ -4,3 +4,4 @@ model_params:
   dec_depth: 16
   num_pools: 7
   channels: 100
+  invariance_lamda: 4.0

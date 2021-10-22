@@ -1,4 +1,5 @@
 """Utilities for visualisation of latent space"""
+import copy
 from collections import Iterable
 
 import torch
@@ -19,14 +20,16 @@ def hybridiseN(model:GenerativeAE, device:str, base:Tensor=None, other:Tensor=No
         """
     single_sample = kwargs.get('single_sample',True)
     unit_dim = model.unit_dim
+    kwargs=copy.deepcopy(kwargs)
+    kwargs.pop('num_samples',1)
     complete_set = [] # here we store all the X samples to plot
-    if base is None: base = model.sample_noise_from_prior(1, device=device, **kwargs).detach()
+    if base is None: base = model.sample_noise_from_prior(num_samples=1, device=device, **kwargs).detach()
     if single_sample and other is None:
-        other =  model.sample_noise_from_prior(1, device=device, **kwargs).detach()
+        other =  model.sample_noise_from_prior(num_samples=1, device=device, **kwargs).detach()
     # new hybrid on each latent diension
     for d in range(model.latent_size):
         if not single_sample and other is None:
-            other =  model.sample_noise_from_prior(1, device=device, **kwargs).detach()
+            other =  model.sample_noise_from_prior(num_samples=1, device=device, **kwargs).detach()
         value = other[0,d*unit_dim:(d+1)*unit_dim].view(1,-1)
         intervened_sample = base.clone()
         intervened_sample[0,d*unit_dim:(d+1)*unit_dim] = value
@@ -141,7 +144,7 @@ def traversals(model:GenerativeAE, device, inputs=None, **kwargs):
 
     print("...done")
 
-    return torch.cat(all_reconstructions, dim=0).to(device)
+    return all_reconstructions
 
 
 def get_posterior(model:GenerativeAE, batch_iter, device:str, **kwargs):

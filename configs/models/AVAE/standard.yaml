@@ -1,6 +1,5 @@
 model_params:
-  name: 'BetaVAE'
-  residual: True
+  name: 'AVAE'
   latent_size: 12
   enc_depth: 12 #number of convolutional layers in the encoder
   dec_depth: 12
@@ -9,12 +8,9 @@ model_params:
   dittadi: False
   gaussian_init: 'xavier' #other option: 'normal'
   beta: 4.0
-
+  ro: 0.975
 
 
 opt_params:
   KL_decay: 1.0
   beta_schedule: 'linear'
-
-eval_params:
-  name: "scoring"

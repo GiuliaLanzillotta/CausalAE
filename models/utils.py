@@ -92,27 +92,39 @@ def IMQ_kernel(X:Tensor, Y:Tensor, device:str):
     """Inverse multiquadratic kernels- less sensible to outliers
     Formula: k(x, y) = C / (C + ||x - y||^2)
     credits: @https://github.com/tolstikhin/wae/blob/master/wae.py
+            @https://github.com/schelotto/Wasserstein-AutoEncoders/blob/master/wae_mmd.py
             @https://arxiv.org/pdf/1711.01558.pdf
     """
-    norms_pz = torch.sum(X**2, axis=1, keepdim=True)
-    dotprods_pz = torch.matmul(X, X.T)
-    distances_pz = norms_pz + norms_pz.T - 2. * dotprods_pz
+    M, D = X.shape; N, _ = Y.shape
+    norms_x = X.pow(2).sum(1, keepdim=True)  # M x 1
+    prods_x = torch.mm(X, X.t())  # M x M
+    dists_x = norms_x + norms_x.t() - 2 * prods_x
 
-    norms_qz = torch.sum(Y**2, axis=1, keepdim=True)
-    dotprods_qz = torch.matmul(Y, Y.T)
-    distances_qz = norms_qz + norms_qz.T - 2. * dotprods_qz
+    norms_y = Y.pow(2).sum(1, keepdim=True)  # N x 1
+    prods_y = torch.mm(Y, Y.t())  # N x N
+    dists_y = norms_y + norms_y.t() - 2 * prods_y
 
-    dotprods = torch.matmul(X, Y.T)
-    distances = norms_pz + norms_qz.T - 2. * dotprods
+    dot_prd = torch.mm(X, Y.t())
+    dists_c = norms_x + norms_y.t() - 2 * dot_prd
 
-    # expected squared distance between two multivariate Gaussian vectors drawn from prior
-    C = 2.*float(X.shape[1])*torch.mean(distances_qz)
+    stats = 0
+    for scale in [.1, .2, .5, 1., 2., 5., 10.]:
+        C = 2 * D * 1.0 * scale
+        res1 = C / (C + dists_x)
+        res2 = C / (C + dists_y)
 
-    res1 = C / (C + distances_qz)
-    res2 = C / (C + distances_pz)
-    res3 = C / (C + distances)
+        res1 = (1 - torch.eye(M, device=device)) * res1
+        res2 = (1 - torch.eye(N, device=device)) * res2
 
-    return res1, res2, res3
+        res1 = res1.sum() / (M * (M - 1))
+        res2 = res2.sum() / (N * (N - 1))
+
+        res3 = C / (C + dists_c)
+        res3 = res3.sum() * 2. / (M**2)
+        stats += res1 + res2 - res3
+
+    return stats
+
 
 def Categorical_kernel(X,Y, device, strict=False, hierarchy=False):
     """
@@ -199,7 +211,7 @@ def compute_MMD(fromP:Tensor, fromQ:Tensor, kernel="RBF", **kwargs):
     if kernel=="RBF":
         _MMD = MMD(*RBF_kernel(PN, QN, device))
     elif kernel=="IMQ":
-        _MMD = MMD(*IMQ_kernel(PN, QN, device))
+        _MMD = IMQ_kernel(PN, QN, device)
     elif kernel=="cat":
         _MMD = MMD(*Categorical_kernel(PN, QN, device, kwargs.get("strict",True), kwargs.get("hierarchy",True)))
     else: raise NotImplementedError("Specified kernel for MMD '"+kernel+"' not implemented.")

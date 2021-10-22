@@ -67,7 +67,7 @@ class LatentOrthogonalityEvaluator(object):
 
         with torch.no_grad():
             print("RBF scoring"); scores["RBF"] = float(utils.MMD(*utils.RBF_kernel(ON, HN, device)).cpu().numpy())
-            print("IMQ scoring"); scores["IMQ"] = float(utils.MMD(*utils.IMQ_kernel(ON, HN, device)).cpu().numpy())
+            print("IMQ scoring"); scores["IMQ"] = float(utils.IMQ_kernel(ON, HN, device).cpu().numpy())
             print("CAT scoring"); scores["CAT"] = float(utils.MMD(*utils.Categorical_kernel(ON, HN, device,
                                                 kwargs.get("strict",True), kwargs.get("hierarchy",True))).cpu().numpy())
             print("dCov scoring"); scores["dCOV"] = compute_dCov_multiDim(ON.cpu().numpy())

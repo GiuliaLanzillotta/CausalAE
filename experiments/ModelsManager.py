@@ -46,7 +46,7 @@ class GenerativeAEExperiment(BaseVisualExperiment):
                                           **self.params['model_params'],
                                           **self.params['opt_params'])
         self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
-        self.log_dict({key: val.item() for key, val in losses.items()})
+        self.log_dict({key: val.item() for key, val in losses.items()}, prog_bar=True, on_step=True)
         if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
             if self.visualiser is None:self.init_visualiser()
             figure = self.visualiser.plot_training_gradients()

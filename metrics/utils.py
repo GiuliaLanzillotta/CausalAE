@@ -44,6 +44,7 @@ def generate_batch_factor_code(dataloader:DataLoader,
     representations = None
     factors = None
     i = 0
+    # we collect represetations of batches until we arrived at the desired quantity
     while i < num_points:
         # basically sampling num_points (observation, label) pairs in batches
         num_points_iter = min(num_points - i, batch_size)
@@ -53,7 +54,7 @@ def generate_batch_factor_code(dataloader:DataLoader,
         if i == 0:
             factors = current_factors
             with torch.no_grad():
-                representations = representation_function(current_observations.to(device)).cpu()
+                representations = representation_function(current_observations.to(device)).detach().cpu()
         else:
             factors = np.vstack((factors, current_factors))
             with torch.no_grad():

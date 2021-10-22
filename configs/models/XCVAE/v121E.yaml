@@ -3,5 +3,8 @@ model_params:
   channels: 64
   num_samples: 5
   num_interventions: 10
-  invariance_lamda: 4.0
+  xunit_dim: 4
+  beta: 4.0
+  loss_type: "MSE"
+  do_KL: False
   equivariance: True

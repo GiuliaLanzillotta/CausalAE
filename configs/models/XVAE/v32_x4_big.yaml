@@ -10,3 +10,8 @@ model_params:
   num_interventions: 1
   invariance_lamda: 4.0
   xunit_dim: 4
+  beta: 12.0
+
+
+trainer_params:
+  max_steps: 200000

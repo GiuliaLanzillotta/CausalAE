@@ -64,7 +64,7 @@ class SchedulersManager():
         if self.variational:
             print("Variational mode ON")
             self.beta_scheduler = scheduler_switch[params["opt_params"]["beta_schedule"]]
-            self.KL_weight_init = max(1.0, params["model_params"]["latent_size"]/params['data_params']['batch_size']) #this might be too high for the big datasets
+            self.KL_weight_init = max(1.0, params["model_params"]["latent_size"]/params['data_params']['size']**2) #this might be too high for the big datasets
             self.weights['KL_weight'] = self.KL_weight_init
 
         if self.causal:
@@ -73,11 +73,13 @@ class SchedulersManager():
             self.invariance_lamda_init = params['model_params']['invariance_lamda']
             self.weights['invariance_lamda'] = self.invariance_lamda_init
 
+        """
         if self.wae:
             print("Wasserstein mode ON")
             self.MMD_lamda_scheduler = scheduler_switch[params['opt_params']['MMD_lamda_schedule']]
             self.MMD_lamda_init = params['model_params']['MMD_lamda']
             self.weights['MMD_lamda'] = self.MMD_lamda_init
+        """
 
         if self.explicit:
             print("Explicit mode ON")
@@ -88,7 +90,9 @@ class SchedulersManager():
             self.weights['KL_weight'] = self.beta_scheduler(self.KL_weight_init, step_num) # decaying the KL term
         if self.causal:
             self.weights['invariance_lamda'] = self.lamda_scheduler(self.invariance_lamda_init, step_num)
+        """
         if self.wae:
             self.weights['MMD_lamda'] = self.MMD_lamda_scheduler(self.MMD_lamda_init, step_num, warmup_time=50000)
+        """
         if self.explicit:
             model.tau = temperature_exponential_annealing(step_num)

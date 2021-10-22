@@ -4,3 +4,5 @@ add_noise: False
 size: 128
 batch_size: 128
 test_batch_size: 128
+out_dim: 40
+multi_class: True

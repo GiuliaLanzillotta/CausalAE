@@ -99,6 +99,7 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, debugging=False
         handler = ModelHandler.from_experiment(experiment)
         handler.score_model(save_scores=True,
                             random_seed=config["logging_params"]["manual_seed"],
+                            inference=config['data_params']['dataset_name']!='3DS',
                             **config['eval_params'])
         if config['eval_params'].get("latent_responses",True):
             handler.latent_responses(**config['eval_params'], store=True)

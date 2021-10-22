@@ -8,8 +8,10 @@ model_params:
 opt_params:
   LR: 0.0001
   weight_decay: 0.0
-  scheduler_gamma: 0.95
-  schedulers_step: 10
+  scheduler_type: 'step' # 'exp' or 'step' or 'null'
+  scheduler_gamma: 0.5
+  schedulers_step: 30
+  betas: [0.9, 0.999]
 
 data_params:
   dataset_name: null
@@ -65,6 +67,9 @@ eval_params:
   num_interventions: 50
   num_samples: 100
   num_batches: 10
+  n_iters: 10000
+  num_FID_steps: 10
+
 
 
 

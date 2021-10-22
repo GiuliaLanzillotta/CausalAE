@@ -1,0 +1,14 @@
+eval_params:
+  FID: true
+  name: scoring
+model_params:
+  channels: 100
+  dec_depth: 16
+  enc_depth: 16
+  latent_size: 32
+  loss_type: MSE
+  num_pools: 7
+  random_seed: 13
+  unit_dim: 1
+trainer_params:
+  max_steps: 200000
