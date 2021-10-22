@@ -4,9 +4,24 @@ Codebase for the 'Study on Interventional Consistency'.
 
 
 ### Dependencies
+This repository uses *Pytorch 1.9* and *Pytorch Lightning*. <br>
+The full set of dependencies is available in `requirements.txt`. 
 
 ### Executing an experiment
-Each experiment is defined by its configuration files. All the existing configurations are contained in the `config` module. 
+Base command to launch experiment: <br>
+      `python main.py --name [MODEL NAME] --data [DATASET NAME] --version [VERSION NAME]` 
+      
+The supported models are listed in `models/__init__.py` together with their respective names. The model name identifies the directory to open under `configs/models`. Likewise, the dataset name identifies the dataset config file among those in `configs/data`. Finally, the model version determines the model config file among those in `configs/models/[MODEL NAME]/`. The model version determines the size of the model and training hyperparameters. The full config file is built based on the standard configuration given in `configs/standard.yaml`. For almost every model a dummy version is defined. The dummy version has a smaller size in order for the training to fit in approximately 2GB. 
+
+The test routine (no training) can be actiivated with the command: <br>
+      `python main.py --name [MODEL NAME] --data [DATASET NAME] --version [VERSION NAME] --test True` 
+
+At the end of training or testing the model performance can be scored against multiple metrics by activating the score parameter:
+      `python main.py --name [MODEL NAME] --data [DATASET NAME] --version [VERSION NAME] --score True`
+
+Scoring is active by default.
+
+
 
 ### Structure of the repo 
 
