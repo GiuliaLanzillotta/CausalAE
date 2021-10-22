@@ -1,0 +1,6 @@
+model_params:
+  num_pools: 4
+  channels: 64
+  num_samples: 5
+  num_interventions: 10
+  xunit_dim: 4
