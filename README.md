@@ -2,6 +2,16 @@
 
 Codebase for the 'Study on Interventional Consistency'. 
 
+<div align="center">
+<img src="https://github.com/GiuliaLanzillotta/CausalAE/blob/main/random_samples_XCAExunit_dim4.png" 
+alt="Random Samples MNIST" width="300"  border="30" />
+<img src="https://github.com/GiuliaLanzillotta/CausalAE/blob/main/random_samples_AE_v32_big.png" 
+alt="Random Samples CelebA" width="300"  border="30" />
+<img src="https://github.com/GiuliaLanzillotta/CausalAE/blob/main/traversals_XAE_v32_x4_big_cut2.png" 
+alt="Traversals CelebA" width="300"  border="30" />
+</div>
+
+
 
 ### Dependencies
 This repository uses *Pytorch 1.9* and *Pytorch Lightning*. <br>
