@@ -1,4 +1,4 @@
-# Interventional consistency
+# Study on interventional consistency 
 
 Codebase for the 'Study on Interventional Consistency'. 
 
