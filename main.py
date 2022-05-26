@@ -26,7 +26,7 @@ import ray
 
 from pathlib import Path
 
-
+from experiments.utils import DAG_pretraining_Callback
 
 
 def train_model(config:dict, tuning:bool=False, test:bool=False, debugging=False, score=True):
@@ -57,6 +57,8 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, debugging=False
     metrics = {"loss":"ptl/val_loss"}
     #after each validation epoch we report the above metric to Ray Tune
     if tuning: callbacks.append(TuneReportCallback(metrics, on="validation_end"))
+    if config['logging_params']['name']=="CausalVAE" and False: #if the model is CausalVAE we add the DAG learning pretraining step
+        callbacks.append(DAG_pretraining_Callback(config["opt_params"]["pretraining"]))
 
     #save hyperparameters
     hparams_path = base_path / "configs.yaml"
@@ -98,6 +100,8 @@ def train_model(config:dict, tuning:bool=False, test:bool=False, debugging=False
         print("Scoring the model")
         handler = ModelHandler.from_experiment(experiment)
         handler.score_model(save_scores=True,
+                            update_general_scores=True,
+                            response_classification=True,
                             random_seed=config["logging_params"]["manual_seed"],
                             inference=config['data_params']['dataset_name']!='3DS',
                             **config['eval_params'])
@@ -139,17 +143,17 @@ if __name__ == '__main__':
                         dest="name",
                         metavar='NAME',
                         help =  'Name of the model',
-                        default='AE')
+                        default='CausalVAE')
     parser.add_argument('--data', '-d',
                         dest="data",
                         metavar="DATA",
                         help = 'Name of the dataset to use',
-                        default="CelebA")
+                        default="Pendulum")
     parser.add_argument('--version', '-v',
                         dest="version",
                         metavar="VERSION",
                         help= "Name of version to use",
-                        default="v16_big")
+                        default="dummy")
     parser.add_argument('--data_version', '-dv',
                         dest="data_version",
                         metavar="DATA_VERSION",

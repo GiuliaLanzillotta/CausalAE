@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST, CIFAR10, SVHN, CelebA, FashionMNIST
 import matplotlib.pyplot as plt
-from datasets import RFD, Shapes3d, RFDIterable, AdditiveNoise, RFDh5, SynthVec
+from datasets import RFD, Shapes3d, RFDIterable, AdditiveNoise, RFDh5, SynthVec,Pendulum
 import numpy as np
 import torch
 import os
@@ -99,15 +99,15 @@ class DatasetLoader:
             data_folder = '/cluster/scratch/glanzillo/datasets/celeba/'
             train_set = CelebA(data_folder,
                                split='train',
-                               download=False,
+                               download=True,
                                transform=transform); dataset = train_set
             valid_set = CelebA(data_folder,
                               split='valid',
-                              download=False,
+                              download=True,
                               transform=transform)
             test_set = CelebA(data_folder,
                               split='test',
-                              download=False,
+                              download=True,
                               transform=transform)
             already_split = True
             tot = len(train_set) + len(valid_set) + len(test_set)
@@ -182,6 +182,27 @@ class DatasetLoader:
                                                                            generator=torch.Generator().manual_seed(42))
             already_split = True
 
+        elif args["dataset_name"] == "Pendulum":
+            transform = transforms.ToTensor()
+            if args["add_noise"]:
+                transform = transforms.Compose([transform, AdditiveNoise()])
+            data_folder = './datasets/Pendulum/'
+            dataset = Pendulum(data_folder,
+                               generate=True,
+                               overwrite=False,
+                               transform=transform)
+            # train, val, test set (to be used during training)
+            # note that the split sizes are fixed here (70,20,10 split)
+            tot = len(dataset)
+            self.num_samples = tot
+            train_num = int(0.7*tot)
+            val_num = int(0.2*tot)
+            test_num = tot-train_num-val_num
+            train_set, valid_set, test_set = torch.utils.data.random_split(dataset,
+                                                                           lengths=[train_num, val_num, test_num],
+                                                                           generator=torch.Generator().manual_seed(42))
+            already_split = True
+
         elif args["dataset_name"] == 'RFDh5': #new dataset: https://arxiv.org/pdf/2010.14407.pdf - h5 version
             transform = None
             if args["add_noise"]:
@@ -202,7 +223,6 @@ class DatasetLoader:
         elif args["dataset_name"] == 'SynthVec': #new dataset: https://arxiv.org/pdf/2010.14407.pdf - h5 version
 
             data_folder = './datasets/SynthVec/'
-            #data_folder = '/cluster/scratch/glanzillo/datasets/SynthVec/'
             train_set =SynthVec(data_folder,
                                 name=args["experiment_name"],
                                 num_factors = args["num_factors"],
@@ -246,8 +266,6 @@ class DatasetLoader:
                                                                  lengths=[train_num, val_num],
                                                                  generator=torch.Generator().manual_seed(42))
             self.num_samples = tot_train + tot_test
-
-        print(args["batch_size"])
 
         self.train = DataLoader(train_set,
                                 batch_size=args["batch_size"],

@@ -1,4 +1,5 @@
 """ Script implementing logic for model visualisations """
+import copy
 import math
 from typing import List
 
@@ -26,7 +27,7 @@ class ModelVisualiser(object):
         super(ModelVisualiser, self).__init__()
         self.model = model
         self.dataloader = iter(test_dataloader)
-        self.test_input, _ = next(self.dataloader)
+        self.test_input, self.test_labels = next(self.dataloader)
         # Fix the random seed for reproducibility.
         self.random_state = np.random.RandomState(0)
 
@@ -56,17 +57,57 @@ class ModelVisualiser(object):
         plt.grid(b=None)
         return figure
 
+    def plot_results_intervention(self, device, **kwargs):
+        """ Plots the results of an intervention under multiple sequential applications of the response map.
+        Note: this function only works with unidimensional latent spaces at the moment.
+        """
+        # get posterior codes
+        iterations = kwargs.get("iterations",10) # number of times the response map is applied
+        seed = kwargs.get("random_seed",13)
+        dimension = kwargs.get("dimension",0) # dimension to intervene on
+        figsize = kwargs.get("figsize",(iterations, 6))
+        # sample 2 inputs randomly from the test set batch
+        rndn_gen = np.random.RandomState(seed)
+        idxs = rndn_gen.randint(0, self.test_labels.shape[0], 2)
+        inputs = self.test_input[idxs]
+        with torch.no_grad():
+            codes = self.model.encode_mu(inputs.to(device), update_prior=False).detach()
+            vector = copy.deepcopy(codes[0])
+            vector[dimension] = codes[1,dimension] # applying the intervention
+            new_input = torch.vstack([codes[0],vector]).to(device)
+            # now we generate a row of images
+            images1 = []; images2 = []
+            for i in range(iterations):
+                out = self.model.decode(new_input,activate=True)
+                new_input = self.model.encode_mu(out, update_prior=False)
+                images1.append(out[0].unsqueeze(0))
+                images2.append(out[1].unsqueeze(0))
+            images = torch.vstack(images1+images2).detach() # 2 rows, iterations columns
+
+        grid_traversals = torchvision.utils.make_grid(images, nrow=iterations)
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(grid_traversals.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.grid(b=None)
+        return figure
+
     def plot_samples_from_prior(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         """ samples from latent prior and plots reconstructions"""
         num_pics = kwargs.get('num_pics',grid_size**2) # square grid
+        unconditional = kwargs.get("unconditional", True)
         with torch.no_grad():
-            recons = self.model.generate(num_pics, activate=True, device=device).detach()
+            if unconditional:
+                recons = self.model.generate(num_pics, activate=True, device=device).detach()
+            else:
+                recons = self.model.generate(num_pics, activate=True, device=device,
+                                             u=self.test_labels[:num_pics]).detach()
         grid_recons = torchvision.utils.make_grid(recons, nrow=grid_size)
         figure = plt.figure(figsize=figsize)
         plt.imshow(grid_recons.permute(1, 2, 0).cpu().numpy())
         plt.axis('off')
         plt.grid(b=None)
         return figure
+
 
     def plot_samples_controlled_hybridisation(self, grid_size:int=12, device=None, figsize=(12,12), **kwargs):
         """ specific to ESAE model - to be used in ESAEmanager"""
@@ -84,6 +125,35 @@ class ModelVisualiser(object):
                 plt.grid(b=None)
                 figures.append(figure)
         return figures
+
+    def plot_causalVAE_interventions(self, device:str, **kwargs):
+        """Method only applicable to CausalVAEs.
+        Applying interventions to the latent space of CausalVAE."""
+        # retrieve samples from the dataset
+        num_plots = kwargs.get('num_plots', 10) # number of samples to intervene on
+        test_sample = self.test_input[:num_plots].to(device)
+        seed = kwargs.get("random_seed",13)
+        rndn_gen = np.random.RandomState(seed)
+        idx = rndn_gen.randint(self.test_labels.shape[0])
+        values = self.test_labels[idx] #randomly extracts a set of intervention values
+        # now we intervene on each latent feature randomly
+        intervened_set = []
+        for i in range(self.model.latent_size):
+            val = values[i]*torch.ones(self.model.unit_dim).to(device)
+            with torch.no_grad():
+                x_tilde = self.model.generate_intervened(test_sample, i, val, activate=True)
+            intervened_set.append(x_tilde)
+        # now intervened_set is a list of latent_size sets of num_plots images
+        # we now plot each element of the list into a different row of the grid, adding the input to the last one
+        figsize=kwargs.get("figsize",(num_plots*2,12))
+        intervened_set.append(test_sample)
+        grid = torchvision.utils.make_grid(torch.vstack(intervened_set), nrow=num_plots)
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(grid.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.grid(b=None)
+        return figure
+
 
     def plot_latent_traversals(self, steps:int=10, device=None, figsize=(12,12), tailored=False, **kwargs):
         """ traverses the latent space in different axis-aligned directions and plots
@@ -464,23 +534,29 @@ class ModelVisualiser(object):
     @staticmethod
     def scatterplot_with_line(x:Tensor, y:Tensor, hue:List, **kwargs):
         """Plots the scatterplot and lineplot over the two input vectors x,y"""
-        figsize = kwargs.get("figsize",(20,10))
-        markersize = kwargs.get("markersize",10)
-        x_name = kwargs.get("x_name","First dim")
+        sns.axes_style("white")
+        sns.set_context("poster")
+        sns.set(rc={'figure.figsize': (10, 6)})
+        sns.set_context("paper",
+        rc={"font.size": 14, "axes.titlesize": 14, "axes.labelsize": 14, 'xtick.labelsize': 'medium',
+                            'ytick.labelsize': 'medium'})
+
+        sns.despine(offset=10, trim=True)
+        x_name = kwargs.get("x_name", "First dim")
         y_name = kwargs.get("y_name", "Second dim")
         legend_on = kwargs.get("legend", True)
-        with_line = kwargs.get("with_line", False)
+        with_line = kwargs.get("with_line", True)
         ylim = kwargs.get("ylim")
         xlim = kwargs.get("xlim")
 
-        figure = plt.figure(figsize=figsize)
-        axi = sns.scatterplot(x, y,  marker=".", hue=hue, palette="viridis")
+        figure = plt.figure()
         if with_line:
-            axi = sns.lineplot(x, y,  hue=hue, palette="viridis")
-        axi.set_title(f"Scatterplot of {x_name} and {y_name}")
-        axi.set_ylabel(f'Latent dim {y_name}')
-        axi.set_xlabel(f'Latent dim {x_name}')
-        if not legend_on: axi.legend([],[], frameon=False)
+            axi = sns.lineplot(x, y, hue=hue, palette="mako", err_style="band", ci=100, legend=False)
+
+        sns.scatterplot(x, y, marker=".", color="gray")
+        axi.set_ylabel(f'{y_name}')
+        axi.set_xlabel(f'{x_name}')
+        if not legend_on: axi.legend([], [], frameon=False)
         if ylim is not None: axi.set(ylim=(-ylim, ylim))
         if xlim is not None: axi.set(xlim=(-xlim, xlim))
 
@@ -515,7 +591,7 @@ class ModelVisualiser(object):
         plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
         plt.tick_params(axis='both', labelsize=4)
         plt.xlim(left=0, right=len(ave_grads))
-        plt.ylim(bottom = -0.001, top=0.002) # zoom in on the lower gradient regions
+        #plt.ylim(bottom = -0.001, top=0.002) # zoom in on the lower gradient regions
         plt.xlabel("Layers")
         plt.ylabel("average gradient")
         plt.title("Gradient flow")

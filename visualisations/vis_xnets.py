@@ -7,6 +7,8 @@ import torch
 from torch import Tensor
 
 import models.LVAE
+from experiments import get_causal_block_graph
+from experiments.utils import temperature_exponential_annealing
 from models import Xnet
 from models import utils as mutils
 from visualisations import utils
@@ -110,6 +112,47 @@ def hybridiseX(model:Xnet, device:str, base:Tensor=None, other:Tensor=None, **kw
     complete_set = torch.cat(complete_set, dim=0)
     with torch.no_grad(): recons = model.decode_from_X(complete_set.to(device), activate=True).detach()
     return recons, base, other
+
+
+def traversalsX(model:Xnet, device:str, dim:int, inputs=None, **kwargs):
+    """Traverses causal latent space on the specified dimension by applying interventions."""
+
+    print("Computing causal latent traversals...")
+    if not kwargs.get('num_samples'): #note: this argument will be ignored if inputs is provided
+        kwargs['num_samples'] = 50
+    steps = kwargs.get('steps',20)
+    ranges = model.estimate_range_dim(dim, device, **kwargs)
+
+    with torch.no_grad():
+        if inputs is None: codes = model.sample_noise_from_prior(device=device, **kwargs).detach()
+        else: codes = model.encode_mu(inputs.to(device))  # sample randomly
+        X = model.get_causal_variables(codes, **kwargs).detach().reshape(-1, model.latent_size, model.xunit_dim)
+        traversal_vecs = []
+        for sub_dim in range(model.xunit_dim):
+            traversals_steps = utils.get_traversals_steps(steps, [ranges[sub_dim]], relative=False).to(device).detach()[0]
+            for v in traversals_steps:
+                vec = X[:,dim,:]
+                vec[:,sub_dim] = v # preparing intervention values in the format required by Xnet intervention
+                I_X = model.intervene_on_X([dim], codes, torch.unsqueeze(vec,1)).detach() # num_samples x L x U
+                traversal_vecs.append(I_X)
+        traversal_vecs = torch.vstack(traversal_vecs) # (num_samples x steps x unit_dim) x L
+        recons = model.decode_from_X(traversal_vecs.to(device), activate=True).detach()
+    print("...done")
+    return recons
+
+def get_free_causes(model:Xnet, device:str, **kwargs):
+    """Returns list containing indices of free causal variables according
+    to the Xnet structure"""
+    tau = kwargs.get('tau', temperature_exponential_annealing(100000))
+    A = get_causal_block_graph(model, "X", device, tau=tau).detach().cpu().numpy()
+    incoming_weight = A.sum(axis=0)
+    idx = list(np.where(incoming_weight==0)[0])
+    return idx
+
+
+
+
+
 
 def multidimUnitMarginal(model:Xnet, unit:int, device:str, **kwargs):
     """Computes 2D projection of multidimensional unit marginal aggregate posterior distribution"""

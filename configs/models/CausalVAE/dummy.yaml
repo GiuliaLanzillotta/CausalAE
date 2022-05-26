@@ -1,0 +1,27 @@
+model_params:
+  name: 'CausalVAE'
+  latent_size: 4
+  enc_depth: 3 #number of convolutional layers in the encoder
+  dec_depth: 3
+  pool_every: 1
+  channels: 4
+  unit_dim: 4
+  gaussian_init: 'xavier' #other option: 'normal'
+  loss_type: "BCE"
+  convolutional: True
+
+opt_params:
+  LR: 0.0005
+  weight_decay: 0.0
+  alpha: 0.3
+  beta: 1.0
+  gamma: 1.0
+
+trainer_params:
+  max_steps: 80000
+
+logging_params:
+  save_dir: "./logs/"
+
+vis_params:
+  plot_every: 5

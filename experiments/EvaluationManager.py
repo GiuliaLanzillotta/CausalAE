@@ -37,7 +37,7 @@ class ModelHandler(object):
         self.model.eval()
         model_name = self.config["model_params"]["name"]
         self.model_name = model_name
-        print(model_name+ " model hanlder loaded.")
+        print(model_name+ " model handler loaded.")
         self.visualiser = None
         self.fidscorer = None
         self._orthogonalityScorer = None
@@ -99,7 +99,7 @@ class ModelHandler(object):
         """
         num_FID_steps = kwargs.get("num_FID_steps",10)
         kind = kwargs.get('kind','reconstruction')
-        # adjusting FID steps based on inpput size
+        # adjusting FID steps based on input size
         factor = math.ceil(self.config['data_params']['size']/32)
         num_FID_steps = math.ceil(num_FID_steps/factor)
         print(f"FID scoring set with {num_FID_steps} steps")
@@ -156,6 +156,23 @@ class ModelHandler(object):
                                                              device = self.device, random_seed=random_seed, verbose=verbose)
         # initialising the latent posterior distribution
         self._consistencyScorer.sample_codes_pool(num_batches, self.device)
+
+    def score_SCN_under_perturbation(self, **kwargs):
+        """Evaluates the model's self consistency under multiple modes of perturbation"""
+        consistencies = {}
+        for prior_mode in ["posterior","hybrid","uniform"]:
+            params = {'num_samples': kwargs.get('num_samples',1000),
+                      'random_seed': kwargs.get('random_seed',23),
+                      'num_batches': kwargs.get('num_batches',10),
+                      'prior_mode': prior_mode,
+                      'normalise': True,
+                      'verbose': kwargs.get("verbose",False),
+                      'level': 1}
+            with torch.no_grad():
+                consistency, std_dev = self.evaluate_self_consistency(**params)
+                consistencies["SCN_"+prior_mode] = torch.clamp(consistency, 0.0, 1).mean().cpu().numpy().item() # average across dimensions
+        return consistencies
+
 
     def evaluate_invariance(self, **kwargs):
         """ Evaluate invariance of respose map to intervention of the kind specified in the kwargs
@@ -378,6 +395,17 @@ class ModelHandler(object):
         entropy = vis_xnets.compute_renyis_entropy_X(self.model, iter(self.dataloader.test), self.device, **kwargs)
         return entropy
 
+    def score_classification_on_responses(self, **kwargs):
+        """Obtains classification score on responses"""
+        scores, outs, Ys, Y_hats, preds =  vis_responses.classification_on_responses(self.model, self.device, **kwargs)
+        scores = np.asarray(scores).mean(axis=0)
+        return scores
+
+    def score_DCI_on_response(self, **kwargs):
+        """Computes DCI score on traversal responses."""
+        return vis_responses.DCI_on_responses(self.model, self.device, **kwargs)
+
+
     def load_checkpoint(self, name=None):
         #TODO: together with checkpoint load some training status file, old results etc
         checkpoint_path =  self.root / "checkpoints/"
@@ -406,7 +434,8 @@ class ModelHandler(object):
 
     def score_model(self, FID=True, disentanglement=True, orthogonality=True, invariance=True,
                     save_scores=True, update_general_scores=True, equivariance=True,
-                    self_consistency=True, inference=True, sparsity=True, **kwargs):
+                    self_consistency=True, inference=True, sparsity=True,
+                    response_classification=False, DCI_response=True, SCN_perturbed=True, **kwargs):
         """Scores the model on the test set in loss and other terms selected
         #TODO: add here the saving of the scores to the 'scores.csv' file that has the scores of all the models"""
         self.device = next(self.model.parameters()).device
@@ -463,13 +492,19 @@ class ModelHandler(object):
 
         if self_consistency:
             weighted = kwargs.get('weighted',True) # wheter to use weights depending on the standard deviations in the sum
+            multi_level = kwargs.get('multi_level',True)
+            if multi_level:
+                kwargs["level"] = 10
             consistencies, std_devs = self.evaluate_self_consistency(**kwargs)
             W = torch.ones(self.model.latent_size, device=self.device); Z = W.sum()
-            scores["SCN"] = (torch.sum(consistencies*W)/Z).cpu().numpy()
+            scores["SCN"] = (torch.sum(consistencies[0,:]*W)/Z).cpu().numpy() #first level
+            if multi_level:
+                scores["SCN+"] = (torch.sum(consistencies[4,:]*W)/Z).cpu().numpy() #last level
+                scores["SCN++"] = (torch.sum(consistencies[-1,:]*W)/Z).cpu().numpy() #last level
             if weighted:
-                W = W*(std_devs[1,:].view(-1,1))
+                W = W*(std_devs[1,:].view(-1))
                 Z = W.sum().cpu().numpy()
-                scores["SCN_w"] = torch.sum(consistencies*W).cpu().numpy()/Z
+                scores["SCN_w"] = torch.sum(consistencies[0,:]*W).cpu().numpy()/Z
 
         if inference:
             _, _, inference = self.evaluate_inference(**kwargs)
@@ -477,6 +512,23 @@ class ModelHandler(object):
             if 'X' in self.model_name:
                 _, _, inferenceX = self.evaluate_inference(causal=True, **kwargs)
                 scores["inferenceX"] = np.mean(inferenceX)
+
+        if response_classification:
+            class_scores = self.score_classification_on_responses(**kwargs)
+            # maybe we can do a weighted average and exclude collapsed dimensions
+            scores["PLC"] = class_scores[0] #prior latent classification
+            scores["RLC"] = class_scores[1] #response latent classification
+
+        if DCI_response:
+            d, c, importance_matrix = self.score_DCI_on_response(**kwargs)
+            scores["DCIR_dis"] = d
+            scores["DCIR_cmplt"] = c
+
+        if SCN_perturbed:
+            SCN_perturbed_scores = self.score_SCN_under_perturbation(**kwargs)
+            scores.update(SCN_perturbed_scores)
+
+
         end = time.time()
 
         print("Time elapsed for scoring {:.0f}".format(end-start))
@@ -503,6 +555,7 @@ class ModelHandler(object):
             full_df.drop_duplicates(subset = ["model_name","model_version","dataset","random_seed"],
                                     keep="last", inplace=True, ignore_index=True)
             full_df.to_csv(full_df_path) #save it again
+            print("Updated general scores.")
 
         return scores
 
@@ -530,8 +583,10 @@ class VisualModelHandler(ModelHandler):
                    do_latent_response_field=False, do_equivariance=False,
                    do_jointXmarginals=False, do_hybridsX=False, do_unitMarginal=False,
                    do_marginalX=False, do_latent_response_fieldX=False, do_N2X=False,
-                   do_double_hybridsXN=False, do_interpolationN=False,
-                   do_inference=False, do_multiple_traversals=False, **kwargs):
+                   do_double_hybridsXN=False, do_interpolationN=False, do_traversalsX=False,
+                   do_traversalsNX=False, do_inference=False, do_multiple_traversals=False,
+                   do_CausalVAE_interventions=False, do_intervention_res=False,
+                   do_classification_on_responses=False, **kwargs):
 
         plots = {}
         if self.visualiser is None:
@@ -545,12 +600,38 @@ class VisualModelHandler(ModelHandler):
             traversals_rec = vis_latents.traversals(self.model, self.device, **kwargs)
             plots["traversals"] = self.visualiser.plot_grid(torch.cat(traversals_rec, dim=0).to(self.device),
                                                             nrow=kwargs.get('steps'), **kwargs)
+        if do_intervention_res:
+            plots["intervention_res"] = self.visualiser.plot_results_intervention(self.device, **kwargs)
+
+        if do_traversalsX:
+            #notice: only works if argument 'dim' is provided to kwargs
+            dims = kwargs.get('dims')
+            all = []
+            for d in dims:
+                traversals_rec = vis_xnets.traversalsX(self.model, self.device, dim=d, **kwargs)
+                all.append(traversals_rec)
+            plots["traversalsX"] = self.visualiser.plot_grid(torch.cat(all, dim=0).to(self.device),
+                                                                 nrow=kwargs.get('steps',20), **kwargs)
+        if do_traversalsNX:
+            # plot traversals on N alongside traversals on X for a given dimension (which has to be provided in kwargs)
+            dim = kwargs.get('dim')
+            traversalsN = vis_latents.traversals(self.model, self.device, **kwargs)[dim]
+            traversalsX = vis_xnets.traversalsX(self.model, self.device, **kwargs)
+            plots["traversalsNX"] = self.visualiser.plot_grid(torch.cat([traversalsN, traversalsX], dim=0).to(self.device),
+                                                             nrow=kwargs.get('steps', 20), **kwargs)
+
+
         if do_originals: # print the originals
             plots["originals"] = self.visualiser.plot_originals()
         if do_hybrisation: # print the originals
             print(f"Plotting hybridisation on the noise variables")
             hybrids, _, _  = vis_latents.hybridiseN(self.model, self.device, **kwargs)
             plots["hybridsN"] = self.visualiser.plot_grid(hybrids, nrow=3, **kwargs)
+        if do_CausalVAE_interventions:
+            assert self.config['logging_params']['name']=="CausalVAE", "CausalVAE interventions only apply to CausalVAE models"
+            print(f"Plotting effect of random interventions on the causal variables")
+            self.visualiser.plot_causalVAE_interventions(device=self.device, **kwargs)
+
         if do_loss2distortion:
             plots["distortion"] = self.visualiser.plot_loss2distortion(device=self.device, **kwargs)
         if do_marginal:
@@ -578,6 +659,7 @@ class VisualModelHandler(ModelHandler):
                 fig = self.visualiser.plot_traversal_responses(d, all_traversal_latents[d], all_traversals_responses[d],
                                                                traversals_steps=traversals_steps, **kwargs)
                 plots["trvs_responses"].append(fig)
+
         if do_multiple_traversals:
             # list of reconstructions for each dimension
             all_traversals_recs = vis_latents.traversals(self.model, self.device, **kwargs)
@@ -652,6 +734,12 @@ class VisualModelHandler(ModelHandler):
             importance_matrix, train_acc, test_acc = self.evaluate_inference(**kwargs)
             plots["inference_imp"] = self.visualiser.plot_heatmap(torch.Tensor(importance_matrix), title="Importance matrix for inference", threshold=0., **kwargs)
             plots["inference_acc"] = self.visualiser.plot_heatmap(torch.Tensor(test_acc), title="Average accuracies for inference", threshold=0., **kwargs)
+
+        if do_classification_on_responses:
+            scores, outs, Ys, Y_hats = vis_responses.classification_on_responses(self.model, self.device, **kwargs)
+            #TODO: complete here
+
+
         return plots
 
 

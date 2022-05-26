@@ -64,12 +64,12 @@ def generate_multiple_configs(model_names:List[str], model_versions:List[str], a
 
 
 if __name__ == '__main__':
-    _model_names = ["AE","XAE","XCAE","BetaVAE","XVAE","XCVAE"]
-    _model_versions = ["v32_big"]
+    _model_names = ["CausalVAE"]
+    _model_versions = ["fc_pd","fc_pd_1D"]
     _attribute_family = "model_params"
     _attribute_name = "random_seed"
     _attribute_values = [13,17,37,121]
-    _command = 'bsub -oo "_name_title_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" ' \
-              '-R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name _name --data CelebA --version _version'
+    _command = 'bsub -oo "_name_title_Pendulum.txt" -R "rusage[mem=30000, ngpus_excl_p=1]" ' \
+              'python main.py --name _name --data Pendulum --version _version'
     generate_multiple_configs(_model_names, _model_versions, _attribute_family,
                               _attribute_name, _attribute_values, _command)

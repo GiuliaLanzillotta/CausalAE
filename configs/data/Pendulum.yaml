@@ -1,0 +1,6 @@
+dataset_name: Pendulum
+add_noise: False
+out_dim: 4
+multi_class: True
+size: 92
+num_workers: 0

@@ -41,13 +41,15 @@ class GenerativeAEExperiment(BaseVisualExperiment):
         results = self.forward(input_imgs, update_prior=True, integrate=False)
         losses = self.model.loss_function(*results,
                                           X=input_imgs,
+                                          latent_labels = labels,
                                           device=self.device,
                                           use_MSE=self.use_MSE,
                                           **self.params['model_params'],
-                                          **self.params['opt_params'])
+                                          **self.params['opt_params'],
+                                          epoch=self.current_epoch)
         self.log('train_loss', losses["loss"], prog_bar=True, on_epoch=True, on_step=True)
         self.log_dict({key: val.item() for key, val in losses.items()}, prog_bar=True, on_step=True)
-        if self.global_step%(self.plot_every*self.val_every)==0 and self.global_step>0:
+        if self.global_step%(self.plot_every)==0 and self.global_step>0:
             if self.visualiser is None:self.init_visualiser()
             figure = self.visualiser.plot_training_gradients()
             self.logger.experiment.add_figure("gradient", figure, global_step=self.global_step)
@@ -58,6 +60,7 @@ class GenerativeAEExperiment(BaseVisualExperiment):
         results = self.forward(input_imgs, update_prior=True, integrate=True)
         losses = self.model.loss_function(*results,
                                           X=input_imgs,
+                                          latent_labels=labels,
                                           device=self.device,
                                           use_MSE=self.use_MSE,
                                           **self.params['model_params'],
@@ -71,6 +74,7 @@ class GenerativeAEExperiment(BaseVisualExperiment):
         results = self.forward(input_imgs, update_prior=True, integrate=True)
         losses = self.model.loss_function(*results,
                                           X=input_imgs,
+                                          latent_labels=labels,
                                           device=self.device,
                                           use_MSE=self.use_MSE,
                                           **self.params['model_params'],

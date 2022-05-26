@@ -1,6 +1,11 @@
 USEFUL BATCH COMMANDS
 
 ----
+
+tensorboard --logdir /cluster/scratch/glanzillo/logs/AE/conv_pdrandom_seed121_Pendulum/ --port 16006
+cp /cluster/scratch/glanzillo/logs/all_scores.csv  .
+
+
 ** copying responses matrix **
 
 cp /cluster/scratch/glanzillo/logs/ESAE/standardS_MNIST/responses.pkl ./logs/ESAE/standardS_MNIST/

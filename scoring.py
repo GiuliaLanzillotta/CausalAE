@@ -10,9 +10,11 @@ if __name__ == '__main__':
     #model_names = ["VecESAE","VecSAE","VecVAE","VecRSAE", "VecRAE","VecAE"]
     #model_versions = [["standard"],["standard","full"],["standard"],["standard", "full"],["standard"],["standard"]]
 
-    model_names = ["BaseSAE","RSAE","RAE","AE","BetaVAE"]
-    model_versions = [["v121"]]*4 + [["v12_3DS"]]
-    #model_versions = [["v121"],["v121"],["v121"],["v121"]]
+    model_names = ["AE","XAE","XCAE","BetaVAE","XVAE","XCVAE"]
+    base_version_name = "conv_pd"
+    rs_versions = ["13","17","37","121"]
+    all_versions = [base_version_name] + [base_version_name+"random_seed"+rs for rs in rs_versions]
+
 
     """
     for data_v in data_versions:
@@ -28,10 +30,15 @@ if __name__ == '__main__':
                                     save_scores=True, full=False, name="scoring_noises")
                 #handler.latent_responses(num_batches=10, num_samples=100, store=True)
     """
-    for model_n, model_vs in zip(model_names, model_versions):
-        for model_v in model_vs:
-            handler = ModelHandler.from_config(model_name=model_n, model_version=model_v, data="3DS")
+    for model_n in model_names:
+        for model_v in all_versions:
+            handler = ModelHandler.from_config(model_name=model_n, model_version=model_v, data="Pendulum")
             handler.load_checkpoint() # loading latest checkpoint saved
-            handler.score_model(FID=True, disentanglement=True, orthogonality=False,
-                                save_scores=True, full=False, name="scoring")
+            config = handler.config
+            handler.score_model(save_scores=True,
+                                update_general_scores=True,
+                                response_classification=True,
+                                random_seed=config["logging_params"]["manual_seed"],
+                                inference=False,
+                                **config['eval_params'])
             #handler.latent_responses(num_batches=10, num_samples=100, store=True)

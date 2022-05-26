@@ -1,0 +1,26 @@
+eval_params:
+  FID: false
+model_params:
+  beta: 4.0
+  channels: 16
+  dec_depth: 6
+  dittadi: false
+  enc_depth: 6
+  gaussian_init: xavier
+  latent_size: 4
+  loss_type: BCE
+  name: BetaVAE
+  pool_every: 2
+  random_seed: 121
+opt_params:
+  KL_decay: 3.0
+  LR: 0.0005
+  beta_schedule: cyclic
+  weight_decay: 0.0
+trainer_params:
+  log_every_n_steps: 10
+  max_steps: 80000
+  progress_bar_refresh_rate: 10
+  val_check_interval: 10
+vis_params:
+  plot_every: 20

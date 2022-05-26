@@ -232,3 +232,14 @@ class Xnet(GenerativeAE, ABC):
         codes = self.encode_mu(inputs, **kwargs)
         if causal: return self.get_causal_variables(codes, **kwargs)
         return codes
+
+    def estimate_range_dim(self, dim:int, device:str, size=100, **kwargs):
+        """Estimates the range of the selected causal variable by sampling from the prior"""
+
+        codes = self.sample_noise_from_prior(device=device, num_samples=size).detach()
+        X = self.get_causal_variables(codes, **kwargs).detach().reshape(-1, self.latent_size, self.xunit_dim)
+        X_d = X[:, dim, :]  # (num_samples,) -
+        ranges = [(torch.min(X_d[:,i]).detach().cpu().numpy().item(),
+                 torch.max(X_d[:,i]).detach().cpu().numpy().item()) for i in range(self.xunit_dim)]
+        return ranges
+

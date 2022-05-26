@@ -18,27 +18,26 @@ if __name__ == '__main__':
                      "grid_size":4, "num_samples":1, "steps": 6}
 
     # All model configurations ---------------
-    models = {"AE":["v32_big"],
-              "XAE":["v32_big","v32_x4_big"],
-              "XCAE":["v32_big","v32_x4_big","v32_bigE"],
-              "BetaVAE":["v32_big"],
-              "XVAE":["v32_big","v32_x4_big"],
-              "XCVAE":["v32_big","v32_x4_big","v32_bigE"]}
+    base_version_name = "v32_big"
+    rs_versions = ["13","17","37","121"]
+    all_versions = [base_version_name] + [base_version_name+"random_seed"+rs for rs in rs_versions]
+    models = ["AE","XAE","XCAE","BetaVAE","XVAE","XCVAE"]
 
     # Main loop
     print("CelebA evaluation script started.")
     print("-"*20)
-    for model_name, versions in models.items():
+    for model_name in models:
         variational = "V" in model_name #flag to use later
-        for v in versions:
+        for v in all_versions:
             params = {"model_name":model_name,
                       "model_version":v,
                       "data" : "CelebA"}
             # load handler
             handler = VisualModelHandler.from_config(**params)
             handler.load_checkpoint()
+            """
 
-            # Plotting first -------------
+            # Plotting -------------
             if not variational: # warming up the prior
                 for i in range(10): handler.plot_model(do_reconstructions=True, **figure_params)
 
@@ -62,5 +61,6 @@ if __name__ == '__main__':
 
             print("Scoring ...")
             handler.score_model(save_scores=True,
+                                update_general_scores=True,
                                 random_seed=handler.config["logging_params"]["manual_seed"],
-                                inference=False, **handler.config['eval_params'])"""
+                                inference=False, **handler.config['eval_params'])

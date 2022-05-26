@@ -1,0 +1,38 @@
+eval_params:
+  FID: false
+  latent_responses: true
+  mode: X
+  name: scoring
+model_params:
+  beta: 4.0
+  channels: 16
+  dec_depth: 6
+  dittadi: false
+  do_KL: false
+  enc_depth: 6
+  gaussian_init: xavier
+  gumbel: true
+  ignore_variance: true
+  invariance_lamda: 1.0
+  latent_size: 4
+  loss_type: BCE
+  name: XCVAE
+  num_interventions: 10
+  num_samples: 10
+  parents_with_grad: true
+  pool_every: 2
+  random_seed: 37
+  sparsity: false
+  sparsity_lamda: 2.0
+opt_params:
+  KL_decay: 3.0
+  LR: 0.0005
+  beta_schedule: cyclic
+  weight_decay: 0.0
+trainer_params:
+  log_every_n_steps: 10
+  max_steps: 80000
+  progress_bar_refresh_rate: 10
+  val_check_interval: 10
+vis_params:
+  plot_every: 20

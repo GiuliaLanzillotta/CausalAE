@@ -122,7 +122,7 @@ def traversals(model:GenerativeAE, device, inputs=None, **kwargs):
     unit_dim = 1
 
     if inputs is None: codes = model.sample_noise_from_prior(device=device, **kwargs).detach()
-    else: codes = model.encode_mu(inputs[torch.randperm(inputs.shape[0])[:kwargs['num_samples']]].to(device)) #sample randomly
+    else: codes = model.encode_mu(inputs.to(device)) #sample randomly
 
     all_reconstructions = []
     # sample N vectors from prior

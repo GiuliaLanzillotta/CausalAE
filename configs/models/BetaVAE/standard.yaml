@@ -11,7 +11,6 @@ model_params:
   beta: 4.0
 
 
-
 opt_params:
   KL_decay: 1.0
   beta_schedule: 'linear'

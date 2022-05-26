@@ -42,6 +42,7 @@ class FCBlock(nn.Module):
             prev = size
         self.fc = nn.Sequential(*modules)
 
+
     def forward(self, inputs:Tensor) -> Tensor:
         return self.fc(inputs)
 
@@ -343,8 +344,12 @@ class GaussianLayer(nn.Module):
     @staticmethod
     def sample_parametric(num_samples:int, mus, logvars, device:str):
         """Sampling noise from a parametrised Orthogonal Gaussian"""
-        samples = [torch.normal(mus, torch.exp(logvars), device=device) for i in range(num_samples)]
-        return torch.stack(samples)
+        if mus.shape[0] == num_samples:
+            samples = torch.normal(mus, torch.exp(logvars)).to(device)
+        else:
+            assert mus.shape[0] == 1, f"Incosistent parameters and number of samples: {mus.shape[0]} != {num_samples}"
+            samples = torch.stack([torch.normal(mus, torch.exp(logvars)).to(device) for i in range(num_samples)])
+        return samples
 
     def init_weights(self, init_type="xavier"):
         if init_type=="normal":
@@ -403,17 +408,32 @@ class HybridLayer(nn.Module):
         self.prior = torch.index_select(all_vecs, 0, idx).detach()
 
 
-    def sample_from_prior(self, input_shape):#FIXME: use directly num_samples instead of input_shape
+    def sample_from_prior(self, input_shape, input_codes=None):#FIXME: use directly num_samples instead of input_shape
         # splitting the prior latent vectors into chunks (one for each noise dimension)
-        if self.prior is None: raise ValueError("No samples from the prior have been obtained yet")
+        if self.prior is None and input_codes is None: raise ValueError("No samples from the prior have been obtained yet")
+        if input_codes is None: input_codes = self.prior
         num_samples = input_shape[0]
-        prior_chunks = torch.split(self.prior, self.unit_dim, dim=1)
+        prior_chunks = torch.split(input_codes, self.unit_dim, dim=1)
         # randomising the order of each chunk
         new_vectors = []
         for chunk in prior_chunks:
             # num_samples x N one-hot matrix
-            idx = torch.multinomial(self.weights[:self.prior.shape[0]],
+            idx = torch.multinomial(self.weights[:input_codes.shape[0]],
                                     num_samples, replacement=True).to(chunk.device)
+            new_vectors.append(torch.index_select(chunk, 0, idx))
+        noise = torch.cat(new_vectors, dim=1).detach()
+        return noise
+
+    @staticmethod
+    def sample_from_prior_with_input(input_codes, unit_dim:int, device:str):
+        # splitting the prior latent vectors into chunks (one for each noise dimension)
+        prior_chunks = torch.split(input_codes, unit_dim, dim=1)
+        weights = torch.ones(input_codes.shape[0], device=device, requires_grad=False)
+        # randomising the order of each chunk
+        new_vectors = []
+        for chunk in prior_chunks:
+            # num_samples x N one-hot matrix
+            idx = torch.multinomial(weights, input_codes.shape[0], replacement=True).to(device)
             new_vectors.append(torch.index_select(chunk, 0, idx))
         noise = torch.cat(new_vectors, dim=1).detach()
         return noise
@@ -499,13 +519,24 @@ class HybridLayer(nn.Module):
         with torch.no_grad(): output = self.sample_from_prior(inputs.shape)
         return output
 
-    def sample_uniformly_in_support(self, num_samples:int):
+    def sample_uniformly_in_support(self, num_samples:int, input_codes=None):
         """uniform samples inside the range of the hybrid distribution"""
+        if input_codes is None: input_codes=self.prior
         with torch.no_grad():
-            lows = torch.min(self.prior, dim=0).values # dx1
-            highs = torch.max(self.prior, dim=0).values #dx1
+            lows = torch.min(input_codes, dim=0).values # dx1
+            highs = torch.max(input_codes, dim=0).values #dx1
             uniform = Uniform(lows, highs)
             samples = uniform.sample([num_samples])
+        return samples
+
+    @classmethod
+    def sample_uniformly_in_support_with_inputs(self, input_codes):
+        """uniform samples inside the range of the hybrid distribution"""
+        with torch.no_grad():
+            lows = torch.min(input_codes, dim=0).values # dx1
+            highs = torch.max(input_codes, dim=0).values #dx1
+            uniform = Uniform(lows, highs)
+            samples = uniform.sample([input_codes.shape[0]])
         return samples
 
     @property
@@ -819,7 +850,7 @@ class VecSCM(nn.Module):
     def forward_intervention(self, z, dims:List[int], values:Tensor,  masks_temperature=0.5):
         """Forward pass on intervened SCM.
         Intervention = hard intervention on the causal variables in dims, with values 'values'.
-        values is a tensor of shape Nx m x Dx, where m is len(values) and Dx is the dimensionality of each xunit, """
+        values is a tensor of shape N x m x Dx, where m is len(dims) and Dx is the dimensionality of each xunit, """
         causal_vars = []
         intervened = 0
         assert values.shape[1] == len(dims), "Values and dimensions provided do not match"

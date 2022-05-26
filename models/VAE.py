@@ -5,7 +5,7 @@ from abc import ABC
 import torch
 from torch import Tensor
 from torch import nn
-from models import utils, Xnet
+from models import utils, Xnet, HybridLayer
 from torch.nn import functional as F
 
 from . import ConvNet, GaussianLayer, GenerativeAE, UpsampledConvNet, FCBlock, DittadiConvNet, DittadiUpsampledConv, \
@@ -37,7 +37,16 @@ class VAEBase(GenerativeAE, nn.Module, ABC):
         return out
 
     def sample_noise_from_prior(self, num_samples: int, **kwargs):
-        return self.gaussian_latent.sample_standard(num_samples, device=kwargs['device'])
+        device = kwargs['device']
+        codes= self.gaussian_latent.sample_standard(num_samples, device=device)
+        prior_mode = kwargs.get('prior_mode','posterior')
+        with torch.no_grad():
+            if prior_mode == 'posterior': # this is actually the prior
+                return codes
+            if prior_mode == 'hybrid':
+                return HybridLayer.sample_from_prior_with_input(input_codes=codes, unit_dim=self.unit_dim, device=device)
+            if prior_mode == 'uniform':
+                return HybridLayer.sample_uniformly_in_support_with_inputs(input_codes=codes).to(device)
 
     def sample_noise_from_posterior(self, inputs: Tensor, device:str):
         return self.encode(inputs)[0].to(device)

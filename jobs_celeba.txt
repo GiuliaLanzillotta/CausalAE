@@ -1,21 +1,21 @@
-bsub -oo "AE_CelebA.txt" -R "rusage[mem=30000, ngpus_excl_p=1]"  -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name AE --data CelebA --version v32_big
-bsub -oo "VAE_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name BetaVAE --data CelebA --version v32_big
-bsub -oo "XAE_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XAE --data CelebA --version v32_big
-bsub -oo "XVAE_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XVAE --data CelebA --version v32_big
-bsub -oo "XCAE_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data CelebA --version v32_big
-bsub -oo "XCVAE_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCVAE --data CelebA --version v32_big
+bsub -oo "AE_CelebA.txt" -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=32000]"  python main.py --name AE --data CelebA --version v32_big
+bsub -oo "VAE_CelebA.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=32000]"   python main.py --name BetaVAE --data CelebA --version v32_big
+bsub -oo "XAE_CelebA.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]"  -R "select[gpu_mtotal0>=32000]"  python main.py --name XAE --data CelebA --version v32_big
+bsub -oo "XVAE_CelebA.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=32000]"   python main.py --name XVAE --data CelebA --version v32_big
+bsub -oo "XCAE_CelebA.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=32000]"  python main.py --name XCAE --data CelebA --version v32_big
+bsub -oo "XCVAE_CelebA.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]"-R "select[gpu_mtotal0>=32000]"   python main.py --name XCVAE --data CelebA --version v32_big
 
 
-bsub -oo "XAE_CelebA32x4.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XAE --data CelebA --version v32_x4_big
-bsub -oo "XVAE_CelebA32x4.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XVAE --data CelebA --version v32_x4_big
-bsub -oo "XCAE_CelebA32x4.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data CelebA --version v32_x4_big
-bsub -oo "XCVAE_CelebA32x4.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCVAE --data CelebA --version v32_x4_big
+bsub -oo "XAE_CelebA32x4.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]"   python main.py --name XAE --data CelebA --version v32_x4_big
+bsub -oo "XVAE_CelebA32x4.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]"   python main.py --name XVAE --data CelebA --version v32_x4_big
+bsub -oo "XCAE_CelebA32x4.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCAE --data CelebA --version v32_x4_big
+bsub -oo "XCVAE_CelebA32x4.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCVAE --data CelebA --version v32_x4_big
 
-bsub -oo "XCAE_E_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data CelebA --version v32_bigE
-bsub -oo "XCVAE_E_CelebA.txt" -W 24:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCVAE --data CelebA --version v32_bigE
+bsub -oo "XCAE_E_CelebA.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCAE --data CelebA --version v32_bigE
+bsub -oo "XCVAE_E_CelebA.txt"  -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCVAE --data CelebA --version v32_bigE
 
 
 
-bsub -oo "XCAE_CelebAx4.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data CelebA --version v16_x4_big
-bsub -oo "XCAE_CelebAx4.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data CelebA --version v16_bigE
-bsub -oo "XCAE_CelebA40.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]" -R "select[gpu_model0==A100_PCIE_40GB]" python main.py --name XCAE --data CelebA --version v40_big
+bsub -oo "XCAE_CelebAx4.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCAE --data CelebA --version v16_x4_big
+bsub -oo "XCAE_CelebAx4.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCAE --data CelebA --version v16_bigE
+bsub -oo "XCAE_CelebA40.txt" -W 4:00 -R "rusage[mem=30000, ngpus_excl_p=1]"  python main.py --name XCAE --data CelebA --version v40_big

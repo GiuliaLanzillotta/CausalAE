@@ -10,6 +10,13 @@ datasets/Shapes3d
 datasets/FashionMNIST
 datasets/celeba
 datasets/SynthVec
+datasets/Pendulum
 */.ipynb_checkpoints/
 figures/
 *.csv
+jobs.txt
+jobs_celeba.txt
+jobs_random_seed.txt
+jobs_relu.txt
+jobs_xunit_dim.txt
+jobs_WAE.txt

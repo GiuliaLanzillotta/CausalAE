@@ -12,12 +12,20 @@ def get_traversals_steps(steps:int, ranges:List, relative=False):
     @relative:bool - whether to return the change to apply to the vector or directly the value to be adopted
 
     Note: returns a torch Tensor"""
-    if not relative:  values = torch.vstack([torch.linspace(m,M, steps) for (m,M) in ranges])
+    if not relative:  values = torch.vstack([torch.Tensor(np.linspace(m,M, num=steps, endpoint=False)) for (m,M) in ranges])
     else:
         #move half of the total range to the right and hald of the total range to the left
         values = torch.vstack([torch.linspace(-abs(M-m)/2, abs(M-m)/2, steps) for (m,M) in ranges]) # D x N
     return values
 
+def get_class_boundaries(bins:int, ranges:List):
+    """
+    Computes the class boundaries for each dimension (described in terms of its ranges).
+    Returns a total of bins classes for each dimension.
+    """
+    #note: need B+1 boundaries to obtain B classes
+    boundaries = torch.vstack([torch.linspace(m,M, bins+1) for (m,M) in ranges])
+    return boundaries
 
 def do_latent_traversals_multi_dim(model, latent_vector, dimensions, values, device=None):
     """ Creates a tensor where each element is obtained by passing a

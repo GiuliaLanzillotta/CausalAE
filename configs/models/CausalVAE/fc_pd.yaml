@@ -1,0 +1,19 @@
+model_params:
+  name: 'CausalVAE'
+  latent_size: 4
+  pool_every: 2
+  unit_dim: 4
+  gaussian_init: 'xavier' #other option: 'normal'
+  loss_type: "MSE"
+  act: 'elu'
+  convolutional: False
+
+opt_params:
+  LR: 0.0001
+  weight_decay: 0.0
+  alpha: 0.3
+  beta: 1.0
+  gamma: 1.0
+
+trainer_params:
+  max_steps: 80000

@@ -1,6 +1,11 @@
 """Set of utilities for experimetns managers"""
 import numpy as np
 import torch
+from pytorch_lightning import LightningModule
+from pytorch_lightning.callbacks import BaseFinetuning
+from torch.optim import Optimizer
+
+
 
 def get_causal_block_graph(model, model_name, device, **kwargs):
     """Only for explicit causal block models (X-classes)"""
@@ -49,15 +54,43 @@ def temperature_exponential_annealing(iter_num):
     tau = max(np.exp(-r*iter_num),0.01)
     return tau
 
+
+class DAG_pretraining_Callback(BaseFinetuning):
+    """Implements pre-training logic for the Causal Graph layer in CausalVAE"""
+    def __init__(self, num_pretraining_epochs):
+        super().__init__()
+        self.num_pretraining_epochs = num_pretraining_epochs
+        self.status = False #signals whether the unfreezing has already been done
+
+    def finetune_function(self, pl_module: LightningModule, epoch: int, optimizer: Optimizer, opt_idx: int):
+        """Start training the rest of the network when the number of pretraining epochs has been reached
+        Note: This method is called on every train epoch start"""
+        if epoch > self.num_pretraining_epochs and not self.status:
+            print("Pre-training of causal graph layer completed.")
+            self.unfreeze_and_add_param_group(pl_module.model.children(),
+                                              optimizer=optimizer,
+                                              train_bn=True)
+            self.status = True
+
+
+    def freeze_before_training(self, pl_module: LightningModule):
+        """Freeze everything except the causal graph layer
+        Note: This method is called before configure_optimizers"""
+        print("Starting pre-training of causal graph layer...")
+        for n, param in pl_module.model.named_parameters():
+            if n!="A": param.requires_grad = False
+        return
+
+
 class SchedulersManager():
     """ Responsible for updating all training hyperparameters subjected to schedules"""
 
     def __init__(self, model_name:str, params:dict):
 
         print("Initialising schedulers Manager...")
-        self.variational = 'VAE' in model_name
+        self.variational = 'VAE' in model_name and (not model_name=='CausalVAE')
         self.explicit = 'X' in model_name
-        self.causal = 'C' in model_name
+        self.causal = 'C' in model_name and (not model_name=='CausalVAE')
         self.wae = "W" in model_name
         self.weights = {}
 

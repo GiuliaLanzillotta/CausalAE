@@ -1,6 +1,9 @@
 """ All functions needed to compute the material to visualise the latent responses"""
+import numpy as np
 import torch
-
+from sklearn import linear_model
+from sklearn.ensemble import GradientBoostingClassifier
+from metrics import DCI
 from models import GenerativeAE, Xnet
 from . import utils
 
@@ -120,3 +123,138 @@ def response_fieldX(i:int, j:int, model:Xnet, device, **kwargs):
     return response_field, hybrid_grid
 
 
+def get_latent_classification_examples(model:GenerativeAE, device, **kwargs):
+    """Collects examples for classification problem on the latent dimensions.
+    An example consists of a pair (images, label), where """
+    #TRY https://gist.github.com/s7ev3n/5717df957e61ce2fa3600368cd7724c9
+
+def DCI_on_responses(model:GenerativeAE, device, **kwargs):
+    """Implements DCI metric test on response map
+
+    kwargs accepted keywords:
+        - num_samples: number of samples from the latent space to use in the computation
+        - steps: number of steps to take in the traversal
+        - bins: number of bins to use for categorisation of the latent variables
+        - random_state: random seed used for classifier training
+        - all arguments accepted in 'sample_noise_from_prior'
+    """
+    # we need to obtain bins for all variables first
+    print("Computing DCI test on responses ... ")
+    if not kwargs.get('num_samples'):
+        kwargs['num_samples'] = 50
+    steps = kwargs.get('steps', 40)
+    bins = kwargs.get('bins', 5)
+    verbose = kwargs.get('verbose', False)
+    if hasattr(model, "unit_dim"):
+        unit_dim = model.unit_dim
+    else: unit_dim = 1 #TODO: make computation work for multi-dim models
+
+    # sample N vectors from prior
+    prior_samples = model.sample_noise_from_prior(device=device, **kwargs).detach()
+    ranges = model.get_prior_range()
+    # for each latent unit we start traversal
+    # 1. obtain traversals values (for all the dimensions)
+    traversals_steps = utils.get_traversals_steps(steps, ranges, relative=False).to(device).detach()  # torch Tensor
+    # 2. obtain categories for each latent dimension
+    class_boundaries = utils.get_class_boundaries(bins, ranges).detach().cpu().numpy()  # D x bins tensor
+    # now we need to collect our dataset by applying traversals to each dimension for all of our samples
+    # and then extracting the corresponding label
+    Xs = []; Ys = []
+    for d in range(model.latent_size):
+        if verbose: print(f"Collecting dataset samples from dimension {d}")
+        with torch.no_grad():
+            # 3. do traversals on dimension d
+            traversals = utils.do_latent_traversals_multi_vec(prior_samples, unit_dim=unit_dim,
+                                                              unit=d, values=traversals_steps[d],
+                                                              device=device, relative=False) # shape steps x N x D
+            X = traversals.reshape(-1,model.latent_size).cpu().numpy() # now we have (stepsxN) latent vectors
+            np.random.shuffle(X)
+            out = model.decode(torch.Tensor(X).to(device), activate=True)
+            X_hat = model.encode_mu(out).cpu().numpy()
+            Xs.append(X_hat)
+            # 4. obtain the labels associated to each vector using the bins: # i <-> bins[i-1] < x <= bins[i]
+            # Y is latent_size x batch size
+            Y = np.vstack([np.digitize(X[:, i], class_boundaries[i, :], right=False) for i in range(model.latent_size)])
+            Ys.append(Y)
+    # put everything together
+    X = np.vstack(Xs) # should be (batch x D) x D
+    Y = np.hstack(Ys) # should be D x (BxD)
+    # now we train a classifier and compute the importance matrix
+    importance_matrix = np.zeros(shape=[model.latent_size, model.latent_size], dtype=np.float64)
+    for i in range(model.latent_size):
+        if verbose: print(f"Training linear model for dimension {i}")
+        classifier = GradientBoostingClassifier()
+        classifier.fit(X, Y[i,:])
+        importance_matrix[:, i] = np.abs(classifier.feature_importances_)  # why abs?
+    disentanglement = DCI.disentanglement(importance_matrix)
+    completeness = DCI.completeness(importance_matrix)
+    print("...done")
+
+    return disentanglement, completeness, importance_matrix
+
+
+
+def classification_on_responses(model:GenerativeAE, device, **kwargs):
+    """Implements classification test on response map
+
+    kwargs accepted keywords:
+        - num_samples: number of samples from the latent space to use in the computation
+        - steps: number of steps to take in the traversal
+        - bins: number of bins to use for categorisation of the latent variables
+        - random_state: random seed used for classifier training
+        - all arguments accepted in 'sample_noise_from_prior'
+
+    """
+    print("Computing classification test responses ... ")
+    if not kwargs.get('num_samples'):
+        kwargs['num_samples'] = 50
+    steps = kwargs.get('steps',40)
+    bins = kwargs.get('bins',5)
+    random_state = kwargs.get('random_state',11)
+    verbose = kwargs.get('verbose',False)
+    unit_dim = 1 #TODO check and fix
+
+    outs = []; Ys = []; Y_hats = []; preds=[]; scores = []
+    # sample N vectors from prior
+    prior_samples = model.sample_noise_from_prior(device=device, **kwargs).detach()
+    ranges = model.get_prior_range()
+    # for each latent unit we start traversal
+    # 1. obtain traversals values (for all the dimensions)
+    traversals_steps = utils.get_traversals_steps(steps, ranges, relative=False).to(device).detach() #torch Tensor
+    # 2. obtain categories for each latent dimension
+    class_boundaries = utils.get_class_boundaries(bins, ranges).detach().cpu().numpy() #D x bins tensor
+    for d in range(model.latent_size):
+        with torch.no_grad():
+            # 3. do traversals on dimension d
+            traversals = utils.do_latent_traversals_multi_vec(prior_samples, unit_dim=unit_dim,
+                                                              unit=d, values=traversals_steps[d],
+                                                              device=device, relative=False) # shape steps x N x D
+            X = traversals.reshape(-1,model.latent_size).cpu().numpy() # now we have (stepsxN) latent vectors
+            np.random.shuffle(X) #shuffling before training
+            # 4. obtain the labels associated to each vector
+            Y = np.digitize(X[:,d],class_boundaries[d,:], right=False) # i <-> bins[i-1] < x <= bins[i]
+            Ys.append(Y)
+            # 5. now we train a linear classifier to predict the class labels from X and we score it on the training set
+            if verbose: print(f"Training linear model for dimension {d}")
+            #shuffle before training
+            classifier = linear_model.LogisticRegression(random_state=random_state)
+            classifier.fit(X, Y)
+            pred = classifier.predict(X)
+            preds.append(pred)
+            prior_accuracy = np.mean(pred == Y)
+            if verbose: print(f"Prior accuracy: {prior_accuracy:.2g}")
+            # 6. obtain response vectors
+            out = model.decode(torch.Tensor(X).to(device), activate=True)
+            outs.append(out)
+            X_hat = model.encode_mu(out).cpu().numpy()
+            # 7. score accuracy in the response space
+            Y_hat = classifier.predict(X_hat)
+            Y_hats.append(Y_hat)
+            response_accuracy = np.mean(Y_hat==Y)
+            if verbose: print(f"Response accuracy: {response_accuracy:.2g}")
+            scores.append(np.asarray([prior_accuracy, response_accuracy]))
+
+
+    print("...done")
+
+    return scores, outs, Ys, Y_hats, preds

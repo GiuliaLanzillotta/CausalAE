@@ -25,6 +25,7 @@ def act_switch(name:str):
     if name=="mish": return Mish
     if name=="relu": return nn.ReLU
     if name=="leaky_relu":return nn.LeakyReLU
+    if name=="elu":return nn.ELU
     raise  NotImplementedError(f"Specified activation -{name}- not supported")
 
 
@@ -34,7 +35,7 @@ def standard_initialisation(m, non_linearity='leaky_relu'):
     https://pytorch.org/docs/stable/nn.init.html
     https://www.deeplearning.ai/ai-notes/initialization/
     """
-    if isinstance(m, (nn.Conv2d, nn.Linear)):
+    if isinstance(m, (nn.Conv2d, nn.Linear, nn.Parameter)):
         if non_linearity in ['relu','leaky_relu']:
             nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity=non_linearity)
         else: nn.init.xavier_normal_(m.weight)
@@ -255,6 +256,14 @@ def gumbel_trick(logits:Tensor, tau:float, device:str):
     noised_logits = (logits + gumbel_noise)/tau
     return noised_logits
 
+def continuous_DAG_constraint(M, power):
+    """Implementation of the continuous differential DAG constraint on the input matrix
+    as shown in https://arxiv.org/abs/1904.10098.
+    Code from https://github.com/fishmoon1234/DAG-GNN/blob/master/src/train.py """
+    M_square = torch.eye(power).double().to(M.device) + torch.div(M*M, power)
+    M_power = torch.matrix_power(M_square, power)
+    H = torch.trace(M_power) - power
+    return H
 
 if __name__ == '__main__':
     #TESTING

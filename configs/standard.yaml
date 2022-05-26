@@ -38,8 +38,7 @@ trainer_params:
 
 
 logging_params:
-  #save_dir: "/logs"
-  save_dir: "/cluster/scratch/glanzillo/logs/"
+  save_dir: "/cluster/scratch/glanzillo/logs"
   manual_seed: 1265
   version: 'null'
   score_every: 20 # number of validations

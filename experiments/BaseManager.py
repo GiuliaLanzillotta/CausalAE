@@ -79,12 +79,27 @@ class BaseVisualExperiment(pl.LightningModule):
                                                   threshold=0.0, figsize=(self.model.latent_size,self.model.latent_size))
             logger.add_figure("Causal block adjacency matrix", figure, global_step=self.global_step)
 
+        if self.params["model_params"]["name"]=="CausalVAE":
+            # plotting the causal graph matrix
+            A = self.model.A
+            figure = self.visualiser.plot_heatmap(A.cpu(), title="Causal block adjacency matrix",
+                                                  threshold=0.0, figsize=(self.model.latent_size,self.model.latent_size))
+            logger.add_figure("Latent causal graph matrix (A)", figure, global_step=self.global_step)
+            # plotting the result of random interventions on the causal variables
+            figure = self.visualiser.plot_causalVAE_interventions(device=self.device)
+            logger.add_figure("Interventions on the causal variables", figure, global_step=self.global_step)
+            # plotting result of unconditional sampling
+            figure = self.visualiser.plot_samples_from_prior(device=self.device, unconditional=False)
+            logger.add_figure("Conditional prior samples", figure, global_step=self.global_step)
+
+
     def validation_epoch_end(self, outputs):
         # Logging hyperparameters
         # Visualisation
         if self.num_val_steps%self.plot_every==0 or \
                 self.global_step==self.params["trainer_params"]["max_steps"]:
-            self.make_plots(originals=self.global_step==0, hybrids=True, latent_block="X" in self.params["model_params"]["name"])
+            self.make_plots(originals=self.global_step==0, hybrids=True,
+                            latent_block="X" in self.params["model_params"]["name"])
         self.num_val_steps+=1
 
     def test_epoch_end(self, outputs):
@@ -92,12 +107,12 @@ class BaseVisualExperiment(pl.LightningModule):
 
     def configure_optimizers(self):
         opt_params = self.params["opt_params"]
-        optimizer = optim.Adam(self.model.parameters(),
+        optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()),
                                betas=opt_params['betas'],
                                lr=opt_params['LR'],
                                weight_decay=opt_params['weight_decay'])
 
-        if opt_params['scheduler_type'] != 'null':
+        if opt_params['scheduler_type'] != 'null': #TODO: scheduler not used here
             if opt_params['scheduler_type'] == 'exp':
                 scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma = opt_params['scheduler_gamma'])
             elif opt_params['scheduler_type'] == 'step':
